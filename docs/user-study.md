@@ -22,11 +22,14 @@ Run these in a terminal in the project folder. The tool works with any dataset i
 
 **1. Install** (once): `npm install`
 
-**2. Get a dataset.** Either way, the dataset goes in its own folder under `data/` in the project folder (e.g. `data/ds006644`).
+**2. Choose a BIDS-compliant dataset.**
 
-- **Download the study dataset (ds006644)** with DataLad, which fetches only the files the tool needs:
+You can either use your own BIDS-compliant dataset or **download a study dataset** via DataLad, which fetches only the files the tool needs.
 
-Download datalad: 
+**Download DataLad, if not already installed.**
+Please follow the instructions on https://www.datalad.org/#install
+
+**Download ```ds006644``` via datalad:** 
 
   ```bash
   datalad install -s https://github.com/OpenNeuroDatasets/ds006644.git data/ds006644
@@ -38,7 +41,7 @@ Download datalad:
 
 - **Or add your own BIDS-compliant dataset:** copy (or link) it to `data/<name>/`. Any dataset in BIDS format works, as long as it has:
   - physiological recordings as `sub-XX/[ses-XX/]func/*_physio.tsv.gz`, each with a JSON sidecar giving `SamplingFrequency`, `StartTime` and `Columns`;
-  - optionally fMRIPrep derivatives (`*_desc-confounds_timeseries.tsv`) to show head-motion confounds, by default in a folder inside `derivatives/` in the dataset.
+  - (optionally) fMRIPrep derivatives (`*_desc-confounds_timeseries.tsv`) to show head-motion confounds, by default in a folder inside `derivatives/` in the dataset.
 
   The dataset can also stay where it is: give the tool its path instead (step 4). If the physio or the derivatives are stored next to the main BIDS folder rather than inside it (e.g. CNeuroMod), give all three folders (steps 3 and 4).
 
