@@ -31,9 +31,25 @@ export function isCounterColumn(values: string[]): boolean {
   return rising || falling;
 }
 
-/** Events columns worth showing: every column except counters */
+/**
+ * A constant such as trial_type = movie on every row: one value, ignoring
+ * n/a. It tells the events apart no better than the blocks themselves.
+ */
+export function isConstantColumn(values: string[]): boolean {
+  const present = values.filter((v) => !isMissing(v));
+  return present.length > 0 && present.every((v) => v === present[0]);
+}
+
+/** Events columns worth showing: every column except counters and constants */
 export function usefulEventColumns(events: EventsRaw): string[] {
-  return Object.keys(events.columns).filter((c) => !isCounterColumn(events.columns[c]));
+  return Object.keys(events.columns).filter(
+    (c) => !isCounterColumn(events.columns[c]) && !isConstantColumn(events.columns[c]),
+  );
+}
+
+/** True when the file has a constant column and nothing worth showing (the figure is hidden) */
+export function onlyConstantEvents(events: EventsRaw): boolean {
+  return usefulEventColumns(events).length === 0 && Object.values(events.columns).some(isConstantColumn);
 }
 
 /**
