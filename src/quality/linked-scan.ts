@@ -1,11 +1,14 @@
 import { lastViewedKey, readLastViewed, saveLastViewed } from '@/viewer/persistence';
 import type { ScanKeyLike } from './metrics-tsv';
 
-// Links the scan shown in Explore and Annotate with the one in Stats, through
-// the viewer's own "last viewed" entry in localStorage
-// (src/viewer/persistence.ts). The viewer resumes from that entry when it
-// loads, so no viewer code changes: Stats reads it to open the viewer's scan,
-// and writes it so the viewer opens the scan shown here.
+// Shares the scan between Stats and Explore and Annotate through the viewer's
+// "last viewed" entry in localStorage (src/viewer/persistence.ts). Stats opens
+// the viewer's last scan when its own link names none, and writes the scan it
+// shows back to that entry. Which scan the viewer opens is decided by its link
+// (`#scan?…`, see viewerUrl in route.ts) and pickStartScan
+// (src/viewer/navigation.ts), where the first unannotated scan comes before
+// the last-viewed one; the entry written here mainly carries the channel,
+// confound, events column and stacked channels across.
 
 /** Scan last shown in Explore and Annotate for this dataset, if any */
 export function viewerScan(datasetName: string | null, store?: Storage | null): ScanKeyLike | null {

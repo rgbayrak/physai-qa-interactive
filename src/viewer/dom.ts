@@ -1,5 +1,5 @@
 /** Every element the viewer uses from index.html */
-export interface ViewerElements {
+interface ViewerElements {
   subjectSelect: HTMLSelectElement;
   sessionSelect: HTMLSelectElement;
   taskSelect: HTMLSelectElement;

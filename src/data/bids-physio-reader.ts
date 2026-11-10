@@ -6,7 +6,7 @@ export interface SubjectInfo {
   sessions: string[];
 }
 
-export interface ChannelQuality {
+interface ChannelQuality {
   assessment: string;
   percentValid: number | null;
 }
@@ -253,7 +253,7 @@ export async function fetchAnnotations(
   return res.json();
 }
 
-export interface AnnotationProgress {
+interface AnnotationProgress {
   annotated: number;
   total: number;
   /** Earliest scan (hierarchy order) with nothing saved for the channel; null when all are annotated */

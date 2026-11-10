@@ -17,7 +17,7 @@ export interface ChannelMetrics {
   beatCorrelation: number;
 }
 
-export interface SQIResults {
+interface SQIResults {
   metrics: ChannelMetrics[];
 }
 

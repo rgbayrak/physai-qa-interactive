@@ -3,7 +3,7 @@
 // Shared by the dev server (plain-text log line) and the viewer's dataset summary.
 // Relative imports only: this module is also loaded by Node scripts.
 
-export const ISSUES_URL = 'https://github.com/rgbayrak/physai-qa-interactive/issues';
+const ISSUES_URL = 'https://github.com/rgbayrak/physai-qa-interactive/issues';
 
 /** One file or folder that breaks the rules */
 export interface StructureProblem {
@@ -30,7 +30,7 @@ export type BidsStructure =
     };
 
 /** A piece of the line: plain text, a file name (code style) or a link */
-export type StructurePart = string | { code: string } | { link: string };
+type StructurePart = string | { code: string } | { link: string };
 
 const plural = (n: number, word: string) => `${n.toLocaleString('en-US')} ${word}${n === 1 ? '' : 's'}`;
 const ISSUE_INVITE: StructurePart[] = [' If you come across any issues, please open an issue at ', { link: ISSUES_URL }, '.'];

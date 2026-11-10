@@ -6,7 +6,7 @@ import type { QualityRun } from './run-log';
 // Loads the static files written by scripts/compute-quality-metrics.ts. The
 // dev server serves them from data/quality/ directly; no API endpoint needed.
 // Which dataset to show comes from the dev server (/api/bids/dataset), so the
-// Stats tabs always match Explore and Annotate.
+// Stats tab always matches Explore and Annotate.
 
 const QUALITY_BASE = '/data/quality';
 
@@ -64,7 +64,7 @@ export async function fetchDatasetQuality(dataset: string): Promise<LoadedDatase
 }
 
 /** Whether the served dataset's PDF report is saved, and where to open it */
-export interface ReportStatus {
+interface ReportStatus {
   exists: boolean;
   url: string;
 }

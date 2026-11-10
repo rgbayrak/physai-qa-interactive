@@ -12,7 +12,7 @@ export function isRestTask(task: string): boolean {
 }
 
 /** Longest value still drawn as a word on its event block */
-export const MAX_WORD_LENGTH = 16;
+const MAX_WORD_LENGTH = 16;
 
 const isMissing = (v: string) => v === '' || v.toLowerCase() === 'n/a';
 const isNumeric = (v: string) => v.trim() !== '' && Number.isFinite(Number(v));

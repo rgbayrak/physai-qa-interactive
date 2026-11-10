@@ -7,9 +7,9 @@ import type { GroupSelection } from './shared';
 // TRIAL (not a supported feature yet): peaks drawn as dots on the main signal.
 
 /** Detected peak: filled blue dot */
-export const PEAK_COLOR = '#466eb4';
+const PEAK_COLOR = '#466eb4';
 /** Corrected peak: green ring, so it stays visible around a detected peak at the same time */
-export const PEAK_CORRECTED_COLOR = '#1a9850';
+const PEAK_CORRECTED_COLOR = '#1a9850';
 
 /**
  * Draw the peaks inside the chart's time window, each on the signal value at

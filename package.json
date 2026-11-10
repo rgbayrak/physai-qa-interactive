@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -19,8 +19,6 @@
     "d3-scale": "^4.0.2",
     "d3-selection": "^3.0.0",
     "d3-shape": "^3.2.0",
-    "d3-time": "^3.1.0",
-    "d3-time-format": "^4.1.0",
     "d3-transition": "^3.0.1",
     "d3-zoom": "^3.0.0"
   },
@@ -31,8 +29,6 @@
     "@types/d3-scale": "^4.0.8",
     "@types/d3-selection": "^3.0.11",
     "@types/d3-shape": "^3.1.7",
-    "@types/d3-time": "^3.0.4",
-    "@types/d3-time-format": "^4.0.3",
     "@types/d3-transition": "^3.0.9",
     "@types/d3-zoom": "^3.0.8",
     "@types/node": "^25.5.0",

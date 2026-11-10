@@ -5,9 +5,9 @@ import type { ScaleLinear } from 'd3-scale';
 import type { ChartInstance } from '@/core';
 import type { DataPoint } from '@/data/bids-physio-reader';
 
-export type LinearScale = ScaleLinear<number, number>;
+type LinearScale = ScaleLinear<number, number>;
 export type GroupSelection = ReturnType<ChartInstance['getLayers']>['content'];
-export type RectSelection = Selection<SVGRectElement, unknown, null, undefined>;
+type RectSelection = Selection<SVGRectElement, unknown, null, undefined>;
 export type PathSelection = Selection<SVGPathElement, unknown, null, undefined>;
 
 /** Width and margins shared by every viewer chart, so their time axes line up */
@@ -116,7 +116,7 @@ export function appendOverlayRect(chart: ChartInstance): RectSelection {
     .attr('cursor', 'crosshair');
 }
 
-export interface HoverOptions {
+interface HoverOptions {
   /** Fill of the marker on the nearest sample */
   color: string;
   /** Tooltip HTML for the nearest sample */

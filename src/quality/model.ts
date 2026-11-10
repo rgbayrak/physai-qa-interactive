@@ -1,4 +1,5 @@
-import { SQI_COLUMNS, formatMetricValue } from '@/viewer/sqi-table';
+import { SQI_COLUMNS, formatMetricValue } from './metric-columns';
+import { escapeHtml } from '@/utils/html';
 import { METRIC_COLUMNS, sameScanKey, scanId } from './metrics-tsv';
 import type { MetricKey, QualityRow, ScanKeyLike, ParticipantsTable } from './metrics-tsv';
 import { finiteValues } from './stats';
@@ -7,7 +8,7 @@ import type { QualityRun } from './run-log';
 
 // Pure helpers behind the Stats tab, the scatter plot in Explore and Annotate and the PDF (no DOM access).
 
-export interface MetricDef {
+interface MetricDef {
   key: MetricKey;
   label: string;
   description?: string;
@@ -16,7 +17,7 @@ export interface MetricDef {
   group: string;
 }
 
-/** Metric labels, descriptions and groups come from SQI_COLUMNS (src/viewer/sqi-table.ts), the one list of metric names */
+/** Metric labels, descriptions and groups come from SQI_COLUMNS (src/quality/metric-columns.ts), the one list of metric names */
 export const METRIC_DEFS: MetricDef[] = METRIC_COLUMNS.map((c) => {
   const col = SQI_COLUMNS.find((s) => s.key === c.key);
   return {
@@ -126,7 +127,7 @@ export function defaultMetricPair(rows: QualityRow[]): [MetricKey, MetricKey] {
 export type ColorBy = 'task' | 'ses' | 'timingStatus' | 'sidecarAssessment' | 'none';
 
 /** Every possible Colour by choice; colorByOptions() keeps the ones a dataset has */
-export const COLOR_BY_OPTIONS: { key: Exclude<ColorBy, 'none'>; label: string }[] = [
+const COLOR_BY_OPTIONS: { key: Exclude<ColorBy, 'none'>; label: string }[] = [
   { key: 'task', label: 'Task' },
   { key: 'ses', label: 'Session' },
   { key: 'timingStatus', label: 'Timing check' },
@@ -160,7 +161,7 @@ export function colorGroups(rows: QualityRow[], by: ColorBy): string[] {
   );
 }
 
-export interface ChannelSummary {
+interface ChannelSummary {
   channel: string;
   scans: number;
   pass: number;
@@ -339,7 +340,7 @@ export function yAxisChoices(channelRows: QualityRow[], channelUnits?: Record<st
   return metricAxisChoices(channelRows, channelUnits);
 }
 
-export interface ScatterDatum {
+interface ScatterDatum {
   row: QualityRow;
   x: number;
   y: number;
@@ -376,7 +377,7 @@ const TIMING_PHRASES: Record<string, string> = {
   unverified: 'taken from the sidecar only (no trigger pulses to check against)',
 };
 
-export interface SummaryInput {
+interface SummaryInput {
   nSubjects: number;
   nScans: number;
   tasks: string[];
@@ -430,11 +431,8 @@ export function datasetSummaryText(s: SummaryInput, rows: QualityRow[], lastRun:
   return sentences.join(' ');
 }
 
-const HTML_ESCAPES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
-
-export function esc(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => HTML_ESCAPES[c]);
-}
+/** Short name for the shared HTML escape (src/utils/html.ts), used throughout the Stats code */
+export const esc = escapeHtml;
 
 /** A channel name (physio TSV column) as HTML, in the shared file-name style (.channel-name in src/shell/tabs.css) */
 export function channelName(channel: string): string {

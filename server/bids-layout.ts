@@ -20,7 +20,7 @@ const CONFOUNDS_PATTERNS = [
 ];
 
 /** Motion/intensity confound columns exposed to the viewer, in dropdown order */
-export const CONFOUND_COLUMNS = [
+const CONFOUND_COLUMNS = [
   'framewise_displacement',
   'rmsd',
   'dvars',
@@ -63,9 +63,11 @@ export function isReadable(filePath: string): boolean {
 
 /**
  * List physio .tsv.gz filenames in a func dir that are actually readable.
- * Filters out broken symlinks (e.g. unlocked DataLad/git-annex files).
+ * Filters out broken symlinks (e.g. locked DataLad/git-annex files that are
+ * not downloaded). Unlocked annex pointer files pass; see
+ * hasGzipContent in server/availability.ts.
  */
-export function listReadablePhysio(funcDir: string): string[] {
+function listReadablePhysio(funcDir: string): string[] {
   if (!existsSync(funcDir)) return [];
   return readdirSync(funcDir).filter(
     (f) => PHYSIO_GZ_RE.test(f) && isReadable(join(funcDir, f)),

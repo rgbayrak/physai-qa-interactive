@@ -91,7 +91,7 @@ export function channelKeys(name: string): string[] {
   return base && base !== full ? [full, base] : [full];
 }
 
-export type ChannelClass =
+type ChannelClass =
   | { physio: true; signal: SignalType }
   | { physio: false; reason: string };
 
