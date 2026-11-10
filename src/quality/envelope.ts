@@ -6,7 +6,7 @@ export function roundSig(v: number, digits = 6): number {
   return Number.isFinite(v) ? Number(v.toPrecision(digits)) : v;
 }
 
-export interface Envelope {
+interface Envelope {
   /** Centre sample index of each bucket */
   centres: number[];
   min: (number | null)[];

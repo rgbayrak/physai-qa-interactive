@@ -39,7 +39,7 @@ export function listPhysioPaths(root: string): string[] {
 }
 
 /** Readable and gzip content (not a dangling symlink, nor an unlocked git-annex pointer file) */
-export function hasGzipContent(path: string): boolean {
+function hasGzipContent(path: string): boolean {
   if (!isReadable(path)) return false;
   let fd: number | null = null;
   try {

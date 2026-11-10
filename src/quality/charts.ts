@@ -12,7 +12,7 @@ import type { MetricKey } from './metrics-tsv';
 type Linear = ScaleLinear<number, number>;
 
 /**
- * Stats tabs theme (mirrors the CSS custom properties in quality.html).
+ * Stats tab theme (mirrors the CSS custom properties in quality.html).
  * Roles on the histograms: dark ink = this scan, dashed grey = group mean.
  */
 export const THEME = {
@@ -45,7 +45,7 @@ const FAMILY = {
  * wherever a metric appears (histogram bars). These
  * are the page's lead colours: the scatter palette is built from them.
  */
-export const METRIC_GROUP_COLORS: Record<string, string> = {
+const METRIC_GROUP_COLORS: Record<string, string> = {
   Basic: FAMILY.blue,
   Distribution: FAMILY.sky,
   PaPaGei: FAMILY.gold,
@@ -54,7 +54,7 @@ export const METRIC_GROUP_COLORS: Record<string, string> = {
 
 /**
  * Categorical palette for scatter colouring, determined by the four
- * metric-group colours, then the FAMILY colours they don't use (sky, gold) for
+ * metric-group colours, then the FAMILY colours they don't use (teal, magenta) for
  * datasets with more categories. Assigned in this fixed order to sorted
  * category names; more than 6 categories wrap around. Dots get a white ring so
  * overlapping points stay separate.
@@ -102,14 +102,14 @@ const shortNumber = compactNumber;
 
 // ── Scatter ──────────────────────────────────────────────
 
-export interface ScatterPoint<T> {
+interface ScatterPoint<T> {
   x: number;
   y: number;
   color: string;
   datum: T;
 }
 
-export interface ScatterOptions<T> {
+interface ScatterOptions<T> {
   container: HTMLElement;
   points: ScatterPoint<T>[];
   xLabel: string;
@@ -215,7 +215,7 @@ export function drawScatter<T>(opts: ScatterOptions<T>): ChartInstance {
 
 // ── Histogram ────────────────────────────────────────────
 
-export interface HistogramOptions {
+interface HistogramOptions {
   container: HTMLElement;
   /** Group values (non-finite ones are ignored) */
   values: number[];
@@ -304,7 +304,7 @@ export function drawHistogram(opts: HistogramOptions): ChartInstance | null {
 
 // ── Static waveform ──────────────────────────────────────
 
-export interface WaveformOptions {
+interface WaveformOptions {
   container: HTMLElement;
   channel: string;
   times: number[];

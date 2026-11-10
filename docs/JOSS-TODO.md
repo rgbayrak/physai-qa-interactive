@@ -16,7 +16,7 @@ Today the server only runs as a Vite dev-mode plugin; reviewers must be able to 
 
 - [ ] Move the request handling out of `server/bids-physio-plugin.ts` into a plain Node module, with the Vite plugin as a thin wrapper over it
 - [ ] Standalone Node server that serves the production build (`npm run build`, which includes `quality.html`), the `/api/bids/*` endpoints and the computed `data/quality/` files
-- [ ] Single launch command, e.g. `npx physai-qa-interactive --bids-root <path> [--derivatives <path>]`
+- [ ] Single launch command, e.g. `npx physai-qa-interactive --bids-root <path> [--physio-root <path>] [--deriv-root <path>]` (the same option names as `scripts/compute-quality-metrics.ts`)
 - [ ] Tests for the endpoints (status codes, JSON shapes, 400 on unsafe input) against the fixtures, including `/api/bids/annotation-progress` and the `waveform_quality` / `waveform_comment` fields in `POST /api/bids/annotations`
 
 ## Phase 3 — Packaging and release
@@ -44,8 +44,8 @@ Today the server only runs as a Vite dev-mode plugin; reviewers must be able to 
 - [x] **Statement of need**: the research problem and target users. Drafted; needs your review
 - [x] **Software design**: drafted
 - [ ] Software design: add the standalone server and launch command once Phase 2 lands
-- [ ] Bring the Software design section up to date with the tool: it says "three key components" but lists four; "Group and Individual tabs" are now the scatter plot at the bottom of Explore and Annotate and the Stats tab; the BIDS reader also finds MRIQC confounds and task events (not only fMRIPrep); the "signal quality table" in the viewer was removed. Mention the newer features where they fit (task events chart, On disk data summary, quality metrics run log)
-- [ ] Software testing section: add task events, MRIQC confounds, downloaded-file counts and the run log to the list
+- [ ] Review the updated Software design section (four components, the scatter plot and Stats tab in place of the Group and Individual tabs, MRIQC confounds and task events, the BIDS version check, finding folders by content, the required dataset path, downloaded-file counts and the run log) and Software testing list; check the word count
+- [ ] Add an MRIQC reference to `paper.bib` and cite it where the paper names MRIQC
 - [ ] **Research use**: add labs tested the tool (TODO comment in the paper)
 - [ ] Metric citations: resolve the open items in `REVIEW.md` (ApEn attribution, missing PaPaGei and Romano 2023 references in `paper.bib`) before the paper cites the metrics
 - [ ] Acknowledgements and funding

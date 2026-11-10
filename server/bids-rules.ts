@@ -7,14 +7,14 @@ import { join } from 'path';
 // scripts/update-bids-rules.ts (1.8.0 and later) or converted once from the
 // schema's YAML sources (1.6.0, 1.7.0).
 
-export interface EntityRule {
+interface EntityRule {
   /** Name the file rules use, e.g. "subject" */
   name: string;
   /** Key in file names, e.g. "sub" */
   key: string;
 }
 
-export interface TopLevelRule {
+interface TopLevelRule {
   /** File or folder name without extension, e.g. "README", "dataset_description" */
   name: string;
   required: boolean;

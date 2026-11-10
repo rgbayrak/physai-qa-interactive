@@ -4,7 +4,7 @@
 
 **An interactive visualization and annotation tool for physiological recordings in BIDS fMRI datasets.**
 
-physAI-QA-interactive lets you step through every scan of a BIDS dataset, view cardiac, respiratory and other physiological signals on one time axis anchored at scan onset, check that alignment against scanner trigger pulses, compare it with fMRIPrep motion confounds, compute per-channel signal quality metrics, and mark artifacts as annotations saved next to the dataset. A second page compares signal quality metrics across every scan of a dataset and exports them as a PDF report.
+physAI-QA-interactive lets you step through every scan of a BIDS dataset, view cardiac, respiratory and other physiological signals on one time axis anchored at scan onset, check that alignment against scanner trigger pulses, compare it with fMRIPrep or MRIQC motion confounds, compute per-channel signal quality metrics, and mark artifacts as annotations saved next to the dataset. A second page compares signal quality metrics across every scan of a dataset and exports them as a PDF report.
 
 It is part of **physAI**, a research suite for physiological data. This repository, **physAI-QA-interactive**, is the manual data exploration and annotation tool of **physAI-QA**, the suite's quality assurance component. Coming next: **physAI-QA-auto**, for automated artifact detection, annotation and correction.
 
@@ -16,8 +16,10 @@ The viewer is built on a reusable D3 + TypeScript chart library with **zoom/pan*
 
 ```bash
 npm install
-npm run dev        # Vite dev server with hot reload
+BIDS_ROOT=data/<dataset> npm run dev   # Vite dev server with hot reload
 ```
+
+There is no default dataset: `BIDS_ROOT` must point at the main BIDS folder (the one with `dataset_description.json`). Without it, the dev server stops and says what to set. When it starts, it prints a welcome banner (version, docs and issues link, citation, license), then the three folders it reads from and what it found in them.
 
 ### Getting the data
 
@@ -36,12 +38,12 @@ Open the URL Vite prints (usually `http://localhost:5173`).
 
 ### BIDS version check
 
-When the dev server starts, it checks the dataset's file and folder names against the rules of the BIDS version in its `dataset_description.json` (`BIDSVersion`), and shows the result in the dataset summary. The rules come from the official [BIDS schema](https://github.com/bids-standard/bids-schema), one file per version in `server/schema-rules/` (BIDS 1.6.0 to 1.11.2). Only names are read, so it works before any data is downloaded. It checks:
+When the dev server starts, it checks the dataset's file and folder names against the rules of the BIDS version in its `dataset_description.json` (`BIDSVersion`), and shows the result in the On disk data summary. The rules come from the official [BIDS schema](https://github.com/bids-standard/bids-schema), one file per version in `server/schema-rules/` (BIDS 1.6.0 to 1.11.2). Only names are read, so it works before any data is downloaded. It checks:
 
 - required top-level files (`dataset_description.json`, and `README` and `CHANGES` where that version requires them)
 - in every `sub-*/[ses-*/]` folder: datatype folders, and each file's entities (allowed, required, order, matching `sub-` and `ses-` folders), suffix and extension
 
-This is not a full BIDS validation (file contents and sidecar fields are not checked); OpenNeuro datasets have already been through the official BIDS validator. A dataset that declares a version older than 1.6.0, or one that isn't a BIDS release (for example `0.0.1`, often the dataset's own version), is not checked, and the summary says so.
+This is not a full BIDS validation (file contents and sidecar fields are not checked); OpenNeuro datasets have already been through the official BIDS validator. A dataset with no `BIDSVersion`, one that declares a version older than 1.6.0, or one that isn't a BIDS release (for example `0.0.1`, often the dataset's own version), is not checked, and the summary says so. For a version newer than the newest rules in `server/schema-rules/`, the summary says to update them with `npx vite-node scripts/update-bids-rules.ts`.
 
 To use the dataset quality metrics page, compute the metrics once per dataset (see [Dataset quality metrics](#dataset-quality-metrics)):
 
@@ -53,9 +55,9 @@ npx vite-node scripts/compute-quality-metrics.ts ds006644
 
 The app loads a BIDS physiology dataset and presents an interactive viewer with:
 
-- **On disk data summary** — a box under the Annotations box: how many physio recordings the dataset lists and how many are downloaded (counted once when the dev server starts, with git-annex when available), and how many the quality metrics cover, from the last line of `quality_runs.tsv`. When the metrics don't cover the whole dataset, it says to download the rest and rerun `scripts/compute-quality-metrics.ts`
+- **On disk data summary** — a box under the Annotations box: how many physio recordings the dataset lists and how many are downloaded (counted once when the dev server starts, with git-annex when available), and how many the quality metrics cover, from the last line of `quality_runs.tsv`. When the metrics don't cover the whole dataset, it says to download the rest and rerun `scripts/compute-quality-metrics.ts`. A third line gives the result of the [BIDS version check](#bids-version-check)
 - **Controls** — under the INTERACTIVE QUALITY ASSESSMENT TOOL title, three rows: Subject, Session, Task, Run (when present) and Channel dropdowns; an **Auxiliary Signal Options** row with the Event dropdown (task scans with an events file), the Confound dropdown (when derivatives exist) and Stack checkboxes for extra channels, for the Auxiliary charts below (Channel and Stack offer only physiological channels, matched against the same dictionary as the quality metrics, so `trigger` is left out); Prev/Next buttons (or ←/→ keys) to step through scans in hierarchy order plus a search bar accepting `sub-03` or `ses-012` style input. The Annotate: On/Off button is in the Annotations box, under Time Windows
-- **Dataset info** — name, authors, BIDS version, license, DOI link and derivatives pipeline/version, read from the dataset's own `dataset_description.json` (raw and derivatives); fields that are missing are skipped
+- **Dataset info** — name, authors, BIDS version, license, DOI link and derivatives pipeline/version, read from the dataset's own `dataset_description.json` (raw and derivatives); fields that are missing are skipped. When `dataset_description.json` is missing, or its `Name` or `Authors` are placeholders, a notice under the name says how to fix it (see [docs/troubleshooting.md](docs/troubleshooting.md))
 - **Filename display** — shows the exact `.tsv.gz` file being viewed
 - **Badges** — next to the file name: a timing badge (see [Timing alignment](#timing-alignment)) and per-channel pass/fail quality indicators when a `_desc-quality.json` sidecar is present (run-level, e.g. `*_run-01_desc-quality.json`, or run-less)
 - **Focus chart** (top) — drag to brush-select a time window (zooms on release), double-click to reset, auto-fits Y-axis to visible data; hover for data readout
@@ -65,7 +67,7 @@ The app loads a BIDS physiology dataset and presents an interactive viewer with:
 - **Events chart** — for task scans (not rest) with a BIDS `*_events.tsv`, shown above the confounds chart: each event is a block from its onset to onset + duration. A categorical column with at most 10 values (by default `trial_type`, else `condition` or a similar column) gets one coloured lane per category with a colour key; any other column, picked from the Event dropdown, draws every event in one grey lane with its value in the tooltip, and short words (e.g. cue words) are written on their blocks when they fit. Counters such as `trial_number` (numbers that never repeat and only rise or only fall) are not offered
 - **Peaks (trial)** — a trial feature, not final: when the physio folder has an events file with detected peaks (e.g. physprep's `r_peak`, `systolic_peak` and their `_corrected` versions), a Peaks toggle next to Channel draws them on the signal of interest, blue for detected and green rings for corrected, matched to the channel picked
 - **Channel persistence** — selected channel and stacked channels are preserved when stepping through scans with Prev/Next; a reload keeps the channel, stacked channels, events column and confound (saved per dataset in the browser's localStorage)
-- **Where it opens** — on the earliest scan (subject, session, task, run order) with nothing annotated yet for the remembered channel, so a skipped scan always comes back; once every scan is annotated, on the last-viewed scan. A link from Stats (`/#scan?sub=…`) opens that scan instead
+- **Where it opens** — on the earliest scan (subject, session, task, run order) with nothing annotated yet for the remembered channel, so a skipped scan always comes back; once every scan is annotated, on the last-viewed scan. A link from Stats (`/#scan?sub=…`) opens that scan instead. The **Go to the first unannotated scan** button, under the annotation progress bar, opens that earliest scan at any time; it is off when every scan is annotated or that scan is already shown
 - **Annotations** box — *Full Recording*: rate the Signal Quality (Good, Bad, Fixable, Unknown) and write Notes; *Time Windows*: toggle Annotate mode, drag on the focus chart to mark and label a time window. Everything is saved to disk per `{sub, ses, task, run, channel}` (signal quality and notes first in the file) and reloads automatically when you return to that scan
 
 ## Dataset quality metrics
@@ -92,7 +94,7 @@ The script runs the per-channel signal quality metrics (`src/data/sqi-metrics.ts
 
 Only physiological channels are computed. Column names are checked against a dictionary (`src/quality/channels.ts`; e.g. `cardiac`, `PPG`, `ECG`, `respiratory`, `RSP`, `EDA`); `trigger` and unknown columns are skipped. Output is deterministic: the same input gives byte-identical files (except `quality_runs.tsv`, which records when each run happened).
 
-**2. Reload the page.** Both tabs show the dataset the dev server is serving (`BIDS_ROOT`, see [Using your own dataset](#using-your-own-dataset)). The scan open in Explore and Annotate is the one Stats opens, and the other way round.
+**2. Reload the page.** Both tabs show the dataset the dev server is serving (`BIDS_ROOT`, see [Using your own dataset](#using-your-own-dataset)). The scan open in Explore and Annotate is the one Stats opens, and the other way round: each folder tab's link carries the scan shown.
 
 - **Scatter plot** (bottom of Explore and Annotate): shows the channel chosen in the page's one Channel dropdown, the same as the charts above it, and names it in its title; pick Y, X and colouring. The colour legend and the number of scans plotted are to the right of the plot. Y is a metric, X can be a metric or a participant variable such as age or sex. The menus list every metric in `quality_metrics.tsv` that has values for that channel; a channel without metrics (e.g. `trigger`) gets a short message instead of a plot. Colour by offers only what the dataset has (task, session, timing check, sidecar pass/fail). The scan you are viewing is the larger pinkish-red point. Hover a point for details; double-click it to open that scan in Stats.
 - **Stats:** one scan at a time (Prev/Next): file name, participant info, recording details, the waveform of each physiological channel, and per channel a table of its metrics with percentiles, followed by where the scan sits in each metric's histogram.
@@ -127,7 +129,7 @@ The server reads from three folders:
 
 | Setting | Point it at | Read from it |
 |---|---|---|
-| `BIDS_ROOT` | Always the main BIDS folder (default `data/ds006644`), even when the physio is stored elsewhere | `dataset_description.json`, `participants.tsv`, task events, BOLD sidecars |
+| `BIDS_ROOT` | Always the main BIDS folder (required, no default), even when the physio is stored elsewhere | `dataset_description.json`, `participants.tsv`, task events, BOLD sidecars |
 | `BIDSPHYS_ROOT` | The folder holding the `*_physio.tsv.gz` files, when it is outside `BIDS_ROOT` | Physio files and their sidecars; subjects, sessions, tasks and runs are discovered here |
 | `BIDSDER_ROOT` | The derivatives folder with the confounds, when it is outside `BIDS_ROOT/derivatives/` | Confounds, the derivatives' dataset description, BOLD sidecars when `BIDS_ROOT` has none |
 
@@ -152,11 +154,11 @@ Requirements:
 - For confound timing: a BOLD sidecar with `VolumeTiming` or `RepetitionTime` (raw scan-level, top-level `task-<task>_bold.json`, or derivatives)
 - Run labels are compared as numbers between raw and derivatives, so `run-01` matches `run-1`
 
-Annotations are saved under `data/annotations/` by default; set `ANNOTATIONS_ROOT` to store them elsewhere.
+Annotations are saved under `data/annotations/<dataset>/sub-XX/[ses-YY/]func/`, one folder per dataset; set `ANNOTATIONS_ROOT` to use another folder in place of `data/annotations/`.
 
 Something not working? See [docs/troubleshooting.md](docs/troubleshooting.md).
 
-The Stats tabs show the same dataset, using the metrics computed for it under `data/quality/<name>/`, where `<name>` is the first folder under `data/` (e.g. `BIDS_ROOT=data/friends/friends` → `friends`). For a dataset outside `data/`, compute its metrics with `--bids-root` and the same name the server uses: the folder name of `BIDS_ROOT`, or set `DATASET_NAME` (useful when the main BIDS folder has a generic name such as `data`).
+The Stats tab shows the same dataset, using the metrics computed for it under `data/quality/<name>/`, where `<name>` is the first folder under `data/` (e.g. `BIDS_ROOT=data/friends/friends` → `friends`). For a dataset outside `data/`, compute its metrics with `--bids-root` and the same name the server uses: the folder name of `BIDS_ROOT`, or set `DATASET_NAME` (useful when the main BIDS folder has a generic name such as `data`).
 
 ## Contributing
 

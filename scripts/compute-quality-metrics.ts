@@ -1,5 +1,6 @@
 // Compute quality metrics for every scan of a dataset and write them to
-// data/quality/<dataset>/ (quality_metrics.tsv, dataset.json, waveforms/). The
+// data/quality/<dataset>/ (quality_metrics.tsv, dataset.json, waveforms/), and
+// add a line to quality_runs.tsv there for each run. The
 // PDF report (quality_report.pdf) is saved there by the Stats tab when it next opens.
 //
 //   npx vite-node scripts/compute-quality-metrics.ts -- <dataset> [options]

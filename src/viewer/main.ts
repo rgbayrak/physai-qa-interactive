@@ -13,7 +13,7 @@ import {
 } from '@/data/bids-physio-reader';
 import type { ScanEntry, PhysioRaw, ConfoundsRaw, EventsRaw, PeaksRaw } from '@/data/bids-physio-reader';
 import { getElements } from './dom';
-import { createState, sameScan } from './state';
+import { createState } from './state';
 import {
   createAnnotation,
   toAnnotationsFile,
@@ -23,7 +23,8 @@ import {
   WAVEFORM_QUALITIES,
 } from './annotations';
 import type { WaveformQuality } from '@/data/bids-physio-reader';
-import { renderAnnotationList, progressColor, escapeHtml } from './annotation-panel';
+import { renderAnnotationList, progressColor } from './annotation-panel';
+import { escapeHtml } from '@/utils/html';
 import { renderDatasetInfo, renderQualityBadges, renderSummary } from './info';
 import type { MetricsStatus } from './info';
 import type { PhysioFileCount } from '@/data/bids-physio-reader';
@@ -37,7 +38,7 @@ import {
   toggleStacked,
   physioColumns,
 } from './controls';
-import { stepScan, resolveSearch, isScanStepKey, pickStartScan } from './navigation';
+import { stepScan, resolveSearch, isScanStepKey, pickStartScan, firstUnannotatedTarget } from './navigation';
 import { DEFAULT_LAST_VIEWED_KEY, lastViewedKey, saveLastViewed, readLastViewed, resumeFrom } from './persistence';
 import { buildFocusContext } from './charts/focus-context';
 import type { FocusContextHandle } from './charts/focus-context';
@@ -54,6 +55,7 @@ import type { StackChartsHandle } from './charts/stack';
 import { fetchServedDataset, fetchDatasetQuality } from '@/quality/data';
 import { createScatterPanel } from '@/quality/scatter-panel';
 import { parseScanHash, statsUrl } from '@/quality/route';
+import { scanId, sameScanKey } from '@/quality/metrics-tsv';
 
 // Entry point: owns the DOM, the state object and the live charts, and wires
 // user events to the modules that do the work.
@@ -144,13 +146,32 @@ async function refreshAnnotationProgress() {
   els.annotationProgressBar.style.width = `${(fraction * 100).toFixed(1)}%`;
   els.annotationProgressBar.style.backgroundColor = progressColor(fraction);
   els.annotationProgressBar.parentElement?.setAttribute('aria-valuenow', String(Math.round(fraction * 100)));
+  updateFirstUnannotatedBtn(progress?.firstUnannotated);
 }
+
+/** Scan "Go to the first unannotated scan" opens; null while it is off */
+let firstUnannotatedScan: ScanEntry | null = null;
+
+function updateFirstUnannotatedBtn(firstUnannotated: ScanEntry | null | undefined) {
+  const target = firstUnannotatedTarget(state.scans, firstUnannotated, state.current);
+  firstUnannotatedScan = target.scan;
+  els.firstUnannotatedBtn.disabled = !target.scan;
+  els.firstUnannotatedBtn.title = target.scan
+    ? `Open ${scanId(target.scan)}, the first scan with nothing saved for this channel`
+    : target.reason === 'current'
+      ? 'This is the first scan with nothing saved for this channel'
+      : 'All scans are annotated for this channel';
+}
+
+els.firstUnannotatedBtn.addEventListener('click', () => {
+  if (firstUnannotatedScan) void goToScan(firstUnannotatedScan);
+});
 
 async function loadSavedAnnotations(scan: ScanEntry, channel: string) {
   const stored = await fetchAnnotations(scan.sub, scan.ses, scan.task, scan.run, channel).catch(() => null);
   if (!stored) return;
   // Discard if the scan or channel changed while the request was in flight
-  if (!sameScan(state.current, scan) || channel !== els.channelSelect.value) return;
+  if (!state.current || !sameScanKey(state.current, scan) || channel !== els.channelSelect.value) return;
   state.annotations = fromAnnotationsFile(stored);
   state.waveform = waveformAssessmentFromFile(stored);
   focusContext?.redrawAnnotations();
@@ -326,7 +347,7 @@ function pickPreferred(options: string[], preferred: (string | undefined)[]): st
 
 async function loadPhysio(scan: ScanEntry) {
   // Same scan already loaded (e.g. dropdown re-selected): rebuild from cache
-  if (sameScan(state.current, scan) && state.raw) {
+  if (state.current && sameScanKey(state.current, scan) && state.raw) {
     buildMainCharts(state.raw, els.channelSelect.value);
     rebuildStack(state.raw);
     if (state.events) rebuildEvents(state.events, state.raw);
@@ -351,6 +372,7 @@ async function loadPhysio(scan: ScanEntry) {
     scanPeaks = peaks;
     state.current = { ...scan };
     scatterPanel.setCurrentScan(state.current); // its point turns pinkish red
+    els.statsTab.setAttribute('href', statsUrl(scan)); // Stats opens this same scan
 
     els.filename.textContent = raw.filename;
     renderQualityBadges(els.qualityBadges, raw);

@@ -14,7 +14,7 @@ import {
 import type { GroupSelection, PathSelection } from './shared';
 
 /** Axis label and tooltip unit for each confound column */
-export const CONFOUND_UNITS: Record<string, { label: string; unit: string }> = {
+const CONFOUND_UNITS: Record<string, { label: string; unit: string }> = {
   framewise_displacement: { label: 'FD (mm)', unit: 'mm' },
   rmsd: { label: 'RMSD (mm)', unit: 'mm' },
   dvars: { label: 'DVARS', unit: '' },
@@ -84,7 +84,7 @@ export function confoundYDomain(points: DataPoint[], isFD: boolean): [number, nu
   return [vMin - pad, vMax + pad];
 }
 
-export interface ConfoundsChartOptions {
+interface ConfoundsChartOptions {
   sectionEl: HTMLElement;
   labelEl: HTMLElement;
   confounds: ConfoundsRaw;

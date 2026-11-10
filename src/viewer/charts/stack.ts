@@ -14,7 +14,7 @@ import {
   attachHover,
 } from './shared';
 
-export interface StackChartsOptions {
+interface StackChartsOptions {
   sectionEl: HTMLElement;
   raw: PhysioRaw;
   channels: string[];

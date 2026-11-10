@@ -28,7 +28,7 @@ export function paddedExtent(values: number[], pad = 0.05): [number, number] | n
   return [lo - p, hi + p];
 }
 
-export interface Bin {
+interface Bin {
   x0: number;
   x1: number;
   count: number;

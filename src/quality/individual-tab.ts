@@ -22,7 +22,7 @@ import {
 import type { VisibleMetrics } from './model';
 import { percentileRank } from './stats';
 
-export interface IndividualTabElements {
+interface IndividualTabElements {
   prevBtn: HTMLButtonElement;
   nextBtn: HTMLButtonElement;
   filename: HTMLElement;
@@ -33,7 +33,7 @@ export interface IndividualTabElements {
   metrics: HTMLElement;
 }
 
-export interface IndividualTab {
+interface IndividualTab {
   /** Show one scan of a loaded dataset (first scan when scan is null); returns the scan shown */
   show: (dataset: string, data: LoadedDataset, scan: ScanKeyLike | null) => ScanKeyLike | null;
   /**

@@ -1,5 +1,6 @@
 import type { ScanEntry } from '@/data/bids-physio-reader';
 import type { RestoredSelection } from './state';
+import { findScan } from './navigation';
 
 // Last-viewed scan in localStorage. A per-browser convenience only: storage can
 // be unavailable (private mode, blocked site data), so every access is wrapped
@@ -53,9 +54,7 @@ export function resumeFrom(
   scans: ScanEntry[],
 ): { scan: ScanEntry; selection: RestoredSelection } | null {
   if (!saved) return null;
-  const scan = scans.find(
-    (s) => s.sub === saved.sub && s.ses === saved.ses && s.task === saved.task && s.run === saved.run,
-  );
+  const scan = findScan(scans, saved);
   if (!scan) return null;
   return {
     scan,

@@ -32,7 +32,7 @@ describe('scatter colour legend', () => {
     expect(legendHtml('Task', [{ label: '<b>', color: '#000' }], false)).toContain('&lt;b&gt;');
   });
 });
-import { parseScanHash, scanHash, statsUrl } from '../route';
+import { parseScanHash, scanHash, statsUrl, viewerUrl } from '../route';
 import {
   METRIC_DEFS,
   availableMetrics,
@@ -171,6 +171,9 @@ describe('scan links to the Stats tab', () => {
     expect(scanHash(scan)).toBe('#scan?sub=01&ses=02&task=rest');
     expect(parseScanHash(scanHash(scan))).toEqual(scan);
     expect(statsUrl(scan)).toBe('/quality.html#scan?sub=01&ses=02&task=rest');
+    // Explore and Annotate's link names the scan too, so switching tabs keeps it
+    expect(viewerUrl(scan)).toBe('/#scan?sub=01&ses=02&task=rest');
+    expect(parseScanHash(viewerUrl(scan).slice(1))).toEqual(scan);
   });
 
   it('has no scan without sub and task, and still reads older #subject links', () => {
@@ -190,7 +193,7 @@ describe('model', () => {
     row({ sub: '02', channel: 'trigger', task: 'motor', sidecarAssessment: '', timingStatus: 'mismatch' }),
   ];
 
-  it('labels every metric from the viewer SQI table', () => {
+  it('labels every metric from the metric column definitions', () => {
     expect(METRIC_DEFS).toHaveLength(METRIC_COLUMNS.length);
     expect(METRIC_DEFS.find((d) => d.key === 'beatCorrelation')!.label).toBe('Beat Corr');
   });

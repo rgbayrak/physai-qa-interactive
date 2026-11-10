@@ -1,15 +1,15 @@
 import type { ChannelMetrics } from '@/data/sqi-metrics';
 
 // Labels, decimals, descriptions and groups for each per-channel quality metric.
-// The Stats tabs (src/quality/model.ts) and their PDF take metric names from
-// here. Explore and Annotate no longer shows a metrics table.
+// The Stats tab, the scatter plot and the PDF (through src/quality/model.ts)
+// take metric names from here.
 
 export interface ColDef {
   label: string;
   key: keyof ChannelMetrics;
   decimals: number;
   description?: string;
-  /** 'always' is the channel name; the others are the metric groups below */
+  /** 'always' is the channel name; the others are the metric groups (Basic, Distribution, PaPaGei, PhysioQC) */
   group: string;
 }
 
@@ -28,8 +28,6 @@ export const SQI_COLUMNS: ColDef[] = [
   { label: 'ApEn', key: 'approxEntropy', decimals: 4, description: 'Approximate entropy — signal regularity (Elgendi 2016, m=2, r=0.2×SD). Lower = more regular.', group: 'PhysioQC' },
   { label: 'Beat Corr', key: 'beatCorrelation', decimals: 3, description: 'Mean Pearson correlation of each beat/breath vs average waveform (Romano 2023).', group: 'PhysioQC' },
 ];
-
-export const SQI_GROUPS = ['Basic', 'Distribution', 'PaPaGei', 'PhysioQC'];
 
 export function formatMetricValue(val: number, decimals: number): string {
   if (val === Infinity) return 'Inf';

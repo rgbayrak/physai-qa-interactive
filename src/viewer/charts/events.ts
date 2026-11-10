@@ -2,12 +2,12 @@ import type { ScaleBand } from 'd3-scale';
 import { createChart } from '@/core';
 import type { EventsRaw } from '@/data/bids-physio-reader';
 import { CATEGORY_PALETTE } from '@/quality/charts';
-import { escapeHtml } from '../annotation-panel';
+import { escapeHtml } from '@/utils/html';
 import { eventCategories, isWordColumn } from '../events';
 import { CHART_WIDTH, CHART_MARGIN_X, xScaleOf, drawOnsetMarker } from './shared';
 
 /** Block colour when the column is not drawn one lane per category */
-export const SINGLE_LANE_COLOR = '#9aa0a6';
+const SINGLE_LANE_COLOR = '#9aa0a6';
 /** Label of the one lane (and its legend entry) in that case */
 const SINGLE_LANE = 'all events';
 
@@ -19,7 +19,7 @@ const MARGIN = { top: 10, bottom: 40, ...CHART_MARGIN_X };
 /** Rough width of one character at --fs-xs (13px), to tell whether a word fits its block */
 const WORD_CHAR_PX = 7.5;
 
-export interface EventsChartOptions {
+interface EventsChartOptions {
   sectionEl: HTMLElement;
   labelEl: HTMLElement;
   legendEl: HTMLElement;
