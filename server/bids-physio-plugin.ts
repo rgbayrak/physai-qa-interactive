@@ -23,6 +23,7 @@ import type { AnnotationsFile, ScanKey } from './bids-layout';
 import { countPhysioFiles } from './availability';
 import { checkStructure } from './bids-structure';
 import { checkRootSettings, noPhysioLines } from './bids-roots-check';
+import { bannerLines, readAppVersion } from './startup-banner';
 import { descriptionNoticeLines, noticeText } from '../src/data/dataset-notice';
 import { structureLine, structureText } from '../src/data/bids-structure';
 import type { ServerResponse } from 'http';
@@ -54,6 +55,18 @@ const DATA_DIR = join(process.cwd(), 'data');
 /** Print each message line, tagging the ones that start a new message */
 function printLines(lines: string[], print: (line: string) => void) {
   for (const line of lines) print(line.startsWith(' ') ? line : `[bids-physio] ${line}`);
+}
+
+/**
+ * Print the welcome banner the first time the dev server starts. Vite
+ * re-bundles this file on each restart, resetting module state, so the
+ * "already printed" flag is kept on globalThis.
+ */
+function printBannerOnce() {
+  const g = globalThis as { __physaiBannerShown?: boolean };
+  if (g.__physaiBannerShown) return;
+  g.__physaiBannerShown = true;
+  console.log(['', ...bannerLines(readAppVersion(process.cwd())), ''].join('\n'));
 }
 
 /**
@@ -110,6 +123,7 @@ export function bidsPhysioPlugin(): Plugin {
 
   /** Subjects, scans (from the physio root) and dataset info (from BIDS_ROOT), read once and logged */
   function cacheDataset() {
+      printBannerOnce();
       resolveRoots();
       const subjects = getSubjects(BIDSPHYS_ROOT);
       cachedSubjectsJson = JSON.stringify({ subjects });
