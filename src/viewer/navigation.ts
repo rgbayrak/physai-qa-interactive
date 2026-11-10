@@ -25,9 +25,30 @@ export function pickStartScan(
   scans: ScanEntry[],
   candidates: { linked?: ScanEntry | null; firstUnannotated?: ScanEntry | null; lastViewed?: ScanEntry | null },
 ): ScanEntry | undefined {
-  const find = (c: ScanEntry | null | undefined) =>
-    c ? scans.find((s) => s.sub === c.sub && s.ses === c.ses && s.task === c.task && s.run === c.run) : undefined;
+  const find = (c: ScanEntry | null | undefined) => findScan(scans, c);
   return find(candidates.linked) ?? find(candidates.firstUnannotated) ?? find(candidates.lastViewed) ?? scans[0];
+}
+
+/** The entry in `scans` for `scan`, or undefined when it is not in the dataset (or not given) */
+export function findScan(scans: ScanEntry[], scan: ScanEntry | null | undefined): ScanEntry | undefined {
+  return scan
+    ? scans.find((s) => s.sub === scan.sub && s.ses === scan.ses && s.task === scan.task && s.run === scan.run)
+    : undefined;
+}
+
+/**
+ * State of "Go to the first unannotated scan": the scan it opens, or why it is
+ * off (everything annotated, or that scan is the one already shown).
+ */
+export function firstUnannotatedTarget(
+  scans: ScanEntry[],
+  firstUnannotated: ScanEntry | null | undefined,
+  current: ScanEntry | null,
+): { scan: ScanEntry } | { scan: null; reason: 'all-annotated' | 'current' } {
+  const scan = findScan(scans, firstUnannotated);
+  if (!scan) return { scan: null, reason: 'all-annotated' };
+  if (findScan([scan], current)) return { scan: null, reason: 'current' };
+  return { scan };
 }
 
 /**

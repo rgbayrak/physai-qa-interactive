@@ -299,6 +299,11 @@
       margin: 0 0 10px;
     }
 
+    /* "Go to the first unannotated scan", under the progress bar */
+    .first-unannotated-btn {
+      margin: 0 0 12px;
+    }
+
     /* How saving works, under the Annotations box */
     .annotation-note {
       margin: 0 0 14px;
@@ -615,6 +620,8 @@
         <div id="annotation-progress-bar" class="progress-fill"></div>
       </div>
     </div>
+    <!-- Opens the earliest scan (hierarchy order) with nothing saved for this channel; off when there is none -->
+    <button id="first-unannotated-btn" class="btn first-unannotated-btn" type="button" disabled>Go to the first unannotated scan</button>
     <p class="annotation-note">
       All changes are saved automatically.
       A new Signal Quality choice replaces the previous one (click it again to clear it).

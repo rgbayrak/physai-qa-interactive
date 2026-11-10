@@ -1,7 +1,7 @@
 import { fetchServedDataset, fetchDatasetQuality, fetchReportStatus, saveReport } from './data';
 import type { LoadedDataset, ServedDataset } from './data';
 import { shareScanWithViewer, viewerScan } from './linked-scan';
-import { parseScanHash, scanHash } from './route';
+import { parseScanHash, scanHash, viewerUrl } from './route';
 import type { ScanKeyLike } from './metrics-tsv';
 import { sameScanKey } from './metrics-tsv';
 import { createIndividualTab } from './individual-tab';
@@ -32,6 +32,8 @@ const els = {
   status: byId<HTMLElement>('status'),
   /** "Open this scan in Explore and Annotate" */
   openViewer: byId<HTMLAnchorElement>('open-viewer'),
+  /** The "Explore and Annotate" folder tab */
+  viewerTab: byId<HTMLAnchorElement>('viewer-tab'),
 };
 
 // Metrics shown: which metrics the Stats tables and histograms show; remembered in this browser only
@@ -97,11 +99,12 @@ function showScanFromHash(): void {
   // No scan in the link: open the one last shown in Explore and Annotate
   const wanted = parseScanHash(location.hash) ?? viewerScan(served.name);
   const shown = statsTab.show(served.id, data, wanted);
-  // ...and make Explore and Annotate open the scan shown here: the link names it
-  // (Explore otherwise opens the earliest scan not annotated yet)
+  // ...and make Explore and Annotate open the scan shown here: both links name it
+  // (without a scan in the link, Explore opens the earliest scan not annotated yet)
   if (shown) {
     shareScanWithViewer(served.name, shown);
-    els.openViewer.href = `/${scanHash(shown)}`;
+    els.openViewer.href = viewerUrl(shown);
+    els.viewerTab.href = viewerUrl(shown);
   }
   // Back to the top only when a different scan opens (Prev/Next, a scatter double-click)
   if (!shown || !lastScan || !sameScanKey(shown, lastScan)) window.scrollTo(0, 0);

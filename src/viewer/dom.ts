@@ -26,6 +26,8 @@ export interface ViewerElements {
   annotationProgress: HTMLElement;
   /** Its mini progress bar (fill width and colour) */
   annotationProgressBar: HTMLElement;
+  /** "Go to the first unannotated scan", under the progress bar */
+  firstUnannotatedBtn: HTMLButtonElement;
   qualityBadges: HTMLElement;
   loading: HTMLElement;
   confoundsSection: HTMLElement;
@@ -89,6 +91,7 @@ export function getElements(): ViewerElements {
     filename: byId('filename'),
     annotationProgress: byId('annotation-progress'),
     annotationProgressBar: byId('annotation-progress-bar'),
+    firstUnannotatedBtn: byId('first-unannotated-btn'),
     qualityBadges: byId('quality-badges'),
     loading: byId('loading'),
     confoundsSection: byId('confounds-section'),
