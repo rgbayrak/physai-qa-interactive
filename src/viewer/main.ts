@@ -46,7 +46,7 @@ import { buildConfoundsChart } from './charts/confounds';
 import type { ConfoundsChartHandle } from './charts/confounds';
 import { buildEventsChart } from './charts/events';
 import type { EventsChartHandle } from './charts/events';
-import { isRestTask, defaultEventColumn, usefulEventColumns } from './events';
+import { isRestTask, defaultEventColumn, usefulEventColumns, onlyConstantEvents } from './events';
 import { peaksForChannel } from './peaks-trial';
 import type { Peak } from './peaks-trial';
 import { drawPeaks } from './charts/peaks-trial';
@@ -388,9 +388,14 @@ async function loadPhysio(scan: ScanEntry) {
     buildMainCharts(raw, els.channelSelect.value);
     rebuildStack(raw);
 
-    // Counters such as trial_number are left out of the dropdown
+    // Counters such as trial_number and constants are left out of the dropdown
     const eventColumns = events ? usefulEventColumns(events) : [];
-    if (events && eventColumns.length > 0) {
+    if (events && onlyConstantEvents(events)) {
+      // Nothing but constant columns (e.g. trial_type = movie on every row): hide the picker and the figure
+      els.eventsSelect.innerHTML = '';
+      els.eventsLabel.style.display = 'none';
+      els.eventsSection.style.display = 'none';
+    } else if (events && eventColumns.length > 0) {
       populateSelect(
         els.eventsSelect,
         eventColumns,

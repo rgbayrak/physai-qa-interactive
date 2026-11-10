@@ -4,6 +4,8 @@ import {
   eventCategories,
   defaultEventColumn,
   isCounterColumn,
+  isConstantColumn,
+  onlyConstantEvents,
   usefulEventColumns,
   isWordColumn,
   MAX_EVENT_CATEGORIES,
@@ -84,6 +86,27 @@ describe('counters (e.g. trial_number)', () => {
   it('are left out of the useful columns', () => {
     const e = events({ trial_type: ['go', 'stop', 'go'], trial_number: ['1', '2', '3'] });
     expect(usefulEventColumns(e)).toEqual(['trial_type']);
+  });
+});
+
+describe('constants (e.g. trial_type = movie on every row)', () => {
+  it('have one value, ignoring n/a', () => {
+    expect(isConstantColumn(['movie', 'movie', 'movie'])).toBe(true);
+    expect(isConstantColumn(['movie', 'n/a', '', 'movie'])).toBe(true);
+    expect(isConstantColumn(['go', 'stop', 'go'])).toBe(false);
+    expect(isConstantColumn(['n/a', ''])).toBe(false);
+  });
+
+  it('are left out of the useful columns and never picked by default', () => {
+    const e = events({ trial_type: ['movie', 'movie'], hand: ['left', 'right'] });
+    expect(usefulEventColumns(e)).toEqual(['hand']);
+    expect(defaultEventColumn(e)).toBe('hand');
+  });
+
+  it('hide the figure only when nothing else is worth showing', () => {
+    expect(onlyConstantEvents(events({ trial_type: ['movie', 'movie'] }))).toBe(true);
+    expect(onlyConstantEvents(events({ trial_type: ['movie', 'movie'], hand: ['left', 'right'] }))).toBe(false);
+    expect(onlyConstantEvents(events({}))).toBe(false); // only onset/duration: still drawn
   });
 });
 

@@ -279,6 +279,20 @@ describe('resolveBidsRoots: found by content, not folder names', () => {
   });
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
+  it('notes a folder that does not exist instead of crashing, and finds no subjects in it', () => {
+    const gone = join(dir, 'no-such-folder');
+    const r = resolveBidsRoots(gone, { physioRoot: join(gone, 'phys'), derivRoot: join(gone, 'der') });
+    expect(r.notes).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining(`BIDS_ROOT ${gone} does not exist`),
+        expect.stringContaining(`BIDSPHYS_ROOT ${join(gone, 'phys')} does not exist`),
+        expect.stringContaining(`BIDSDER_ROOT ${join(gone, 'der')} does not exist`),
+      ]),
+    );
+    expect(resolveBidsRoots(gone).physioRoot).toBe(gone);
+    expect(getSubjects(gone)).toEqual([]);
+  });
+
   it('uses the main folder for physio, and finds the derivatives with confounds, in plain BIDS', () => {
     expect(resolveBidsRoots(SES_ROOT)).toMatchObject({ bidsRoot: SES_ROOT, physioRoot: SES_ROOT, derivRoot: SES_DER });
     // MRIQC timeseries count as confounds too, whatever the folder is called

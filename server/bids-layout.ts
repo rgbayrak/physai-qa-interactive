@@ -82,6 +82,8 @@ function funcDir(bidsRoot: string, sub: string, ses: string): string {
 }
 
 export function getSubjects(bidsRoot: string): SubjectInfo[] {
+  // A missing folder has no subjects; resolveBidsRoots notes the bad path
+  if (!existsSync(bidsRoot)) return [];
   const entries = readdirSync(bidsRoot, { withFileTypes: true });
   return entries
     .filter((e) => e.isDirectory() && e.name.startsWith('sub-'))
@@ -795,6 +797,11 @@ export function resolveBidsRoots(
   overrides: { physioRoot?: string; derivRoot?: string } = {},
 ): BidsRoots {
   const notes: string[] = [];
+  const missing = (label: string, dir: string) =>
+    `${label} ${dir} does not exist (check the path, or install the DataLad subdataset with datalad get -n)`;
+  if (!existsSync(bidsRoot)) notes.push(missing('BIDS_ROOT', bidsRoot));
+  if (overrides.physioRoot && !existsSync(overrides.physioRoot)) notes.push(missing('BIDSPHYS_ROOT', overrides.physioRoot));
+  if (overrides.derivRoot && !existsSync(overrides.derivRoot)) notes.push(missing('BIDSDER_ROOT', overrides.derivRoot));
   const derivativesDir = join(bidsRoot, 'derivatives');
   const isPhysio = (f: string) => PHYSIO_GZ_RE.test(f);
 

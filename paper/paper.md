@@ -43,8 +43,8 @@ Drafting notes (remove before submission)
 
 physAI-QA-interactive provides a single interface for visualizing, labeling and
 annotating artifacts, both across whole recordings and within time windows. It
-is designed for researchers who curate, quality-check or reuse BIDS-validated datasets
-with concurrent physiological recordings. It replaces most dataset-specific in-house
+is designed for researchers who curate, quality-check or reuse BIDS-validated physiological 
+datasets concurrent with functional MRI scans. It replaces most dataset-specific in-house
 scripts and viewers with one interactive workflow that behaves the same way on
 any BIDS dataset: review every channel of every scan, compute modality-specific
 quality metrics, compare physiological events across modalities, and annotate
@@ -65,36 +65,34 @@ Concurrent recordings of peripheral physiology, such as cardiac and respiratory
 signals, can enhance fMRI analysis through improved noise modeling
 [@glover2000; @kasper2017] and provide complementary insights into brain-body
 interactions. However, the utility of physiological data is contingent upon
-recording quality and expertise in data handling.
-
-# State of the field
-
-Quality assessment of physiological signals poses challenges distinct from
-those addressed by established neuroimaging quality assessment pipelines [@gray2009;
+recording quality and expertise in data handling. Quality assessment of 
+physiological signals poses challenges distinct from those addressed by 
+established neuroimaging quality assessment pipelines [@gray2009;
 @bulte2017]. For fMRI, automated tools such as MRIQC [@esteban2017] have
 standardized quality evaluation through image quality metrics and visual
 reports, and their use has been formalized into reproducible QC protocols
 [@provins2023]. No comparable solution exists for concurrent physiological
-recordings. BIDS standardizes how these recordings are stored
-[@gorgolewski2016], and community efforts such as physiopy have begun
-compiling recommended practices for their acquisition and processing
-[@phys2bids; @physiopy2026], but the field still lacks a standardized approach
-to physiological quality assessment. Valuable public tools exist, such as PhysIO [@kasper2017]
-and AFNI's `physio_calc.py` [@lauren2024], but they are designed primarily for
-physiological noise modeling. These tools process individual recordings through scripts; none
+recordings. 
+
+# State of the field
+
+BIDS standardizes how these recordings are stored [@gorgolewski2016], 
+and community efforts such as physiopy have begun compiling recommended practices 
+for their acquisition and processing[@phys2bids; @physiopy2026], but the field 
+still lacks a standardized approach to physiological quality assessment. Valuable 
+publicly available tools exist, such as PhysIO [@kasper2017] and AFNI's `physio_calc.py` 
+[@lauren2024], however their primary focus is on physiological noise modeling. 
+These tools process individual recordings through scripts; none
 offers an interactive, dataset-wide interface for reviewing, labeling and
 annotating physiological signals. Signal quality indices for cardiac signals are well
 established in biomedical engineering [@orphanidou2015; @li2012; @elgendi2016]
-and available in general-purpose toolboxes such as NeuroKit2
-[@makowski2021]. Beyond these, most labs that use physiological measures 
-rely on their own in-house scripts and viewers, 
-so quality assessment practices vary widely between groups. This inconsistency is
-a significant obstacle for large-scale studies and data-sharing initiatives, 
-where standardized quality control is essential.
+and available in general-purpose toolboxes such as NeuroKit2 [@makowski2021]. 
+Beyond these, most labs that use physiological measures rely on their own in-house 
+scripts and viewers, so quality assessment practices vary widely between groups. 
 
 # Software design
 
-physAI-QA-interactive is a browser-based tool for exploring and annotating
+physAI-QA-interactive is a browser-faced tool for exploring and annotating
 physiological recordings stored in the Brain Imaging Data Structure (BIDS)
 [@gorgolewski2016]. It discovers every subject, session, task and run in a
 dataset and visualizes multimodal physiological signals alongside auxiliary measures.
@@ -104,10 +102,6 @@ and mark artifacts as time-stamped annotations saved alongside the dataset for
 later correction or use for training machine learning models.
 physAI-QA-interactive is the first released tool of physAI-QA, the quality
 assurance (QA) component of the physAI research suite for physiological data.
-
-*Note: Throughout this paper, QA stands for quality assurance: not only assessing
-signal quality, but also acting on it by labeling, annotating and correcting
-artifacts.
 
 physAI-QA-interactive builds on open-source community standards and tools: it reads data
 organized in BIDS [@gorgolewski2016] and works directly with datasets managed by
@@ -176,19 +170,19 @@ branch and every pull request, cover:
 
 # Research use
 
-The software has been developed and tested on public datasets. On
-DMT-HAR-MED (ds006644) [@egger2025dataset; @egger2025], a multi-echo dataset (ds000210) [@dupre2017] 
-and with the CNeuroMod `movie10` and `friends` datasets.
-
-<!-- TODO: describe any study or lab that uses the tool for its own analyses. -->
+The software has been developed and tested on public datasets, including
+DMT-HAR-MED (OpenNeuro ds006644) [@egger2025dataset; @egger2025], the
+multi-echo dataset ds000210 [@dupre2017], and selected CNeuroMod datasets
+(movie10 and friends). These datasets have been used to exercise the tool's
+dataset-wide quality summaries and scan-level review workflows during
+development. We are not aware of an independent study or laboratory that has
+yet used physAI-QA-interactive to produce results for its own analyses.
 
 # Outlook
 
 physAI-QA-interactive is the manual half of physAI-QA. Its companion,
-physAI-QA-auto, is in development and will bring automated artifact detection,
-annotation and correction. Because every annotation made in
-physAI-QA-interactive records both times and sample indices in a shared format,
-the labels researchers create today can train and evaluate those automated
+physAI-QA-auto, is in development and will bring automated artifact detection, annotation and correction. Because every annotation made in
+physAI-QA-interactive records both times and sample indices in a shared format, the labels researchers create today can train and evaluate those automated
 tools, closing the loop between expert review and automated QA.
 
 # AI usage disclosure
