@@ -8,7 +8,7 @@ see the [README](README.md).
 
 ```bash
 npm install
-npm run dev        # Vite dev server with hot reload
+BIDS_ROOT=data/<dataset> npm run dev   # Vite dev server with hot reload (no default dataset)
 npm test           # vitest run (all tests)
 npm run test:watch # vitest in watch mode
 npm run typecheck  # tsc --noEmit (strict, no output)

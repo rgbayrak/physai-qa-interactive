@@ -5,6 +5,22 @@ server's terminal output: the lines starting with `[bids-physio]` show which
 folders the server reads (`BIDS root`, `Physio root`, `Derivatives root`) and
 how many physio files it found.
 
+## The dev server stops with "No BIDS dataset given"
+
+There is no default dataset. Tell the server which folder to serve:
+
+```bash
+BIDS_ROOT=data/<dataset> npm run dev
+```
+
+The variable is `BIDS_ROOT`. A different name, such as `BIDS_DIR`, is ignored.
+`BIDS_ROOT` is the main BIDS folder, the one with `dataset_description.json`.
+If the terminal says `BIDS-compliant dataset not found`, it points at a folder
+without that file: use the folder above or below it. If the physio or
+derivatives are stored outside that folder, also set `BIDSPHYS_ROOT` and
+`BIDSDER_ROOT` (see
+[Pointing the tool at the right folders](#pointing-the-tool-at-the-right-folders)).
+
 ## The viewer shows no scans
 
 The terminal says `No readable physio files under …`.

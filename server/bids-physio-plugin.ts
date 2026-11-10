@@ -22,6 +22,7 @@ import {
 import type { AnnotationsFile, ScanKey } from './bids-layout';
 import { countPhysioFiles } from './availability';
 import { checkStructure } from './bids-structure';
+import { checkRootSettings, noPhysioLines } from './bids-roots-check';
 import { descriptionNoticeLines, noticeText } from '../src/data/dataset-notice';
 import { structureLine, structureText } from '../src/data/bids-structure';
 import type { ServerResponse } from 'http';
@@ -40,17 +41,48 @@ function rejectInvalid(res: ServerResponse, key: ScanKey): boolean {
 // too; when they are stored elsewhere, BIDSPHYS_ROOT points at them, and
 // BIDSDER_ROOT at derivatives outside BIDS_ROOT/derivatives/. Without them,
 // both are found inside BIDS_ROOT by their files (see resolveBidsRoots).
-const {
-  bidsRoot: BIDS_ROOT,
-  physioRoot: BIDSPHYS_ROOT,
-  derivRoot: BIDSDER_ROOT,
-  notes: ROOT_NOTES,
-} = resolveBidsRoots(process.env.BIDS_ROOT ?? join(process.cwd(), 'data', 'ds006644'), {
-  physioRoot: process.env.BIDSPHYS_ROOT,
-  derivRoot: process.env.BIDSDER_ROOT,
-});
+// There is no default dataset: BIDS_ROOT must be set. The folders are set
+// when the dev server starts (resolveRoots), not when this file loads,
+// because scripts run with vite-node load this plugin too.
+let BIDS_ROOT = '';
+let BIDSPHYS_ROOT = '';
+let BIDSDER_ROOT = '';
+let ROOT_NOTES: string[] = [];
 
 const DATA_DIR = join(process.cwd(), 'data');
+
+/** Print each message line, tagging the ones that start a new message */
+function printLines(lines: string[], print: (line: string) => void) {
+  for (const line of lines) print(line.startsWith(' ') ? line : `[bids-physio] ${line}`);
+}
+
+/**
+ * Check BIDS_ROOT, BIDSPHYS_ROOT and BIDSDER_ROOT and set the folders. If one
+ * is missing or wrong, tell the user what to set and stop the dev server.
+ */
+function resolveRoots() {
+  const check = checkRootSettings(
+    {
+      bidsRoot: process.env.BIDS_ROOT,
+      physioRoot: process.env.BIDSPHYS_ROOT,
+      derivRoot: process.env.BIDSDER_ROOT,
+    },
+    process.cwd(),
+  );
+  if (!check.ok) {
+    printLines(check.lines, console.error);
+    process.exit(1);
+  }
+  const roots = resolveBidsRoots(check.bidsRoot, {
+    physioRoot: check.physioRoot,
+    derivRoot: check.derivRoot,
+  });
+  BIDS_ROOT = roots.bidsRoot;
+  BIDSPHYS_ROOT = roots.physioRoot;
+  BIDSDER_ROOT = roots.derivRoot;
+  ROOT_NOTES = roots.notes;
+  ANNOTATIONS_ROOT = join(process.env.ANNOTATIONS_ROOT ?? join(DATA_DIR, 'annotations'), datasetName());
+}
 
 // Dataset name = first folder under data/ (data/friends/friends → friends,
 // data/ds006644 → ds006644); outside data/, fall back to BIDS_ROOT's basename.
@@ -67,10 +99,8 @@ const QUALITY_ROOT = join(DATA_DIR, 'quality');
 const MAX_REPORT_BYTES = 500 * 1024 * 1024;
 
 // Annotations are grouped per dataset: <annotations>/<dataset>/sub-XX/[ses-YY/]func/
-const ANNOTATIONS_ROOT = join(
-  process.env.ANNOTATIONS_ROOT ?? join(DATA_DIR, 'annotations'),
-  datasetName(),
-);
+// (set in resolveRoots, once the dataset is known)
+let ANNOTATIONS_ROOT = '';
 
 export function bidsPhysioPlugin(): Plugin {
   let cachedSubjectsJson: string;
@@ -80,6 +110,7 @@ export function bidsPhysioPlugin(): Plugin {
 
   /** Subjects, scans (from the physio root) and dataset info (from BIDS_ROOT), read once and logged */
   function cacheDataset() {
+      resolveRoots();
       const subjects = getSubjects(BIDSPHYS_ROOT);
       cachedSubjectsJson = JSON.stringify({ subjects });
       scans = buildScans(BIDSPHYS_ROOT, subjects);
@@ -89,15 +120,7 @@ export function bidsPhysioPlugin(): Plugin {
       console.log(`[bids-physio] Derivatives root: ${BIDSDER_ROOT}`);
       for (const note of ROOT_NOTES) console.log(`[bids-physio]   ${note}`);
       console.log(`[bids-physio] Cached ${subjects.length} subjects, ${scans.length} scans`);
-      if (scans.length === 0) {
-        const check = process.env.BIDSPHYS_ROOT
-          ? 'BIDSPHYS_ROOT'
-          : 'that BIDS_ROOT is the main BIDS folder (set BIDSPHYS_ROOT if the physio is stored elsewhere)';
-        console.warn(
-          `[bids-physio] No readable physio files under ${BIDSPHYS_ROOT}. Check ${check}, ` +
-            'and that the *_physio.tsv.gz files have been downloaded (datalad get).',
-        );
-      }
+      if (scans.length === 0) printLines(noPhysioLines(BIDSPHYS_ROOT, !!process.env.BIDSPHYS_ROOT), console.warn);
       // `id` is the folder name under data/ (e.g. ds006644); the Stats tabs use it to find data/quality/<id>/
       // Downloaded vs listed physio files, counted once (git-annex when it can answer)
       const physioFiles = countPhysioFiles(BIDSPHYS_ROOT);
@@ -123,7 +146,7 @@ export function bidsPhysioPlugin(): Plugin {
     configureServer(server) {
       // Scan the dataset only when the dev server starts listening. Scripts run
       // with vite-node (e.g. scripts/compute-quality-metrics.ts) also load this
-      // plugin but never listen, so they skip this scan of the default BIDS_ROOT
+      // plugin but never listen, so they skip this scan, the BIDS_ROOT check
       // and its log lines. The work is synchronous, so it finishes before the
       // first request is handled. No HTTP server (middleware mode): scan now.
       if (server.httpServer) server.httpServer.once('listening', cacheDataset);
