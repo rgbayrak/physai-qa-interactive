@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { stepScan, resolveSearch, isScanStepKey, pickStartScan } from '../navigation';
+import { stepScan, resolveSearch, isScanStepKey, pickStartScan, firstUnannotatedTarget } from '../navigation';
 import { validStacked, toggleStacked, physioColumns } from '../controls';
 
 describe('physioColumns', () => {
@@ -27,6 +27,22 @@ describe('pickStartScan', () => {
   it('skips candidates that are not in the dataset', () => {
     expect(pickStartScan(scans, { linked: s('99', '01'), firstUnannotated: scans[1] })).toEqual(scans[1]);
     expect(pickStartScan([], {})).toBeUndefined();
+  });
+});
+
+describe('firstUnannotatedTarget', () => {
+  it('opens the first unannotated scan when another scan is shown', () => {
+    expect(firstUnannotatedTarget(scans, scans[2], scans[0])).toEqual({ scan: scans[2] });
+    expect(firstUnannotatedTarget(scans, scans[2], null)).toEqual({ scan: scans[2] });
+  });
+
+  it('is off when that scan is the one shown', () => {
+    expect(firstUnannotatedTarget(scans, s('01', '02'), scans[1])).toEqual({ scan: null, reason: 'current' });
+  });
+
+  it('is off when every scan is annotated or the scan is not in the dataset', () => {
+    expect(firstUnannotatedTarget(scans, null, scans[0])).toEqual({ scan: null, reason: 'all-annotated' });
+    expect(firstUnannotatedTarget(scans, s('99', '01'), scans[0])).toEqual({ scan: null, reason: 'all-annotated' });
   });
 });
 

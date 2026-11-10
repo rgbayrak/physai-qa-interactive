@@ -29,3 +29,12 @@ export function scanHash(scan: ScanKeyLike): string {
 export function statsUrl(scan: ScanKeyLike): string {
   return `/quality.html${scanHash(scan)}`;
 }
+
+/**
+ * Address of Explore and Annotate for one scan, for the links from Stats (its
+ * folder tab and "Open this scan…"). Without a scan in the link, Explore and
+ * Annotate opens the earliest scan not annotated yet.
+ */
+export function viewerUrl(scan: ScanKeyLike): string {
+  return `/${scanHash(scan)}`;
+}
