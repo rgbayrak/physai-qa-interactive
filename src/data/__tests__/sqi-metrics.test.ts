@@ -47,10 +47,6 @@ describe('computeSQI: basic statistics', () => {
     expect(m.stdDev).toBeCloseTo(Math.SQRT1_2, 3);
   });
 
-  it('does not compute min, max, median or percent non-zero', () => {
-    for (const key of ['min', 'max', 'median', 'percentNonZero']) expect(m).not.toHaveProperty(key);
-  });
-
   it('skewness 0 and excess kurtosis -1.5', () => {
     expect(m.skewness).toBeCloseTo(0, 3);
     expect(m.kurtosis).toBeCloseTo(-1.5, 2);

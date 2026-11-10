@@ -21,6 +21,21 @@ derivatives are stored outside that folder, also set `BIDSPHYS_ROOT` and
 `BIDSDER_ROOT` (see
 [Pointing the tool at the right folders](#pointing-the-tool-at-the-right-folders)).
 
+## The dev server stops with "folder not found"
+
+The terminal names the setting and the folder it looked for:
+
+- `BIDS_ROOT folder not found: …`: the path does not exist. A relative path
+  is read from the project folder, so `data/ds006644` means
+  `<project>/data/ds006644`.
+- `BIDSPHYS_ROOT folder not found: …`: set it to the folder with the
+  `*_physio.tsv.gz` files, or leave it out when they are inside `BIDS_ROOT`.
+- `BIDSDER_ROOT folder not found: …`: set it to the derivatives folder with
+  the confounds files, or leave it out when it is inside
+  `BIDS_ROOT/derivatives/`.
+
+Fix the path and run `npm run dev` again.
+
 ## The viewer shows no scans
 
 The terminal says `No readable physio files under …`.
@@ -192,9 +207,15 @@ the first folder under `data/` (`data/friends/friends` → `friends`), or
 
 The header and the terminal say `The main BIDS folder's dataset description
 was not found at …`. The dataset name, authors, licence and DOI come from
-`dataset_description.json` in `BIDS_ROOT`, and the file is not there: the
-folder is not installed yet (an empty DataLad subdataset), the file is not
-downloaded, or `BIDS_ROOT` points at the wrong folder.
+`dataset_description.json` in `BIDS_ROOT`, and the file can't be read.
+
+The dev server stops with `BIDS-compliant dataset not found` when the file is
+not there at all (the folder is not installed yet, an empty DataLad
+subdataset, or `BIDS_ROOT` points at the wrong folder; see
+[The dev server stops with "No BIDS dataset given"](#the-dev-server-stops-with-no-bids-dataset-given)).
+So in the viewer this message means the file is listed but not downloaded
+(a git-annex link without its content). The compute script does not run that
+start check, so it shows this message in all three cases.
 
 - Until it is fixed, the header shows the title from the physio folder's
   description, else the derivatives', and says which one. That is the

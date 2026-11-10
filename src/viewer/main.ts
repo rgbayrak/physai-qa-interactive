@@ -13,7 +13,7 @@ import {
 } from '@/data/bids-physio-reader';
 import type { ScanEntry, PhysioRaw, ConfoundsRaw, EventsRaw, PeaksRaw } from '@/data/bids-physio-reader';
 import { getElements } from './dom';
-import { createState, sameScan } from './state';
+import { createState } from './state';
 import {
   createAnnotation,
   toAnnotationsFile,
@@ -23,7 +23,8 @@ import {
   WAVEFORM_QUALITIES,
 } from './annotations';
 import type { WaveformQuality } from '@/data/bids-physio-reader';
-import { renderAnnotationList, progressColor, escapeHtml } from './annotation-panel';
+import { renderAnnotationList, progressColor } from './annotation-panel';
+import { escapeHtml } from '@/utils/html';
 import { renderDatasetInfo, renderQualityBadges, renderSummary } from './info';
 import type { MetricsStatus } from './info';
 import type { PhysioFileCount } from '@/data/bids-physio-reader';
@@ -54,7 +55,7 @@ import type { StackChartsHandle } from './charts/stack';
 import { fetchServedDataset, fetchDatasetQuality } from '@/quality/data';
 import { createScatterPanel } from '@/quality/scatter-panel';
 import { parseScanHash, statsUrl } from '@/quality/route';
-import { scanId } from '@/quality/metrics-tsv';
+import { scanId, sameScanKey } from '@/quality/metrics-tsv';
 
 // Entry point: owns the DOM, the state object and the live charts, and wires
 // user events to the modules that do the work.
@@ -170,7 +171,7 @@ async function loadSavedAnnotations(scan: ScanEntry, channel: string) {
   const stored = await fetchAnnotations(scan.sub, scan.ses, scan.task, scan.run, channel).catch(() => null);
   if (!stored) return;
   // Discard if the scan or channel changed while the request was in flight
-  if (!sameScan(state.current, scan) || channel !== els.channelSelect.value) return;
+  if (!state.current || !sameScanKey(state.current, scan) || channel !== els.channelSelect.value) return;
   state.annotations = fromAnnotationsFile(stored);
   state.waveform = waveformAssessmentFromFile(stored);
   focusContext?.redrawAnnotations();
@@ -346,7 +347,7 @@ function pickPreferred(options: string[], preferred: (string | undefined)[]): st
 
 async function loadPhysio(scan: ScanEntry) {
   // Same scan already loaded (e.g. dropdown re-selected): rebuild from cache
-  if (sameScan(state.current, scan) && state.raw) {
+  if (state.current && sameScanKey(state.current, scan) && state.raw) {
     buildMainCharts(state.raw, els.channelSelect.value);
     rebuildStack(state.raw);
     if (state.events) rebuildEvents(state.events, state.raw);

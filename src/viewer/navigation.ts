@@ -1,4 +1,5 @@
 import type { ScanEntry } from '@/data/bids-physio-reader';
+import { sameScanKey } from '@/quality/metrics-tsv';
 
 /**
  * The scan `delta` steps away from `current` in hierarchy order, wrapping at
@@ -6,9 +7,7 @@ import type { ScanEntry } from '@/data/bids-physio-reader';
  * first scan.
  */
 export function stepScan(scans: ScanEntry[], current: ScanEntry, delta: number): ScanEntry {
-  const idx = scans.findIndex(
-    (s) => s.sub === current.sub && s.ses === current.ses && s.task === current.task && s.run === current.run,
-  );
+  const idx = scans.findIndex((s) => sameScanKey(s, current));
   return scans[(idx + delta + scans.length) % scans.length];
 }
 
@@ -31,9 +30,7 @@ export function pickStartScan(
 
 /** The entry in `scans` for `scan`, or undefined when it is not in the dataset (or not given) */
 export function findScan(scans: ScanEntry[], scan: ScanEntry | null | undefined): ScanEntry | undefined {
-  return scan
-    ? scans.find((s) => s.sub === scan.sub && s.ses === scan.ses && s.task === scan.task && s.run === scan.run)
-    : undefined;
+  return scan ? scans.find((s) => sameScanKey(s, scan)) : undefined;
 }
 
 /**

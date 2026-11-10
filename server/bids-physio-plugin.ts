@@ -123,37 +123,37 @@ export function bidsPhysioPlugin(): Plugin {
 
   /** Subjects, scans (from the physio root) and dataset info (from BIDS_ROOT), read once and logged */
   function cacheDataset() {
-      printBannerOnce();
-      resolveRoots();
-      const subjects = getSubjects(BIDSPHYS_ROOT);
-      cachedSubjectsJson = JSON.stringify({ subjects });
-      scans = buildScans(BIDSPHYS_ROOT, subjects);
-      cachedScansJson = JSON.stringify({ scans });
-      console.log(`[bids-physio] BIDS root: ${BIDS_ROOT}`);
-      console.log(`[bids-physio] Physio root: ${BIDSPHYS_ROOT}`);
-      console.log(`[bids-physio] Derivatives root: ${BIDSDER_ROOT}`);
-      for (const note of ROOT_NOTES) console.log(`[bids-physio]   ${note}`);
-      console.log(`[bids-physio] Cached ${subjects.length} subjects, ${scans.length} scans`);
-      if (scans.length === 0) printLines(noPhysioLines(BIDSPHYS_ROOT, !!process.env.BIDSPHYS_ROOT), console.warn);
-      // `id` is the folder name under data/ (e.g. ds006644); the Stats tabs use it to find data/quality/<id>/
-      // Downloaded vs listed physio files, counted once (git-annex when it can answer)
-      const physioFiles = countPhysioFiles(BIDSPHYS_ROOT);
-      console.log(
-        `[bids-physio] Physio files: ${physioFiles.downloaded} of ${physioFiles.onDisk} downloaded (${physioFiles.source})`,
-      );
-      const info = readDatasetInfo(BIDS_ROOT, BIDSDER_ROOT, BIDSPHYS_ROOT);
-      for (const line of descriptionNoticeLines(info.description)) console.warn(`[bids-physio] ${noticeText(line)}`);
-      // File and folder names against the rules of the declared BIDSVersion (names only, nothing downloaded)
-      const structure = checkStructure(BIDS_ROOT, info.bidsVersion);
-      const structureMsg = structureLine(structure);
-      if (structureMsg) console.log(`[bids-physio] ${structureText(structureMsg)}`);
-      cachedDatasetJson = JSON.stringify({
-        ...info,
-        id: datasetName(),
-        physioFiles,
-        structure,
-      });
-    }
+    printBannerOnce();
+    resolveRoots();
+    const subjects = getSubjects(BIDSPHYS_ROOT);
+    cachedSubjectsJson = JSON.stringify({ subjects });
+    scans = buildScans(BIDSPHYS_ROOT, subjects);
+    cachedScansJson = JSON.stringify({ scans });
+    console.log(`[bids-physio] BIDS root: ${BIDS_ROOT}`);
+    console.log(`[bids-physio] Physio root: ${BIDSPHYS_ROOT}`);
+    console.log(`[bids-physio] Derivatives root: ${BIDSDER_ROOT}`);
+    for (const note of ROOT_NOTES) console.log(`[bids-physio]   ${note}`);
+    console.log(`[bids-physio] Cached ${subjects.length} subjects, ${scans.length} scans`);
+    if (scans.length === 0) printLines(noPhysioLines(BIDSPHYS_ROOT, !!process.env.BIDSPHYS_ROOT), console.warn);
+    // Downloaded vs listed physio files, counted once (git-annex when it can answer)
+    const physioFiles = countPhysioFiles(BIDSPHYS_ROOT);
+    console.log(
+      `[bids-physio] Physio files: ${physioFiles.downloaded} of ${physioFiles.onDisk} downloaded (${physioFiles.source})`,
+    );
+    const info = readDatasetInfo(BIDS_ROOT, BIDSDER_ROOT, BIDSPHYS_ROOT);
+    for (const line of descriptionNoticeLines(info.description)) console.warn(`[bids-physio] ${noticeText(line)}`);
+    // File and folder names against the rules of the declared BIDSVersion (names only, nothing downloaded)
+    const structure = checkStructure(BIDS_ROOT, info.bidsVersion);
+    const structureMsg = structureLine(structure);
+    if (structureMsg) console.log(`[bids-physio] ${structureText(structureMsg)}`);
+    cachedDatasetJson = JSON.stringify({
+      ...info,
+      // The folder name under data/ (e.g. ds006644); the Stats tab uses it to find data/quality/<id>/
+      id: datasetName(),
+      physioFiles,
+      structure,
+    });
+  }
 
   return {
     name: 'bids-physio',

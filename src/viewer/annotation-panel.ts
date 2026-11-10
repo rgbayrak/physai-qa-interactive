@@ -1,20 +1,8 @@
 import type { Annotation } from './annotations';
-
-const HTML_ESCAPES: Record<string, string> = {
-  '&': '&amp;',
-  '<': '&lt;',
-  '>': '&gt;',
-  '"': '&quot;',
-  "'": '&#39;',
-};
-
-/** Escape user-entered text (annotation labels) before putting it in HTML */
-export function escapeHtml(str: string): string {
-  return str.replace(/[&<>"']/g, (c) => HTML_ESCAPES[c]);
-}
+import { escapeHtml } from '@/utils/html';
 
 /** Annotation progress bar colours: yellow at the start, green halfway, blue when done */
-export const PROGRESS_STOPS: readonly [number, number, number][] = [
+const PROGRESS_STOPS: readonly [number, number, number][] = [
   [0xe3, 0xb5, 0x05], // yellow
   [0x2f, 0xa3, 0x6b], // green
   [0x3b, 0x6f, 0xd8], // blue

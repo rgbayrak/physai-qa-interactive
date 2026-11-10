@@ -312,7 +312,7 @@ function participantLine(table: ParticipantsTable | null, sub: string): string {
     .join(' · ');
 }
 
-export interface ReportOptions {
+interface ReportOptions {
   dataset: string;
   data: LoadedDataset;
   onProgress?: (message: string) => void;

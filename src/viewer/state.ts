@@ -15,7 +15,7 @@ export interface RestoredSelection {
  * All mutable viewer state lives in this one object. Modules receive what they
  * need from it as arguments; only main.ts writes to it.
  */
-export interface ViewerState {
+interface ViewerState {
   subjects: SubjectInfo[];
   /** Every readable scan in hierarchy order, for prev/next and search */
   scans: ScanEntry[];
@@ -49,8 +49,4 @@ export function createState(): ViewerState {
     waveform: { ...NO_ASSESSMENT },
     restoredSelection: null,
   };
-}
-
-export function sameScan(a: ScanEntry | null, b: ScanEntry): boolean {
-  return a !== null && a.sub === b.sub && a.ses === b.ses && a.task === b.task && a.run === b.run;
 }

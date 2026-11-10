@@ -101,7 +101,7 @@ function missingTopLevel(root: string, rules: BidsRules): string[] {
 }
 
 /** Check every sub-<label>/[ses-<label>/]<datatype>/ name in root against one version's rules */
-export function checkWithRules(root: string, rules: BidsRules): Extract<BidsStructure, { state: 'checked' }> {
+function checkWithRules(root: string, rules: BidsRules): Extract<BidsStructure, { state: 'checked' }> {
   const problems: StructureProblem[] = [];
   let problemCount = 0;
   let filesChecked = 0;

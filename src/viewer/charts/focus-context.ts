@@ -16,7 +16,7 @@ import {
 } from './shared';
 import type { GroupSelection } from './shared';
 
-export interface FocusContextOptions {
+interface FocusContextOptions {
   raw: PhysioRaw;
   channel: string;
   getAnnotations: () => Annotation[];

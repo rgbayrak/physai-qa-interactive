@@ -27,7 +27,7 @@ import type { AxisChoice, ColorBy } from './model';
 // variable from participants.tsv. Receives its elements and the loaded
 // dataset; double-clicking a point calls onOpenScan.
 
-export interface ScatterElements {
+interface ScatterElements {
   xSelect: HTMLSelectElement;
   ySelect: HTMLSelectElement;
   colorSelect: HTMLSelectElement;
@@ -36,7 +36,7 @@ export interface ScatterElements {
   note: HTMLElement;
 }
 
-export interface ScatterPanel {
+interface ScatterPanel {
   show: (data: LoadedDataset) => void;
   /** The scan open in Explore and Annotate: its point is drawn larger and pinkish red */
   setCurrentScan: (scan: ScanKeyLike | null) => void;

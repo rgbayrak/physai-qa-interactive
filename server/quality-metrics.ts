@@ -39,14 +39,14 @@ import type {
 // input files: scans are in sorted order and nothing time- or machine-specific
 // is written.
 
-export type PhysioResult = NonNullable<ReturnType<typeof readPhysio>>;
+type PhysioResult = NonNullable<ReturnType<typeof readPhysio>>;
 
 /** Buckets per channel in the waveform envelopes */
-export const WAVEFORM_BUCKETS = 2000;
+const WAVEFORM_BUCKETS = 2000;
 
 const DATASET_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
-export interface DatasetPaths extends BidsRoots {
+interface DatasetPaths extends BidsRoots {
   dataset: string;
 }
 
@@ -71,7 +71,7 @@ export function resolveDatasetPaths(
   return { dataset, ...roots };
 }
 
-export interface PhysioChannels {
+interface PhysioChannels {
   /** The scan with only its physiological columns */
   raw: PhysioResult;
   /** Signal type of each kept column, same order as raw.columns */
@@ -149,7 +149,7 @@ function splitTsvLine(line: string): string[] {
 }
 
 /** participants.tsv + participants.json; null if there is no readable participants.tsv */
-export function readParticipants(bidsRoot: string): ParticipantsTable | null {
+function readParticipants(bidsRoot: string): ParticipantsTable | null {
   const tsvPath = join(bidsRoot, 'participants.tsv');
   if (!isReadable(tsvPath)) return null;
   const lines = readFileSync(tsvPath, 'utf-8').split('\n').filter((l) => l.trim().length > 0);
@@ -204,7 +204,7 @@ const byNumeric = (a: string, b: string) => a.localeCompare(b, undefined, { nume
  * Units of a scan's columns from its physio sidecar, where it describes a
  * column as an object with a string "Units" (e.g. "cardiac": {"Units": "mV"}).
  */
-export function readChannelUnits(physioRoot: string, scan: ScanEntry): Record<string, string> {
+function readChannelUnits(physioRoot: string, scan: ScanEntry): Record<string, string> {
   const found = findPhysioFiles(physioRoot, scan.sub, scan.ses, scan.task, scan.run);
   if (!found?.sidecarPath) return {};
   try {
@@ -220,7 +220,7 @@ export function readChannelUnits(physioRoot: string, scan: ScanEntry): Record<st
   }
 }
 
-export interface QualityRunOptions {
+interface QualityRunOptions {
   /** Folder holding the datasets, normally <project>/data */
   dataDir: string;
   dataset: string;
@@ -234,7 +234,7 @@ export interface QualityRunOptions {
   log?: (msg: string) => void;
 }
 
-export interface QualityRunResult {
+interface QualityRunResult {
   outDir: string;
   rows: QualityRow[];
   summary: DatasetQualityFile;

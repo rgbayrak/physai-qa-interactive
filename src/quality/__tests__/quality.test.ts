@@ -193,7 +193,7 @@ describe('model', () => {
     row({ sub: '02', channel: 'trigger', task: 'motor', sidecarAssessment: '', timingStatus: 'mismatch' }),
   ];
 
-  it('labels every metric from the viewer SQI table', () => {
+  it('labels every metric from the metric column definitions', () => {
     expect(METRIC_DEFS).toHaveLength(METRIC_COLUMNS.length);
     expect(METRIC_DEFS.find((d) => d.key === 'beatCorrelation')!.label).toBe('Beat Corr');
   });

@@ -84,7 +84,7 @@ export function renderDatasetInfo(el: HTMLElement, info: DatasetInfo | null): vo
 // ── Dataset summary (between the dataset header and the dropdowns) ──
 
 /** A piece of summary text; `code` pieces are file names, shown in the code style */
-export type SummaryPart = string | { code: string };
+type SummaryPart = string | { code: string };
 
 /** What the page knows about the quality metrics: still loading (undefined), none, or found with their last logged run */
 export type MetricsStatus = { found: false } | { found: true; lastRun: QualityRun | null };

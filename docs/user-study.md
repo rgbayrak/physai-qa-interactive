@@ -114,6 +114,7 @@ On the **Explore and Annotate** tab.
 | Annotate On / drag a time window / label | | | |
 | Delete a time window (×) | | | |
 | Annotated count and progress bar | | | |
+| Go to the first unannotated scan | | | |
 
 ## Part C: Scatter plot and Stats tab
 
@@ -126,7 +127,7 @@ Check that the script from task 2 has finished, then reload the page: the scatte
 | 12 | Show **cardiac**, then set **Y = Beat Corr** and **X = SNR**. Hover over the point that looks most unusual and write down its subject and session: \_\_\_\_\_\_\_\_\_\_ | | | |
 | 13 | Set **X** to a participant variable (e.g. **age** or **sex**), and change what the points are colored by. What do the colors mean? Then set X back to **SNR**. | | | |
 | 14 | **Double-click** the point from task 12. Where did it take you, and is it the scan you picked? | | | |
-| 15 | On the **Stats** tab for that scan, look at the waveforms. Does the signal look clean? Where does the scan sit in the histograms compared with the group (solid dark line = this scan, dashed grey line = group mean)? Hide one group of metrics, then show it again. | | | |
+| 15 | On the **Stats** tab for that scan, look at the waveforms. Does the signal look clean? Where does the scan sit in the histograms compared with the group (solid dark line = this scan, dashed grey line = group mean)? Hide a metric, then show it again. | | | |
 | 16 | Open the PDF report for this dataset and find the page for the scan from task 12. Where is the file saved? | | | |
 
 ## Part D: Questionnaires
@@ -168,7 +169,7 @@ Rate each statement: 1 = strongly disagree, 4 = neither, 7 = strongly agree.
 | Timing badge (trigger verification) | | | | | | |
 | Signal quality rating and notes for the whole recording | | | | | | |
 | Time-window annotation | | | | | | |
-| Annotated count, progress bar and opening on the next unannotated scan | | | | | | |
+| Annotated count, progress bar and opening on the earliest unannotated scan | | | | | | |
 | Scatter plot (viewed scan highlighted, color legend) | | | | | | |
 | Stats tab (waveforms, metric tables, group histograms, Metrics shown) | | | | | | |
 | PDF report (saved with the metrics) | | | | | | |
@@ -210,7 +211,7 @@ Tasks 3-8 are open: record the scan each participant picked and their reasoning.
 | Task | Expected result |
 |---|---|
 | 1 | Dataset name in the header under the tabs; 80 scans, shown in the Annotations box as "(0/80 … signals are annotated)" |
-| 2 | Script finishes without errors; `quality_metrics.tsv`, `dataset.json` and `waveforms/` written to `data/quality/ds006644/` |
+| 2 | Script finishes without errors; `quality_metrics.tsv`, `dataset.json` and `waveforms/` written to `data/quality/ds006644/`, and a line added to `quality_runs.tsv` there |
 | 5 | Stack the other channel and/or pick a Confound (Auxiliary Signal Options row); the window length is shown over the overview chart |
 | 6 | Timing badge next to the file name; hover for the details |
 | 7 | A Signal Quality button chosen and a note written; a time window labelled with Annotate On. Labels cannot be edited: replacing means deleting (×) and drawing it again |

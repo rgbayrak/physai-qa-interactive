@@ -17,10 +17,14 @@ bids-sessions/      sessions + runs, fMRIPrep-style derivatives
                  (unpadded) with VolumeTiming             -> mismatch
   sub-02 ses-02  no trigger channel                       -> unverified
   sub-03 ses-01  physio is a broken symlink (un-fetched annex file) -> skipped
+  Also: run-level quality sidecar (sub-01 ses-01); physprep-style peaks
+  events next to the physio (sub-01 ses-02, TRIAL peaks overlay).
 
 bids-nosessions/    no sessions, no runs
   sub-01  subject-level physio sidecar, header row in the TSV, top-level
           task-motor_bold.json, run-less quality sidecar  -> verified
+          task events (two trial types, a numeric column, an n/a duration);
+          MRIQC multi-echo derivatives (echo-1 is used)
   sub-02  top-level physio.json fallback, no trigger      -> unverified
 """
 

@@ -70,7 +70,6 @@ export interface TooltipConfig {
   enabled?: boolean;
   className?: string;
   offset?: { x: number; y: number };
-  render?: (data: unknown) => string;
 }
 
 export interface TooltipInstance {
@@ -86,7 +85,6 @@ export interface ResizeConfig {
   enabled?: boolean;
   debounceMs?: number;
   minWidth?: number;
-  minHeight?: number;
 }
 
 export interface ResizeHandle {
@@ -128,7 +126,7 @@ export interface BrushHandle {
 
 // ── Event system ──────────────────────────────────────────
 
-export type ChartEvent = 'beforeUpdate' | 'afterUpdate' | 'resize' | 'destroy' | 'zoom' | 'brushStart' | 'brush' | 'brushEnd';
+export type ChartEvent = 'beforeUpdate' | 'afterUpdate' | 'resize' | 'destroy';
 
 export type ChartEventCallback = (data?: unknown) => void;
 

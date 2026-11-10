@@ -2,7 +2,7 @@ import { lstatSync, statSync } from 'fs';
 import { join, resolve } from 'path';
 
 /** Folder settings as given in the environment (BIDS_ROOT, BIDSPHYS_ROOT, BIDSDER_ROOT) */
-export interface RootSettings {
+interface RootSettings {
   bidsRoot?: string;
   physioRoot?: string;
   derivRoot?: string;
@@ -13,7 +13,7 @@ export interface RootSettings {
  * or the lines of a message telling the user what to set. There is no default
  * dataset: without BIDS_ROOT the dev server does not start.
  */
-export type RootsCheck =
+type RootsCheck =
   | { ok: true; bidsRoot: string; physioRoot?: string; derivRoot?: string }
   | { ok: false; lines: string[] };
 

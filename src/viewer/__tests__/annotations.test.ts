@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { createAnnotation, toAnnotationsFile, fromAnnotationsFile, waveformAssessmentFromFile } from '../annotations';
 import type { AnnotationsFile } from '@/data/bids-physio-reader';
-import { escapeHtml, annotationListHtml, EMPTY_ANNOTATIONS_HTML, progressColor } from '../annotation-panel';
+import { annotationListHtml, EMPTY_ANNOTATIONS_HTML, progressColor } from '../annotation-panel';
+import { escapeHtml } from '@/utils/html';
 
 const scan = { sub: '01', ses: '02', task: 'rest', run: '01' };
 

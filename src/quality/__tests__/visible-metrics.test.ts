@@ -38,7 +38,7 @@ function row(metrics: Partial<Record<MetricKey, number>>): QualityRow {
 }
 
 describe('metric groups', () => {
-  it('uses the viewer SQI table groups and covers every metric once', () => {
+  it('uses the metric column groups and covers every metric once', () => {
     expect(METRIC_GROUPS).toEqual(['Basic', 'Distribution', 'PaPaGei', 'PhysioQC']);
     expect(METRIC_GROUPS.flatMap(groupKeys).sort()).toEqual([...ALL_METRICS].sort());
     expect(groupKeys('PaPaGei')).toEqual(['svri', 'ipa', 'sqi']);
