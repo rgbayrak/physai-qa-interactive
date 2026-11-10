@@ -9,6 +9,11 @@ export default defineConfig({
       '@': resolve(__dirname, 'src'),
     },
   },
+  // Scan only the app's pages for dependencies, not other HTML in the
+  // project (e.g. the built docs in docs/_build/)
+  optimizeDeps: {
+    entries: ['index.html', 'quality.html'],
+  },
   build: {
     rollupOptions: {
       input: {
