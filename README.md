@@ -16,8 +16,10 @@ The viewer is built on a reusable D3 + TypeScript chart library with **zoom/pan*
 
 ```bash
 npm install
-npm run dev        # Vite dev server with hot reload
+BIDS_ROOT=data/<dataset> npm run dev   # Vite dev server with hot reload
 ```
+
+There is no default dataset: `BIDS_ROOT` must point at the main BIDS folder (the one with `dataset_description.json`). Without it, the dev server stops and says what to set.
 
 ### Getting the data
 
@@ -127,7 +129,7 @@ The server reads from three folders:
 
 | Setting | Point it at | Read from it |
 |---|---|---|
-| `BIDS_ROOT` | Always the main BIDS folder (default `data/ds006644`), even when the physio is stored elsewhere | `dataset_description.json`, `participants.tsv`, task events, BOLD sidecars |
+| `BIDS_ROOT` | Always the main BIDS folder (required, no default), even when the physio is stored elsewhere | `dataset_description.json`, `participants.tsv`, task events, BOLD sidecars |
 | `BIDSPHYS_ROOT` | The folder holding the `*_physio.tsv.gz` files, when it is outside `BIDS_ROOT` | Physio files and their sidecars; subjects, sessions, tasks and runs are discovered here |
 | `BIDSDER_ROOT` | The derivatives folder with the confounds, when it is outside `BIDS_ROOT/derivatives/` | Confounds, the derivatives' dataset description, BOLD sidecars when `BIDS_ROOT` has none |
 

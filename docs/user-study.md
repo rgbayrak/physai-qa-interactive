@@ -11,22 +11,21 @@
 | D | Questionnaires | 
 | E | Open questions | 
 
-**Setup.**
-
-- Get a fresh copy of **ds006644** with its fMRIPrep derivatives in `data/ds006644` (step 2 below). Do **not** compute the quality metrics (skip step 3), and remove any `data/annotations/ds006644/` and `data/quality/ds006644/` left from earlier sessions.
-- Start the tool (step 4), open it in the browser, and keep a terminal open in the project folder.
-
 ## Getting the data and starting the tool
 
 Run these in a terminal in the project folder. The tool works with any dataset in [BIDS](https://bids.neuroimaging.io) format.
 
 **1. Install** (once): `npm install`
 
-**2. Get a dataset.** Either way, the dataset goes in its own folder under `data/` in the project folder (e.g. `data/ds006644`).
+**2. Choose a dataset.**
 
-- **Download the study dataset (ds006644)** with DataLad, which fetches only the files the tool needs:
+- **Option 1: Use your own BIDS-compliant dataset.** Any dataset in BIDS format works, as long as it has:
+  - physiological recordings as `sub-XX/[ses-XX/]func/*_physio.tsv.gz`, each with a JSON sidecar giving `SamplingFrequency`, `StartTime` and `Columns`;
+  - optionally fMRIPrep derivatives (`*_desc-confounds_timeseries.tsv`) to show head-motion confounds, by default in a folder inside `derivatives/` in the dataset.
 
-Download datalad: 
+  The dataset can stay where it is: give the tool its path (step 4). If the physio or the derivatives are stored next to the main BIDS folder rather than inside it (e.g. CNeuroMod), give all three folders (steps 3 and 4).
+
+- **Option 2: Download an OpenNeuro dataset with physiological recordings (e.g. ds006644) with DataLad.** Install DataLad by following the instructions for your operating system at https://www.datalad.org/#install. DataLad first downloads only the file list and links to the annexed data; `datalad get` then fetches just the files the tool needs:
 
   ```bash
   datalad install -s https://github.com/OpenNeuroDatasets/ds006644.git data/ds006644
@@ -35,12 +34,6 @@ Download datalad:
   datalad get derivatives/fmriprep/sub-*/ses-*/func/*_desc-confounds_timeseries.*
   cd ../..
   ```
-
-- **Or add your own BIDS-compliant dataset:** copy (or link) it to `data/<name>/`. Any dataset in BIDS format works, as long as it has:
-  - physiological recordings as `sub-XX/[ses-XX/]func/*_physio.tsv.gz`, each with a JSON sidecar giving `SamplingFrequency`, `StartTime` and `Columns`;
-  - optionally fMRIPrep derivatives (`*_desc-confounds_timeseries.tsv`) to show head-motion confounds, by default in a folder inside `derivatives/` in the dataset.
-
-  The dataset can also stay where it is: give the tool its path instead (step 4). If the physio or the derivatives are stored next to the main BIDS folder rather than inside it (e.g. CNeuroMod), give all three folders (steps 3 and 4).
 
 **3. Optional: compute the quality metrics first.** If you want the dataset-wide quality metrics to visualize (the scatter plot in Explore and Annotate, the Stats tab and the PDF report), run the script once for the dataset before starting the tool:
 
@@ -54,7 +47,7 @@ It writes `data/quality/<name>/`. Without it, the tool still works for exploring
 **4. Start the tool:**
 
 ```bash
-npm run dev                                                        # serves data/ds006644
+BIDS_ROOT=data/ds006644 npm run dev                                # the study dataset
 BIDS_ROOT=data/mydata npm run dev                                  # another dataset under data/
 BIDS_ROOT=/path/to/bids BIDSDER_ROOT=/path/to/derivatives/fmriprep npm run dev   # a dataset outside data/
 BIDS_ROOT=data/friends/friends BIDSPHYS_ROOT=data/friends/physprep BIDSDER_ROOT=data/friends/fmriprep npm run dev   # physio and derivatives next to the main BIDS folder
@@ -65,7 +58,7 @@ BIDS_ROOT=data/friends/friends BIDSPHYS_ROOT=data/friends/physprep BIDSDER_ROOT=
 **During the session**, fill in the **Done** column for each task:
 **S** = completed alone, **H** = completed with facilitator help, **F** = failed or gave up, **–** = not reached.
 
-**Participant.** Free explore for 5 mins. Then do each task, then rate how easy it was in the **Ease** column. Say out loud anything that confuses you.
+**Participant.** Explore the tool freely for 5 minutes. Then do each task and rate how easy it was in the **Ease** column. Say out loud anything that confuses you.
 
 **Ease scale (1-7):** *Overall, how difficult or easy was this task?*
 1 = very difficult, 4 = neither, 7 = very easy.
@@ -79,14 +72,14 @@ BIDS_ROOT=data/friends/friends BIDSPHYS_ROOT=data/friends/physprep BIDSDER_ROOT=
 | Years working with fMRI or BIDS data | |
 | Tools you currently use to check physiological data quality | |
 
-## Part A: Load a dataset and start the pipeline (5 min)
+## Part A: Load a dataset and start the pipeline
 
 | # | Do this | Done S/H/F/– | Ease 1-7 | Comments |
 |---|---|---|---|---|
 | 1 | In the browser, find which dataset the tool is showing and how many scans it found. | | | |
 | 2 | In the terminal, run `npx vite-node scripts/compute-quality-metrics.ts ds006644` to compute the dataset's quality metrics. Leave it running and continue with Part B. | | | |
 
-## Part B: Explore and annotate (18 min)
+## Part B: Explore and annotate
 
 On the **Explore and Annotate** tab.
 
@@ -122,7 +115,7 @@ On the **Explore and Annotate** tab.
 | Delete a time window (×) | | | |
 | Annotated count and progress bar | | | |
 
-## Part C: Scatter plot and Stats tab (10 min)
+## Part C: Scatter plot and Stats tab
 
 Check that the script from task 2 has finished, then reload the page: the scatter plot and the **Stats** tab appear once the metrics exist.
 
@@ -136,9 +129,9 @@ Check that the script from task 2 has finished, then reload the page: the scatte
 | 15 | On the **Stats** tab for that scan, look at the waveforms. Does the signal look clean? Where does the scan sit in the histograms compared with the group (solid dark line = this scan, dashed grey line = group mean)? Hide one group of metrics, then show it again. | | | |
 | 16 | Open the PDF report for this dataset and find the page for the scan from task 12. Where is the file saved? | | | |
 
-## Part D: After all tasks (8 min)
+## Part D: Questionnaires
 
-### D1. Ease of use (System Usability Scale)
+### D1. Ease of use (short questionnaire, adapted from the System Usability Scale)
 
 Rate each statement: 1 = strongly disagree, 5 = strongly agree.
 
@@ -146,14 +139,9 @@ Rate each statement: 1 = strongly disagree, 5 = strongly agree.
 |---|---|---|---|---|---|---|
 | 1 | I think that I would like to use this tool frequently. | | | | | |
 | 2 | I found the tool unnecessarily complex. | | | | | |
-| 3 | I thought the tool was easy to use. | | | | | |
-| 4 | I think that I would need the support of a technical person to be able to use this tool. | | | | | |
-| 5 | I found the various functions in this tool were well integrated. | | | | | |
-| 6 | I thought there was too much inconsistency in this tool. | | | | | |
-| 7 | I would imagine that most people would learn to use this tool very quickly. | | | | | |
-| 8 | I found the tool very cumbersome to use. | | | | | |
-| 9 | I felt very confident using the tool. | | | | | |
-| 10 | I needed to learn a lot of things before I could get going with this tool. | | | | | |
+| 3 | I found the various functions in this tool were well integrated. | | | | | |
+| 4 | I thought there was too much inconsistency in this tool. | | | | | |
+| 5 | I would imagine that most people would learn to use this tool very quickly. | | | | | |
 
 ### D2. Usefulness (Perceived Usefulness)
 
@@ -162,12 +150,11 @@ Rate each statement: 1 = strongly disagree, 4 = neither, 7 = strongly agree.
 
 | # | Using this tool in my work would... | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
 |---|---|---|---|---|---|---|---|---|
-| 1 | ...let me check data quality more quickly. | | | | | | | |
+| 1 | ...let me check issues in my data more quickly. | | | | | | | |
 | 2 | ...improve my quality assessment. | | | | | | | |
-| 3 | ...increase my productivity. | | | | | | | |
-| 4 | ...make my quality assessment more effective. | | | | | | | |
-| 5 | ...make it easier to check data quality. | | | | | | | |
-| 6 | Overall, I would find this tool useful in my work. | | | | | | | |
+| 3 | ...make my quality assessment more effective. | | | | | | | |
+| 4 | ...make it easier to check data quality. | | | | | | | |
+| 5 | Overall, I would find this tool useful in my work. | | | | | | | |
 
 ### D3. Usefulness of each feature
 
@@ -175,27 +162,18 @@ Rate each statement: 1 = strongly disagree, 4 = neither, 7 = strongly agree.
 
 | Feature | 1 | 2 | 3 | 4 | 5 | N/A |
 |---|---|---|---|---|---|---|
-| Loading a BIDS-compliant dataset with no configuration | | | | | | |
-| Dataset-wide quality metrics (script + TSV) | | | | | | |
+| Dataset-wide quality metrics | | | | | | |
 | Signal viewer (zoom, overview window and its length, stacked channels) | | | | | | |
 | Head-motion confounds next to the signals | | | | | | |
 | Timing badge (trigger verification) | | | | | | |
 | Signal quality rating and notes for the whole recording | | | | | | |
-| Time-window annotation (artifact annotation) | | | | | | |
+| Time-window annotation | | | | | | |
 | Annotated count, progress bar and opening on the next unannotated scan | | | | | | |
 | Scatter plot (viewed scan highlighted, color legend) | | | | | | |
 | Stats tab (waveforms, metric tables, group histograms, Metrics shown) | | | | | | |
 | PDF report (saved with the metrics) | | | | | | |
 
-### D4. Confidence
-
-1 = strongly disagree, 7 = strongly agree.
-
-| Statement | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
-|---|---|---|---|---|---|---|---|
-| After using the tool, I am confident in my judgement of signal quality. | | | | | | | |
-
-### Open questions (4 min)
+## Part E: Open questions
 
 **What was the most useful feature?**
 
@@ -207,15 +185,9 @@ Rate each statement: 1 = strongly disagree, 4 = neither, 7 = strongly agree.
 
 **Task ease (SEQ).** Per task, report the mean and SD (or median and range if n < 10). The published average is about 5.5; tasks below 5 are candidates for redesign. Summarize by part (A-C).
 
-**Ease of use (SUS, 0-100).** For each participant:
+**Ease of use (D1, 1-5).** For each participant, reverse-score the negative items 2 and 4 (6 − score), then average the five items. Report the mean and SD across participants. This is a shortened, adapted version of the System Usability Scale, so do not convert it to the 0-100 scale or compare it with the published benchmark of 68.
 
-- Odd items (1, 3, 5, 7, 9): score − 1
-- Even items (2, 4, 6, 8, 10): 5 − score
-- Sum the ten values and multiply by 2.5
-
-Report the mean and SD. The benchmark average is 68; above 80 is generally considered good.
-
-**Usefulness (PU, 1-7).** Average the six items per participant, then report the mean and SD across participants. Report Cronbach's alpha if n allows.
+**Usefulness (D2, 1-7).** Average the five items per participant, then report the mean and SD across participants. Report Cronbach's alpha if n allows.
 
 **Feature usefulness (1-5).** Report the median per feature and the number of N/A answers, ranked from most to least useful.
 
@@ -223,7 +195,7 @@ Report the mean and SD. The benchmark average is 68; above 80 is generally consi
 
 **Session length.** Record the total time per participant and report the median.
 
-**Suggested results sentence:** "N participants completed a median of X of 16 tasks unaided (Y% with help) in a median of Z minutes. The mean SUS score was \_\_ (SD \_\_), against a benchmark of 68, and perceived usefulness was \_\_ of 7 (SD \_\_). [Lowest-rated part] received the lowest ease ratings (mean SEQ \_\_)."
+**Suggested results sentence:** "N participants completed a median of X of 16 tasks unaided (Y% with help) in a median of Z minutes. Mean ease of use was \_\_ of 5 (SD \_\_), and perceived usefulness was \_\_ of 7 (SD \_\_). [Lowest-rated part] received the lowest ease ratings (mean SEQ \_\_)."
 
 **References**
 
@@ -233,20 +205,21 @@ Report the mean and SD. The benchmark average is 68; above 80 is generally consi
 
 ## Facilitator answer key (do not hand out)
 
+Tasks 3-8 are open: record the scan each participant picked and their reasoning. Score **Done** by whether they reached a judgement, not by which scan they chose.
+
 | Task | Expected result |
 |---|---|
 | 1 | Dataset name in the header under the tabs; 80 scans, shown in the Annotations box as "(0/80 … signals are annotated)" |
 | 2 | Script finishes without errors; `quality_metrics.tsv`, `dataset.json` and `waveforms/` written to `data/quality/ds006644/` |
-| 3-8 | Open: record the scan each participant picked and their reasoning. Score Done for whether they reached a judgement, not for which scan they chose. |
 | 5 | Stack the other channel and/or pick a Confound (Auxiliary Signal Options row); the window length is shown over the overview chart |
 | 6 | Timing badge next to the file name; hover for the details |
 | 7 | A Signal Quality button chosen and a note written; a time window labelled with Annotate On. Labels cannot be edited: replacing means deleting (×) and drawing it again |
-| 8 | Saved automatically (note in the Annotations box) to `data/annotations/ds006644/sub-XX/ses-XX/func/…_annotations.json`, with signal quality and notes first, then the windows with times and sample indices. Count goes to 1/80 and the bar starts filling. After reload it opens on the earliest scan not annotated yet for that channel |
+| 8 | Saved automatically (note in the Annotations box) to `data/annotations/ds006644/sub-XX/ses-XX/func/…_annotations.json`. Count goes to 1/80 and the bar starts filling. After reload it opens on the earliest scan not annotated yet for that channel |
 | 9 | Timing **not** verified: 21 trigger intervals differ from the TR (first is 0.704 s vs TR 1.8 s). The other 79 scans are trigger-verified. |
 | 10 | One row = one channel of one scan (check against the TSV) |
 | 11 | "n of 80 scans plotted" next to the legend; the viewed scan is the larger pinkish-red point ("Now viewing" in the legend) |
-| 12 | Channel is chosen with the Channel dropdown at the top of the page. Record which scan each participant picked; tasks 14-16 follow from it. Note whether it matches the outlier from task 3. |
+| 12 | Record the scan; tasks 14-16 follow from it. Note whether it is the scan from task 3. |
 | 13 | The legend names the Color by choice (e.g. "Session: ● 01 ● 02") |
 | 14 | The Stats tab opens on that scan |
 | 15 | Metrics shown box (left, level with the metrics): untick and tick a metric, or Hide all / Show all |
-| 16 | Link in the Stats sidebar under **PDF report** (built and saved the first time Stats opens after the metrics are computed); file at `data/quality/ds006644/quality_report.pdf` |
+| 16 | Link in the Stats sidebar under **PDF report** (built the first time Stats opens); file at `data/quality/ds006644/quality_report.pdf` |
