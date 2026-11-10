@@ -28,7 +28,7 @@ bibliography: paper.bib
 
 <!--
 Drafting notes (remove before submission)
-- Completed items from docs/JOSS-TODO.md are written up here, in the
+- Completed items from paper/JOSS-TODO.md are written up here, in the
   section they belong to, and removed from the checklist.
 - "Software design" describes the code as it is today (TypeScript server +
   viewer). Add the standalone server and launch command once JOSS-TODO

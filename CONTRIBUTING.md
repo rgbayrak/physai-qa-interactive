@@ -405,7 +405,7 @@ The BIDS version check (`server/bids-structure.ts`) needs no package: its rules 
 
 ## TODO / Improvements
 
-Research features and improvements. Publication readiness (license, packaging, docs, paper) is tracked separately in [docs/JOSS-TODO.md](docs/JOSS-TODO.md).
+Research features and improvements. Publication readiness (license, packaging, docs, paper) is tracked separately, in a local list that is not part of the repository.
 
 ### Annotations (Tab 1)
 
@@ -466,7 +466,7 @@ Research features and improvements. Publication readiness (license, packaging, d
 ### Docs and user study
 
 - [ ] Retake `docs/physviz.gif` (README) and the images in `user_facing/` and the paper for the current layout: On disk data summary under the Annotations box, the INTERACTIVE QUALITY ASSESSMENT TOOL title, the events chart, the scatter legend to the right and IBM Plex Sans
-- [ ] Add user-study tasks for the events chart and the On disk data summary (`docs/user-study.md`)
+- [ ] Add user-study tasks for the events chart and the On disk data summary (`docs/user-guide/user-study.md`)
 
 ### BIDS discovery (bottom-up)
 
@@ -489,5 +489,5 @@ Research features and improvements. Publication readiness (license, packaging, d
 
 ### Testing
 
-- [ ] Page-level tests under jsdom for the wiring in `src/viewer/main.ts` and `src/quality/main.ts`: Signal Quality buttons toggle and save, Notes save on blur and never to another scan, the progress line updates after a save, Metrics shown redraws without moving the page, Colour by hides when the dataset has nothing to colour by, the Stats tab and scatter plot stay hidden without quality metrics, the viewed scan's point is highlighted (needs `jsdom`, same as the chart-core tests in docs/JOSS-TODO.md)
+- [ ] Page-level tests under jsdom for the wiring in `src/viewer/main.ts` and `src/quality/main.ts`: Signal Quality buttons toggle and save, Notes save on blur and never to another scan, the progress line updates after a save, Metrics shown redraws without moving the page, Colour by hides when the dataset has nothing to colour by, the Stats tab and scatter plot stay hidden without quality metrics, the viewed scan's point is highlighted (needs `jsdom`, same as the planned chart-core tests)
 - [ ] Add a test suite that runs against every existing dataset under `data/` (`ds000210`, `ds004662`, `ds006644`, `movie10`, `friends`): subject/session/task/run discovery, physio + confounds reads, scan-onset timing, dataset info, and annotation path resolution (dataset name, `func/` layout). Skip a dataset gracefully when its files aren't downloaded. `server/__tests__/bids-layout.test.ts` already covers `ds006644` and `ds000210`; `movie10` and `friends` (raw data in `physprep/`) and `ds004662` (task events, MRIQC confounds via `BIDSDER_ROOT=data/ds004662/ds004662-mriqc`) are still missing
