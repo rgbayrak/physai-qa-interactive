@@ -97,7 +97,7 @@ where standardized quality control is essential.
 physAI-QA-interactive is a browser-based tool for exploring and annotating
 physiological recordings stored in the Brain Imaging Data Structure (BIDS)
 [@gorgolewski2016]. It discovers every subject, session, task and run in a
-dataset and visualizes multimodal physiological signals alongside auxilliary measures. 
+dataset and visualizes multimodal physiological signals alongside auxiliary measures.
 Researchers can step through all scans of a dataset, zoom
 into signals, compute per-channel signal quality indices on recordings,
 and mark artifacts as time-stamped annotations saved alongside the dataset for
@@ -114,59 +114,65 @@ organized in BIDS [@gorgolewski2016] and works directly with datasets managed by
 DataLad [@halchenko2021]. Its documentation shows how to install a dataset from
 OpenNeuro [@markiewicz2021] with DataLad and fetch only the physiological and
 confound files, so users can start reviewing public data without downloading
-whole datasets. It has three key components:
+whole datasets. It has four key components:
 
 - **BIDS reader.** Discovers subjects, sessions, tasks and runs, follows BIDS
   metadata inheritance, skips files that DataLad has not yet fetched, and
-  locates fMRIPrep [@esteban2019] confounds and BOLD sidecars. Results are served to the
-  browser as a JSON API.
+  finds the physiological and derivatives folders by their content. It
+  locates fMRIPrep [@esteban2019] or MRIQC motion confounds, task events and
+  BOLD sidecars, checks file and folder names against the rules of the
+  dataset's declared BIDS version, and reports how many physiological files
+  are downloaded. Results are served to the browser as a JSON API.
 - **Signal quality metrics.** Whole-recording statistics for every channel,
   plus windowed and beat-level metrics for cardiac [@elgendi2016; @pincus1991]
   and respiratory channels. A script computes them for every scan of a
   dataset, keeping only physiological channels, and writes one TSV per
-  dataset; a dataset view plots any two metrics (or a metric against a
-  participant variable such as age), opens any scan with its waveforms and
-  its position in the group distribution, and exports a PDF report.
+  dataset, with a log of each run.
 - **Viewer and annotation.** Linked overview and detail charts, built on a
   TypeScript chart library over D3 [@bostock2011], stay responsive on
-  high-rate recordings. Extra channels and motion confounds follow the same
-  time window. Annotations are saved per scan and channel as JSON with times
-  and sample indices, ready to use as artifact masks. The interface keeps all
-  of its state in a single object; charts, controls, annotations and the
-  signal quality table are separate modules that receive state and page
-  elements as arguments rather than reaching into the page themselves.
-- **Group and Individual tabs.** Beyond single-scan review, offers a dataset-level view.
-  Quality metrics are precomputed for every physiological recording in a dataset
-  and stored in a single table, which the group tab loads to summarize quality
-  across the whole dataset, with interactive scatter plots. Outliers can be followed 
-  directly: selecting a point opens an individual view of that scan, 
-  which shows its waveforms, available subject information, and where 
-  each of its quality metrics falls in the group distribution. Moving
-  between the group and individual views lets researchers find problem scans
-  quickly and see why they stand out.
+  high-rate recordings. Extra channels, task events and motion confounds
+  follow the same time window. Annotations are saved per scan and channel as
+  JSON with times and sample indices, ready to use as artifact masks. The
+  interface keeps all of its state in a single object; charts, controls and
+  annotations are separate modules that receive state and page elements as
+  arguments rather than reaching into the page themselves.
+- **Dataset-level view.** Beyond single-scan review, the precomputed quality
+  metrics of every physiological recording are compared across the whole
+  dataset. A scatter plot under the viewer plots any two metrics, or a metric
+  against a participant variable such as age, with the scan being viewed
+  highlighted. Outliers can be followed directly: selecting a point opens
+  that scan in the Stats tab, which shows its waveforms, available subject
+  information, and where each of its quality metrics falls in the group
+  distribution; the same view is exported as a PDF report. Moving between
+  the two lets researchers find problem scans quickly and see why they stand
+  out.
 
 These follow four design goals: a low entry barrier (any standard BIDS dataset,
-no configuration), standardized checks with flexible judgement (fixed metric
-definitions and annotation format;
+only the dataset path to set), standardized checks with flexible judgement (fixed metric
+definitions and annotation format),
 transparency (documented metrics, outputs stored as plain files), and
 modularity (data access and metrics separate from the interface).
 
 
 # Software testing
 
-Automated tests, run by continuous integration on every push and pull request,
-cover:
+Automated tests, run by continuous integration on every push to the main
+branch and every pull request, cover:
 
-- **BIDS reading:** dataset discovery, sidecar lookup, and physiological and
-  confound reading, on two small synthetic BIDS datasets included in the
-  repository and on real OpenNeuro [@markiewicz2021] datasets when present.
+- **BIDS reading:** dataset discovery, finding the physiological and
+  derivatives folders, sidecar lookup, physiological reading, fMRIPrep and
+  MRIQC confounds, task events and downloaded-file counts, on two small
+  synthetic BIDS datasets included in the repository and on real OpenNeuro
+  [@markiewicz2021] datasets when present.
+- **Dataset checks:** the required dataset path, and file and folder names
+  against the rules of the declared BIDS version.
 - **Timing checks:** trigger detection and verification.
 - **Signal quality metrics:** values on synthetic signals with known statistics,
   and the dataset-wide metrics output (file format, identical output on reruns,
-  exclusion of non-physiological channels).
+  exclusion of non-physiological channels, the run log).
 - **Annotations:** saving, loading, and rejection of unsafe file paths.
 - **Interface logic:** annotation format, scan navigation and search, session
-  resume, chart helpers and the signal quality table.
+  resume, chart helpers and the metric definitions.
 
 # Research use
 
