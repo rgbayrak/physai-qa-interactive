@@ -10,11 +10,15 @@ It is part of **physAI**, a research suite for physiological data. This reposito
 
 The viewer is built on a reusable D3 + TypeScript chart library with **zoom/pan**, **brush selection**, **viewport culling** and a **focus+context** layout for dense time-series signals (see [CONTRIBUTING.md](CONTRIBUTING.md#chart-library-usage)).
 
-![Physio viewer demo](docs/physviz.gif)
+![Physio viewer demo](docs/images/physviz.gif)
 
 ## Quick start
 
+Requires [Node.js](https://nodejs.org/en/download) 22 (LTS), which comes with npm; check with `node --version`.
+
 ```bash
+git clone https://github.com/rgbayrak/physai-qa-interactive.git
+cd physai-qa-interactive
 npm install
 BIDS_ROOT=data/<dataset> npm run dev   # Vite dev server with hot reload
 ```
@@ -57,7 +61,7 @@ The app loads a BIDS physiology dataset and presents an interactive viewer with:
 
 - **On disk data summary** — a box under the Annotations box: how many physio recordings the dataset lists and how many are downloaded (counted once when the dev server starts, with git-annex when available), and how many the quality metrics cover, from the last line of `quality_runs.tsv`. When the metrics don't cover the whole dataset, it says to download the rest and rerun `scripts/compute-quality-metrics.ts`. A third line gives the result of the [BIDS version check](#bids-version-check)
 - **Controls** — under the INTERACTIVE QUALITY ASSESSMENT TOOL title, three rows: Subject, Session, Task, Run (when present) and Channel dropdowns; an **Auxiliary Signal Options** row with the Event dropdown (task scans with an events file), the Confound dropdown (when derivatives exist) and Stack checkboxes for extra channels, for the Auxiliary charts below (Channel and Stack offer only physiological channels, matched against the same dictionary as the quality metrics, so `trigger` is left out); Prev/Next buttons (or ←/→ keys) to step through scans in hierarchy order plus a search bar accepting `sub-03` or `ses-012` style input. The Annotate: On/Off button is in the Annotations box, under Time Windows
-- **Dataset info** — name, authors, BIDS version, license, DOI link and derivatives pipeline/version, read from the dataset's own `dataset_description.json` (raw and derivatives); fields that are missing are skipped. When `dataset_description.json` is missing, or its `Name` or `Authors` are placeholders, a notice under the name says how to fix it (see [docs/troubleshooting.md](docs/troubleshooting.md))
+- **Dataset info** — name, authors, BIDS version, license, DOI link and derivatives pipeline/version, read from the dataset's own `dataset_description.json` (raw and derivatives); fields that are missing are skipped. When `dataset_description.json` is missing, or its `Name` or `Authors` are placeholders, a notice under the name says how to fix it (see [docs/user-guide/troubleshooting.md](docs/user-guide/troubleshooting.md))
 - **Filename display** — shows the exact `.tsv.gz` file being viewed
 - **Badges** — next to the file name: a timing badge (see [Timing alignment](#timing-alignment)) and per-channel pass/fail quality indicators when a `_desc-quality.json` sidecar is present (run-level, e.g. `*_run-01_desc-quality.json`, or run-less)
 - **Focus chart** (top) — drag to brush-select a time window (zooms on release), double-click to reset, auto-fits Y-axis to visible data; hover for data readout
@@ -156,13 +160,13 @@ Requirements:
 
 Annotations are saved under `data/annotations/<dataset>/sub-XX/[ses-YY/]func/`, one folder per dataset; set `ANNOTATIONS_ROOT` to use another folder in place of `data/annotations/`.
 
-Something not working? See [docs/troubleshooting.md](docs/troubleshooting.md).
+Something not working? See [docs/user-guide/troubleshooting.md](docs/user-guide/troubleshooting.md).
 
 The Stats tab shows the same dataset, using the metrics computed for it under `data/quality/<name>/`, where `<name>` is the first folder under `data/` (e.g. `BIDS_ROOT=data/friends/friends` → `friends`). For a dataset outside `data/`, compute its metrics with `--bids-root` and the same name the server uses: the folder name of `BIDS_ROOT`, or set `DATASET_NAME` (useful when the main BIDS folder has a generic name such as `data`).
 
 ## Contributing
 
-Architecture, server API, the chart library's API reference, how to add a metric and the TODO list are in [CONTRIBUTING.md](CONTRIBUTING.md). The metric definitions and open review items are in [REVIEW.md](REVIEW.md), and the user study task sheet is [docs/user-study.md](docs/user-study.md).
+Architecture, server API, the chart library's API reference, how to add a metric and the TODO list are in [CONTRIBUTING.md](CONTRIBUTING.md). The metric definitions and open review items are in [REVIEW.md](REVIEW.md), and the user study task sheet is [docs/user-guide/user-study.md](docs/user-guide/user-study.md).
 
 ## Citation
 

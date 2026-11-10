@@ -1,6 +1,6 @@
-# physAI-QA-interactive: user study guide
+# physAI-QA-interactive: user study task sheet
 
-**Duration:** about 50 minutes.
+**Duration:** after the software setup (steps 1-4 below), the session takes about 50 minutes.
 
 | Part | Content | 
 |---|---|
@@ -13,9 +13,19 @@
 
 ## Getting the data and starting the tool
 
-Run these in a terminal in the project folder. The tool works with any dataset in [BIDS](https://bids.neuroimaging.io) format.
+Run these in a terminal; after getting the project, run them in the project folder. The tool works with any dataset in [BIDS](https://bids.neuroimaging.io) format.
 
-**1. Install** (once): `npm install`
+**1. Install** (once).
+
+- **Node.js.** Install Node.js 22 (LTS) from https://nodejs.org/en/download, which has an installer for each operating system; npm comes with it. Check that it worked: `node --version` prints `v22…` and `npm --version` prints a version number.
+- **The project.** Download it with Git (skip this if the facilitator has set it up for you):
+
+  ```bash
+  git clone https://github.com/rgbayrak/physai-qa-interactive.git
+  cd physai-qa-interactive
+  ```
+
+- **The tool's packages.** In the project folder, run `npm install`.
 
 **2. Choose a dataset.**
 
@@ -53,15 +63,18 @@ BIDS_ROOT=/path/to/bids BIDSDER_ROOT=/path/to/derivatives/fmriprep npm run dev  
 BIDS_ROOT=data/friends/friends BIDSPHYS_ROOT=data/friends/physprep BIDSDER_ROOT=data/friends/fmriprep npm run dev   # physio and derivatives next to the main BIDS folder
 ```
 
-`BIDS_ROOT` is always the path to the main BIDS folder (the one with `dataset_description.json`), even when the physio is stored elsewhere. `BIDSPHYS_ROOT` is the folder with the physio files and `BIDSDER_ROOT` the derivatives (fMRIPrep) folder; both are found automatically when they are inside `BIDS_ROOT`, and must be given when they are not. Open the address it prints (usually `http://localhost:5173`). For a dataset outside `data/`, compute its metrics (step 3) with `--bids-root` and `--deriv-root`, and give the script the name of the `BIDS_ROOT` folder (e.g. `/path/to/mydata` → `mydata`), so the tool finds them. More options are in the README, under *Using your own dataset*.
+These commands are for the macOS and Linux terminal. On Windows, use PowerShell and set each folder with `$env:` first, e.g. `$env:BIDS_ROOT="data/ds006644"; npm run dev` (add `$env:BIDSPHYS_ROOT="…";` and `$env:BIDSDER_ROOT="…";` the same way).
 
-**During the session**, fill in the **Done** column for each task:
-**S** = completed alone, **H** = completed with facilitator help, **F** = failed or gave up, **–** = not reached.
+`BIDS_ROOT` is always the path to the main BIDS folder (the one with `dataset_description.json`), even when the physio is stored elsewhere. `BIDSPHYS_ROOT` is the folder with the physio files and `BIDSDER_ROOT` the derivatives (fMRIPrep) folder; both are found automatically when they are inside `BIDS_ROOT`, and must be given when they are not. The tool keeps running in this terminal until you stop it with Ctrl+C. Open the address it prints (usually `http://localhost:5173`) in a desktop web browser. For a dataset outside `data/`, compute its metrics (step 3) with `--bids-root` and `--deriv-root`, and give the script the name of the `BIDS_ROOT` folder (e.g. `/path/to/mydata` → `mydata`), so the tool finds them. More options are in the README, under *Using your own dataset*.
 
-**Participant.** Explore the tool freely for 5 minutes. Then do each task and rate how easy it was in the **Ease** column. Say out loud anything that confuses you.
+**During the session.** Explore the tool freely for 5 minutes. Then do each task and rate how easy it was in the **Ease** column. Say out loud anything that confuses you.
 
 **Ease scale (1-7):** *Overall, how difficult or easy was this task?*
 1 = very difficult, 4 = neither, 7 = very easy.
+
+## Consent
+
+*Facilitator: add your institution's approved consent text and signature line here before printing.*
 
 ## About you
 
@@ -74,10 +87,10 @@ BIDS_ROOT=data/friends/friends BIDSPHYS_ROOT=data/friends/physprep BIDSDER_ROOT=
 
 ## Part A: Load a dataset and start the pipeline
 
-| # | Do this | Done S/H/F/– | Ease 1-7 | Comments |
-|---|---|---|---|---|
+| # | Do this | Ease 1-7 | Comments |
+|---|---|---|---|
 | 1 | In the browser, find which dataset the tool is showing and how many scans it found. | | | |
-| 2 | In the terminal, run `npx vite-node scripts/compute-quality-metrics.ts ds006644` to compute the dataset's quality metrics. Leave it running and continue with Part B. | | | |
+| 2 | Open a second terminal in the project folder (the first one is running the tool) and run `npx vite-node scripts/compute-quality-metrics.ts ds006644` to compute the dataset's quality metrics. Leave it running and continue with Part B. | | | |
 
 ## Part B: Explore and annotate
 
@@ -85,8 +98,8 @@ On the **Explore and Annotate** tab.
 
 **Scenario.** You are checking the physiological recordings in this dataset before analysis. Work the way you normally would, and think aloud as you go.
 
-| # | Do this | Done S/H/F/– | Ease 1-7 | Comments |
-|---|---|---|---|---|
+| # | Do this | Ease 1-7 | Comments |
+|---|---|---|---|
 | 3 | **Browse.** Move through the scans, subject by subject, until you find one that has potential artifacts. Write down which scan it is: \_\_\_\_\_\_\_\_\_\_ | | | |
 | 4 | **Inspect.** Look at that scan in detail. Zoom in, zoom out and scroll as needed until you can say what is wrong with it, and where. | | | |
 | 5 | **Compare.** Check whether the problem is head motion (confound: framewise displacement or rot_x) for the same scan. How long is the time window with the issue? | | | |
@@ -95,33 +108,12 @@ On the **Explore and Annotate** tab.
 | 8 | **Check.** Make sure your work was saved, and find where it is stored. How many scans of this channel are annotated so far? Reload the page: which scan does it open on, and why? | | | |
 | 9 | **Known case.** Open **sub-18, session 02**. Is anything wrong with this scan's timing? How can you tell? | | | |
 
-**Facilitator: controls used during tasks 3-8** (tick one per row). If no outlier has been picked after about 5 minutes, suggest one.
-
-| Control | Used alone | Used after help | Not used |
-|---|---|---|---|
-| Next / Previous or arrow keys | | | |
-| Search box or dropdowns | | | |
-| Channel dropdown | | | |
-| Zoom in (drag on the top chart) | | | |
-| Zoom out (double-click) | | | |
-| Move the window on the overview chart | | | |
-| Window length shown over the overview | | | |
-| Auxiliary Signal Options: Stack (extra channels) | | | |
-| Auxiliary Signal Options: Confound (head motion) | | | |
-| Timing badge (next to the file name) | | | |
-| Signal Quality buttons (Good / Bad / Fixable / Unknown) | | | |
-| Notes | | | |
-| Annotate On / drag a time window / label | | | |
-| Delete a time window (×) | | | |
-| Annotated count and progress bar | | | |
-| Go to the first unannotated scan | | | |
-
 ## Part C: Scatter plot and Stats tab
 
 Check that the script from task 2 has finished, then reload the page: the scatter plot and the **Stats** tab appear once the metrics exist.
 
-| # | Do this | Done S/H/F/– | Ease 1-7 | Comments |
-|---|---|---|---|---|
+| # | Do this | Ease 1-7 | Comments |
+|---|---|---|---|
 | 10 | Find the quality-metric TSV the script wrote. What does one row represent? | | | |
 | 11 | At the bottom of **Explore and Annotate**, find the scatter plot. How many scans does it plot for the channel you are viewing? Does that match task 1? Which point is the scan you are viewing? | | | |
 | 12 | Show **cardiac**, then set **Y = Beat Corr** and **X = SNR**. Hover over the point that looks most unusual and write down its subject and session: \_\_\_\_\_\_\_\_\_\_ | | | |
@@ -179,48 +171,3 @@ Rate each statement: 1 = strongly disagree, 4 = neither, 7 = strongly agree.
 **What was the most useful feature?**
 
 **What was missing or got in your way?**
-
-## Facilitator: scoring and reporting
-
-**Task completion.** Per task, report the share of participants with **S**, and with **S or H**. Report tasks marked **–** separately; they show time pressure, not failure. With small samples, give 95% confidence intervals using the adjusted Wald method.
-
-**Task ease (SEQ).** Per task, report the mean and SD (or median and range if n < 10). The published average is about 5.5; tasks below 5 are candidates for redesign. Summarize by part (A-C).
-
-**Ease of use (D1, 1-5).** For each participant, reverse-score the negative items 2 and 4 (6 − score), then average the five items. Report the mean and SD across participants. This is a shortened, adapted version of the System Usability Scale, so do not convert it to the 0-100 scale or compare it with the published benchmark of 68.
-
-**Usefulness (D2, 1-7).** Average the five items per participant, then report the mean and SD across participants. Report Cronbach's alpha if n allows.
-
-**Feature usefulness (1-5).** Report the median per feature and the number of N/A answers, ranked from most to least useful.
-
-**Controls used (Part B).** For each control, report the share of participants who used it alone, after help, or not at all. Controls rarely found alone point to discoverability problems.
-
-**Session length.** Record the total time per participant and report the median.
-
-**Suggested results sentence:** "N participants completed a median of X of 16 tasks unaided (Y% with help) in a median of Z minutes. Mean ease of use was \_\_ of 5 (SD \_\_), and perceived usefulness was \_\_ of 7 (SD \_\_). [Lowest-rated part] received the lowest ease ratings (mean SEQ \_\_)."
-
-**References**
-
-- Brooke, J. (1996). SUS: A "quick and dirty" usability scale. In *Usability Evaluation in Industry*.
-- Davis, F. D. (1989). Perceived usefulness, perceived ease of use, and user acceptance of information technology. *MIS Quarterly*, 13(3), 319-340.
-- Sauro, J., & Dumas, J. S. (2009). Comparison of three one-question, post-task usability questionnaires. *CHI '09*.
-
-## Facilitator answer key (do not hand out)
-
-Tasks 3-8 are open: record the scan each participant picked and their reasoning. Score **Done** by whether they reached a judgement, not by which scan they chose.
-
-| Task | Expected result |
-|---|---|
-| 1 | Dataset name in the header under the tabs; 80 scans, shown in the Annotations box as "(0/80 … signals are annotated)" |
-| 2 | Script finishes without errors; `quality_metrics.tsv`, `dataset.json` and `waveforms/` written to `data/quality/ds006644/`, and a line added to `quality_runs.tsv` there |
-| 5 | Stack the other channel and/or pick a Confound (Auxiliary Signal Options row); the window length is shown over the overview chart |
-| 6 | Timing badge next to the file name; hover for the details |
-| 7 | A Signal Quality button chosen and a note written; a time window labelled with Annotate On. Labels cannot be edited: replacing means deleting (×) and drawing it again |
-| 8 | Saved automatically (note in the Annotations box) to `data/annotations/ds006644/sub-XX/ses-XX/func/…_annotations.json`. Count goes to 1/80 and the bar starts filling. After reload it opens on the earliest scan not annotated yet for that channel |
-| 9 | Timing **not** verified: 21 trigger intervals differ from the TR (first is 0.704 s vs TR 1.8 s). The other 79 scans are trigger-verified. |
-| 10 | One row = one channel of one scan (check against the TSV) |
-| 11 | "n of 80 scans plotted" next to the legend; the viewed scan is the larger pinkish-red point ("Now viewing" in the legend) |
-| 12 | Record the scan; tasks 14-16 follow from it. Note whether it is the scan from task 3. |
-| 13 | The legend names the Color by choice (e.g. "Session: ● 01 ● 02") |
-| 14 | The Stats tab opens on that scan |
-| 15 | Metrics shown box (left, level with the metrics): untick and tick a metric, or Hide all / Show all |
-| 16 | Link in the Stats sidebar under **PDF report** (built the first time Stats opens); file at `data/quality/ds006644/quality_report.pdf` |

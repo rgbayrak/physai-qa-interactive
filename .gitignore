@@ -7,3 +7,5 @@ dist/
 user_facing/
 CLAUDE.md
 .DS_Store
+docs/_build/
+paper/JOSS-TODO.md
