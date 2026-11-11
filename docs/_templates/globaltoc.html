@@ -1,0 +1,4 @@
+{#- Sidebar contents: the project name (linking home) in place of the
+    default "Table of Contents" heading, then the site's table of contents -#}
+<h3><a href="{{ pathto(root_doc)|e }}">{{ project|e }}</a></h3>
+{{ toctree(includehidden=theme_globaltoc_includehidden, collapse=theme_globaltoc_collapse, maxdepth=theme_globaltoc_maxdepth) }}

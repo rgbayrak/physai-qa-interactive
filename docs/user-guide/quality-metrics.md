@@ -1,4 +1,4 @@
-# Quality metrics and the Stats tab
+# Stats tab
 
 Signal quality metrics are computed once per dataset by a script, and then shown in two places: a scatter plot at the bottom of **Explore and Annotate**, and the **Stats** tab. Both stay hidden until the metrics exist.
 
@@ -7,11 +7,17 @@ Signal quality metrics are computed once per dataset by a script, and then shown
 Run the script once per dataset, and again after the data or the metrics change:
 
 ```bash
-npx vite-node scripts/compute-quality-metrics.ts <dataset>      # main BIDS folder is data/<dataset>, e.g. ds006644
-npx vite-node scripts/compute-quality-metrics.ts mydata --bids-root /path/to/bids --deriv-root /path/to/derivatives/fmriprep
-# physiological recordings and derivatives next to the main BIDS folder (e.g. CNeuroMod friends): give all three
-npx vite-node scripts/compute-quality-metrics.ts friends --bids-root data/friends/friends --physio-root data/friends/physprep --deriv-root data/friends/fmriprep
+# Main BIDS folder is data/<name> in the project folder
+npx vite-node scripts/compute-quality-metrics.ts <name>
+
+# Main BIDS folder anywhere else
+npx vite-node scripts/compute-quality-metrics.ts <name> --bids-root /path/to/dataset
+
+# Physiological recordings and derivatives stored next to the main BIDS folder (e.g. CNeuroMod): give all three
+npx vite-node scripts/compute-quality-metrics.ts <name> --bids-root /path/to/dataset --physio-root /path/to/physio --deriv-root /path/to/derivatives
 ```
+
+`<name>` names the output folder, `data/quality/<name>/`. Use the name the tool gives the dataset, so the Stats tab finds the metrics: the folder name of `BIDS_ROOT`, or the first folder under `data/` (see {doc}`datasets`).
 
 The script finds its folders the same way as the tool (see {doc}`datasets`): `--bids-root`, `--physio-root` and `--deriv-root` match `BIDS_ROOT`, `BIDSPHYS_ROOT` and `BIDSDER_ROOT`. It prints the three folders it uses before computing. Then reload the page.
 
@@ -38,16 +44,44 @@ At the bottom of **Explore and Annotate**. It shows the channel picked in the pa
 
 A channel without metrics (e.g. `trigger`) gets a short message instead of a plot.
 
+```{figure} ../images/quality-metrics-scatter-plot.png
+:alt: Scatter plot comparing respiratory recordings, with Y set to SNR, X to handedness and Colour by to Session; points are blue for session 01 and yellow for session 02, the viewed scan is a larger pinkish-red point, and the legend says 79 of 80 scans plotted
+:name: fig-scatter-plot
+
+SNR of every respiratory recording against a participant variable (handedness), coloured by session.
+```
+
 ## Stats tab
 
 One scan at a time, with **Prev / Next**: file name, participant information, recording details, the waveform of each physiological channel, and per channel a table of its metrics with percentiles, followed by where the scan sits in each metric's histogram compared with the group.
 
+```{figure} ../images/quality-metrics-stats-tab.png
+:alt: The Stats tab for one scan: participant info, recording details, the trigger-verified Timing badge, the last metrics run and a link to the PDF report on the left; the cardiac and respiratory waveforms over the whole recording, with a dashed scan onset line, on the right
+:name: fig-stats-tab
+
+The top of the **Stats** tab: what is known about the scan, and its waveforms over the whole recording.
+```
+
 **Metrics shown** lists the metrics under their groups (Basic, Distribution, PaPaGei, PhysioQC). Tick which ones the tables and histograms show, or use Show all / Hide all. The choice is remembered in your browser.
+
+```{figure} ../images/quality-metrics-histograms.png
+:alt: Metrics shown box with all 12 metrics ticked under Basic, Distribution, PaPaGei and PhysioQC; next to it, the cardiac metrics table with each value and its percentile, and a histogram per metric with a solid dark line for this scan and a dashed grey line for the mean of all 80 cardiac recordings
+:name: fig-metric-histograms
+
+Each metric's value and percentile for this scan, and where it falls in the dataset (solid dark line: this scan; dashed grey line: dataset mean).
+```
 
 The scan open in Explore and Annotate is the one Stats opens, and the other way round.
 
 ## PDF report
 
 `data/quality/<dataset>/quality_report.pdf` has a summary, each channel's scatter plot, and one page per scan with its waveforms and every metric. Computing the metrics deletes the old report; the next time the Stats tab opens, it builds a new one in the background and saves it there. The Stats sidebar shows its progress, then a link to open it.
+
+```{figure} ../images/quality-metrics-pdf-report.png
+:alt: One scan's page in the PDF report: the scan name and file, participant information, sampling rate, duration and timing check, the cardiac and respiratory waveforms over the whole recording with a dashed scan onset line, and a table of every metric for each channel with its percentile
+:name: fig-pdf-report
+
+One scan's page in the PDF report: its waveforms and every metric, with each value's percentile in the dataset.
+```
 
 What each metric computes, and its source, is described in [REVIEW.md](https://github.com/rgbayrak/physai-qa-interactive/blob/main/REVIEW.md).

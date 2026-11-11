@@ -18,14 +18,14 @@ When `BIDSPHYS_ROOT` and `BIDSDER_ROOT` are not set, the tool looks for them ins
 The terminal prints the three folders and how each was chosen. When more than one folder matches, it names the others, so you can pick one with the setting.
 
 ```bash
-BIDS_ROOT=/path/to/your/dataset npm run dev                                  # everything inside it
-BIDS_ROOT=/path/to/your/dataset BIDSDER_ROOT=/path/to/derivatives npm run dev
+BIDS_ROOT=/path/to/dataset npm run dev                                  # everything inside it
+BIDS_ROOT=/path/to/dataset BIDSDER_ROOT=/path/to/derivatives npm run dev
 ```
 
-Folders stored **next to** the main BIDS folder rather than inside it are not searched for: give all three. For example, CNeuroMod `friends` keeps the main BIDS folder next to `physprep/` and `fmriprep/`:
+Folders stored **next to** the main BIDS folder rather than inside it are not searched for: give all three. For example, CNeuroMod datasets keep the main BIDS folder next to `physprep/` and `fmriprep/`:
 
 ```bash
-BIDS_ROOT=data/friends/friends BIDSPHYS_ROOT=data/friends/physprep BIDSDER_ROOT=data/friends/fmriprep npm run dev
+BIDS_ROOT=/path/to/dataset BIDSPHYS_ROOT=/path/to/physio BIDSDER_ROOT=/path/to/derivatives npm run dev
 ```
 
 ## What a dataset needs
@@ -47,6 +47,14 @@ The **On disk data summary** box, under the Annotations box, shows:
 - how many physiological recordings the dataset lists and how many are downloaded (counted once when the server starts, with git-annex when available);
 - how many the quality metrics cover, from the last line of `quality_runs.tsv`. When they don't cover the whole dataset, it says to download the rest and compute the metrics again;
 - the result of the BIDS version check.
+
+```{figure} ../images/datasets-on-disk-summary.png
+:alt: On disk data summary box: 119 of 354 physio recordings are downloaded (checked with git-annex) and the other 235 are listed but not fetched yet; quality metrics cover 119 of 354 recordings, with a prompt to download the rest and rerun scripts/compute-quality-metrics.ts; BIDS version 1.0.1 is older than 1.6.0, so file names were not checked
+:name: fig-on-disk-summary
+:width: 360px
+
+A partly downloaded dataset: what is on disk, what the quality metrics cover, and the BIDS version check.
+```
 
 ## BIDS version check
 

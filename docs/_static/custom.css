@@ -1,0 +1,89 @@
+/* IBM Plex Sans, the app's font, for the workflow diagram */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;600&display=swap');
+
+/* Top bar: no title (the theme shows html_title, or the page's title once
+   scrolled). The menu, search and full-screen buttons stay. */
+#titlebar .title {
+  visibility: hidden;
+}
+
+/* Sidebar toggle for collapsible entries (docs/_static/sidebar.js) */
+.toc-toggle {
+  border: none;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0 0.4em;
+  transition: transform 0.15s;
+}
+.toc-toggle[aria-expanded="true"] {
+  transform: rotate(90deg);
+}
+
+/* Sidebar logo: smaller than the theme's full sidebar width, centred */
+p.logo {
+  text-align: center;
+  margin: 0.75rem 0;
+}
+img.logo {
+  max-width: 120px;
+  height: auto;
+}
+
+/* Tables: never break a code name (e.g. BIDSPHYS_ROOT) across lines; its
+   column widens to fit instead. The theme lets span.pre (inside each code
+   element) wrap anywhere, so this targets that span. */
+table.docutils code,
+table.docutils span.pre {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
+/* The docs do not load the app's src/shell/tabs.css, so its tokens are
+   repeated here with the same values */
+:root {
+  --fs-xl: 18px;
+  --fs-md: 15px;
+  --fs-sm: 14px;
+  --fs-xs: 13px;
+  --text: #222;
+  --text-2: #5a636b;
+  --text-3: #888;
+  --font: 'IBM Plex Sans', system-ui, sans-serif;
+}
+
+/* A short note under a table: {.table-note} before the paragraph */
+p.table-note {
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+  margin-top: -0.4em;
+}
+
+/* Workflow diagram (docs/_static/workflow.js) */
+.workflow {
+  margin: 1.25rem 0 0.75rem;
+}
+.workflow svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+}
+.workflow text { font-family: var(--font); }
+
+.wf-stage { font-size: var(--fs-xl); font-weight: 300; letter-spacing: 0.4px; }
+.wf-stage-num { font-weight: 600; }
+.wf-stage-tag { font-size: var(--fs-xs); font-style: italic; }
+.wf-title { font-size: var(--fs-md); font-weight: 600; fill: var(--text); }
+.wf-detail { font-size: var(--fs-xs); fill: var(--text-2); }
+.wf-num { font-size: var(--fs-xs); font-weight: 600; fill: #f7f2e8; pointer-events: none; }
+.wf-label { font-size: var(--fs-xs); font-style: italic; }
+.wf-note { font-size: var(--fs-xs); fill: var(--text-2); }
+.wf-note-target { fill: #2d6da3; text-decoration: underline; }
+
+.wf-leader { stroke-width: 1.6; stroke-dasharray: 3 6; stroke-linecap: round; opacity: 0.8; }
+.wf-link { fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.wf-node, .wf-link, .wf-label { transition: opacity 0.2s; }
+.wf-node { cursor: pointer; }
+.wf-node:hover .wf-title, .wf-node:focus-visible .wf-title { text-decoration: underline; }
+.wf-node:focus { outline: none; }
