@@ -1,5 +1,5 @@
 ---
-title: 'physAI-QA-interactive: an interactive visualization and annotation tool for physiological recordings in BIDS fMRI datasets'
+title: 'physAI-QA-interactive: an interactive visualization and annotation tool for physiological recordings in BIDS-compliant datasets'
 tags:
   - neuroimaging
   - physiological recordings
