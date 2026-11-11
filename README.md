@@ -8,7 +8,7 @@ physAI-QA-interactive lets you step through every scan of a BIDS dataset, view c
 
 It is part of **physAI**, a research suite for physiological data. This repository, **physAI-QA-interactive**, is the manual data exploration and annotation tool of **physAI-QA**, the suite's quality assurance component. Coming next: **physAI-QA-auto**, for automated artifact detection, annotation and correction.
 
-The viewer is built on a reusable D3 + TypeScript chart library with **zoom/pan**, **brush selection**, **viewport culling** and a **focus+context** layout for dense time-series signals (see [CONTRIBUTING.md](CONTRIBUTING.md#chart-library-usage)).
+The viewer is built on a reusable D3 + TypeScript chart library with **zoom/pan**, **brush selection**, **viewport culling** and a **focus+context** layout for dense time-series signals (see [CONTRIBUTING.md](docs/CONTRIBUTING.md#chart-library-usage)).
 
 ![Physio viewer demo](docs/images/physviz.gif)
 
@@ -83,7 +83,7 @@ The app has two folder tabs at the top: **Explore and Annotate** (the viewer abo
 ```bash
 npx vite-node scripts/compute-quality-metrics.ts <dataset>      # main BIDS folder is data/<dataset>, e.g. ds006644
 npx vite-node scripts/compute-quality-metrics.ts mydata --bids-root /path/to/bids --deriv-root /path/to/derivatives/fmriprep
-# physio and derivatives stored next to the main BIDS folder (e.g. CNeuroMod friends): give all three
+# physio and derivatives stored outside of the main BIDS folder (e.g. CNeuroMod friends): give all three
 npx vite-node scripts/compute-quality-metrics.ts friends --bids-root data/friends/friends --physio-root data/friends/physprep --deriv-root data/friends/fmriprep
 ```
 
@@ -166,7 +166,7 @@ The Stats tab shows the same dataset, using the metrics computed for it under `d
 
 ## Contributing
 
-Architecture, server API, the chart library's API reference, how to add a metric and the TODO list are in [CONTRIBUTING.md](CONTRIBUTING.md). The metric definitions and open review items are in [REVIEW.md](REVIEW.md), and the user study task sheet is [docs/user-guide/user-study.md](docs/user-guide/user-study.md).
+Architecture, server API, the chart library's API reference and how to add a metric are in [CONTRIBUTING.md](docs/CONTRIBUTING.md). The metric definitions and open review items are in [REVIEW.md](REVIEW.md), and the user study task sheet is [docs/user-guide/user-study.md](docs/user-guide/user-study.md).
 
 ## Citation
 
