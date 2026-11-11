@@ -6,8 +6,9 @@ The tool has two tabs at the top of the page:
 - **Stats** compares signal quality metrics across the whole dataset, one scan at a time. It appears once the metrics are computed.
 
 ```{toctree}
-:maxdepth: 2
+:maxdepth: 1
 
+start
 datasets
 explore-and-annotate
 quality-metrics

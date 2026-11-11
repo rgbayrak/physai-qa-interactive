@@ -1,4 +1,4 @@
-# physAI-QA-interactive: user study task sheet
+# USER STUDY
 
 **Duration:** after the software setup (steps 1-4 below), the session takes about 50 minutes.
 
@@ -48,7 +48,7 @@ Run these in a terminal; after getting the project, run them in the project fold
 **3. Optional: compute the quality metrics first.** If you want the dataset-wide quality metrics to visualize (the scatter plot in Explore and Annotate, the Stats tab and the PDF report), run the script once for the dataset before starting the tool:
 
 ```bash
-npx vite-node scripts/compute-quality-metrics.ts mydata --bids-root /path/to/bids --deriv-root /path/to/derivatives/fmriprep
+npx vite-node scripts/compute-quality-metrics.ts dataset --bids-root /path/to/dataset --deriv-root /path/to/derivatives
 npx vite-node scripts/compute-quality-metrics.ts friends --bids-root data/friends/friends --physio-root data/friends/physprep --deriv-root data/friends/fmriprep   # physio and derivatives next to the main BIDS folder
 ```
 
@@ -59,13 +59,13 @@ It writes `data/quality/<name>/`. Without it, the tool still works for exploring
 ```bash
 BIDS_ROOT=data/ds006644 npm run dev                                # the study dataset
 BIDS_ROOT=data/mydata npm run dev                                  # another dataset under data/
-BIDS_ROOT=/path/to/bids BIDSDER_ROOT=/path/to/derivatives/fmriprep npm run dev   # a dataset outside data/
+BIDS_ROOT=/path/to/dataset BIDSDER_ROOT=/path/to/derivatives npm run dev   # a dataset outside data/
 BIDS_ROOT=data/friends/friends BIDSPHYS_ROOT=data/friends/physprep BIDSDER_ROOT=data/friends/fmriprep npm run dev   # physio and derivatives next to the main BIDS folder
 ```
 
 These commands are for the macOS and Linux terminal. On Windows, use PowerShell and set each folder with `$env:` first, e.g. `$env:BIDS_ROOT="data/ds006644"; npm run dev` (add `$env:BIDSPHYS_ROOT="…";` and `$env:BIDSDER_ROOT="…";` the same way).
 
-`BIDS_ROOT` is always the path to the main BIDS folder (the one with `dataset_description.json`), even when the physio is stored elsewhere. `BIDSPHYS_ROOT` is the folder with the physio files and `BIDSDER_ROOT` the derivatives (fMRIPrep) folder; both are found automatically when they are inside `BIDS_ROOT`, and must be given when they are not. The tool keeps running in this terminal until you stop it with Ctrl+C. Open the address it prints (usually `http://localhost:5173`) in a desktop web browser. For a dataset outside `data/`, compute its metrics (step 3) with `--bids-root` and `--deriv-root`, and give the script the name of the `BIDS_ROOT` folder (e.g. `/path/to/mydata` → `mydata`), so the tool finds them. More options are in the README, under *Using your own dataset*.
+`BIDS_ROOT` is always the path to the main BIDS folder (the one with `dataset_description.json`), even when the physio is stored elsewhere. `BIDSPHYS_ROOT` is the folder with the physio files and `BIDSDER_ROOT` the derivatives (fMRIPrep) folder; both are found automatically when they are inside `BIDS_ROOT`, and must be given when they are not. The tool keeps running in this terminal until you stop it with Ctrl+C. Open the address it prints (usually `http://localhost:5173`) in a desktop web browser. For a dataset outside `data/`, compute its metrics (step 3) with `--bids-root` and `--deriv-root`, and give the script the name of the `BIDS_ROOT` folder (e.g. `/path/to/dataset` → `dataset`), so the tool finds them. More options are in the README, under *Using your own dataset*.
 
 **During the session.** Explore the tool freely for 5 minutes. Then do each task and rate how easy it was in the **Ease** column. Say out loud anything that confuses you.
 

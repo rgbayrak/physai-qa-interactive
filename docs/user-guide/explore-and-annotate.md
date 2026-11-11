@@ -1,6 +1,13 @@
-# Explore and Annotate
+# Explore and Annotate tab
 
 The **Explore and Annotate** tab shows one scan at a time: its physiological signals, auxiliary charts on the same time axis, and the Annotations box where you rate and mark the recording.
+
+```{figure} ../images/explore-annotate-overview.png
+:alt: Explore and Annotate with a respiratory recording: Prev and Next buttons and search, the file name with a trigger-verified Timing badge, the focus and overview charts, framewise displacement under Auxiliary, and on the right the Annotations box (12 of 80 respiratory signals annotated) and the On disk data summary
+:name: fig-explore-overview
+
+The signal charts on the left; the Annotations box and the On disk data summary on the right.
+```
 
 ## Moving between scans
 
@@ -28,6 +35,20 @@ The **Auxiliary Signal Options** row adds charts under AUXILIARY, below the sign
 - **Confound:** a head-motion confound from fMRIPrep or MRIQC, shown only when confounds exist for the scan. Framewise displacement is colour-coded by severity (green, amber, red) with 0.2 mm and 0.5 mm reference lines.
 - **Stack:** tick channels to add a compact figure for each. Each fits its own Y-axis and has its own hover readout.
 
+```{figure} ../images/explore-annotate-events.png
+:alt: A task scan (task cuedSGT) with the respiratory signal on top and, under Auxiliary, the events chart for its events.tsv: the Condition column gives five coloured lanes (Other, Past, Control, Null, Future) with a colour key, each event a block from its onset to onset plus duration
+:name: fig-events
+
+The **Event** chart for a task scan: one coloured lane per value of the `Condition` column.
+```
+
+```{figure} ../images/explore-annotate-stack.png
+:alt: An EDA recording as the signal of interest, with RSP ticked under Stack so it appears as a compact figure under Auxiliary, and framewise displacement below it; next to the file name, the sidecar-only Timing badge and quality badges PPG Fail (50%), ECG Pass, RSP Pass and EDA Pass
+:name: fig-stack
+
+A stacked channel (RSP) and a confound under the signal of interest (EDA), all on the same time axis. Next to the file name: the Timing badge and the per-channel quality badges.
+```
+
 Channel and Stack only offer physiological channels, matched against the same list of names as the quality metrics, so `trigger` is left out.
 
 **Peaks (trial).** A trial feature, not final. When the physiological recordings folder has an events file with detected peaks (e.g. physprep's `r_peak` and `systolic_peak`, and their `_corrected` versions), a **Peaks** toggle next to Channel draws them on the signal: blue for detected, green rings for corrected.
@@ -50,7 +71,7 @@ The physiological sidecar's `StartTime` is the reference: it is the time of the 
 - **Confounds** have one row per volume. Volume *i* sits at `VolumeTiming[i]`, or at *i* × `RepetitionTime`, read from the BOLD sidecars. If no sidecar has timing, volumes are spread evenly across the recording; that is only approximate. For multi-echo runs, the lowest echo is used.
 - **Events** are read from the main BIDS folder, following BIDS inheritance (the run's own file, else the run-less file, else a top-level `task-<task>_events.tsv`). Their onsets are already in seconds from the first volume, so they are drawn as they are.
 
-**Quality badges.** When a `_desc-quality.json` sidecar is present (per run, or run-less), per-channel pass/fail badges appear next to the timing badge.
+**Quality badges.** When a `_desc-quality.json` sidecar is present (per run, or run-less), per-channel pass/fail badges appear next to the timing badge (see {ref}`the stacked channel figure <fig-stack>`).
 
 ## Annotations
 
@@ -58,6 +79,13 @@ The **Annotations** box has two parts:
 
 - **Full Recording:** rate the whole recording's **Signal Quality** (Good, Bad, Fixable, Unknown) and write **Notes**.
 - **Time Windows:** switch **Annotate** On, then drag on the focus chart to mark a time window and give it a label. Delete a window with its ×. Labels cannot be edited; to change one, delete the window and draw it again.
+
+```{figure} ../images/explore-annotate-time-window.png
+:alt: A time window from 330.38 s to 360.71 s labelled motion, shaded on the zoomed-in focus chart, with Annotate On and the window listed under Time Windows; the framewise displacement chart below peaks in the same window
+:name: fig-time-window
+
+A time window labelled "motion" over a head-motion peak. It is listed under **Time Windows**, where × deletes it.
+```
 
 Everything is saved to disk automatically, one file per scan and channel, and reloads when you return to that scan. Each time window is stored with both its times and its sample indices, so the file can be used as an artifact mask. See {doc}`datasets` for where the files go.
 

@@ -1,7 +1,7 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it using the metadata from this file."
 type: software
-title: "physAI-QA-interactive: an interactive visualization and annotation tool for physiological recordings in BIDS fMRI datasets"
+title: "physAI-QA-interactive: an interactive visualization and annotation tool for physiological recordings in BIDS-compliant datasets"
 abstract: >-
   physAI-QA-interactive is a browser-based tool for exploring and annotating
   physiological recordings in BIDS fMRI datasets. It lets researchers step

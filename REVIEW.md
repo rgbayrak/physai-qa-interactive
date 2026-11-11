@@ -31,7 +31,7 @@ dataset-wide script (`scripts/compute-quality-metrics.ts`) calls it.
 | PhysioQC | Kurt (win) (`kurtosis_windowed`), ApEn (`approx_entropy`) | pulsatile only |
 | PhysioQC | Beat Corr (`beat_correlation`) | pulsatile and respiratory |
 
-How to add or remove a metric is described in [CONTRIBUTING.md](CONTRIBUTING.md#quality-metrics-adding-or-removing-a-metric).
+How to add or remove a metric is described in [CONTRIBUTING.md](docs/CONTRIBUTING.md#quality-metrics-adding-or-removing-a-metric).
 Min, Max, Median and % Non-Zero were removed: as plain range statistics they said little about signal quality.
 
 ---

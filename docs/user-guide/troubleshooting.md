@@ -26,8 +26,8 @@ derivatives are stored outside that folder, also set `BIDSPHYS_ROOT` and
 The terminal names the setting and the folder it looked for:
 
 - `BIDS_ROOT folder not found: …`: the path does not exist. A relative path
-  is read from the project folder, so `data/ds006644` means
-  `<project>/data/ds006644`.
+  is read from the project folder, so `data/<dataset>` means
+  `<project>/data/<dataset>`.
 - `BIDSPHYS_ROOT folder not found: …`: set it to the folder with the
   `*_physio.tsv.gz` files, or leave it out when they are inside `BIDS_ROOT`.
 - `BIDSDER_ROOT folder not found: …`: set it to the derivatives folder with
@@ -52,18 +52,11 @@ The terminal says `No readable physio files under …`.
   datalad get sub-*/ses-*/func/*_physio.*
   ```
 
-  See [What to download](#what-to-download) for the other files the tool reads.
+  See [what to download with DataLad](#if-using-datalad-what-to--datalad-get) for the other files the tool reads.
 
-## Fewer scans on disk than the dataset lists
+## If using DataLad what to `$ datalad get`
 
-The on disk data summary (under the Annotations box) and the terminal line
-`Physio files: X of Y downloaded` show how many recordings are on disk. If X is
-smaller than Y, download the rest with `datalad get` (see
-[What to download](#what-to-download)).
-
-## What to download
-
-The tool only needs small text files: the physio recordings, their sidecars
+The tool only needs small text and *_physio.tsv files: the physio recordings, their sidecars
 and a few tables. You never need the `*.nii.gz` images. What to download
 depends on which folder each file is read from (see
 [Pointing the tool at the right folders](#pointing-the-tool-at-the-right-folders)).
@@ -165,12 +158,12 @@ The terminal prints the three folders and how each was chosen. When more than
 one folder matches, it names the others: set the variable to pick one.
 
 **Physio or derivatives stored next to the main BIDS folder.** These are not
-searched for: give all three. For example, CNeuroMod `friends` keeps the main
+searched for: give all three. For example, CNeuroMod datasets keep the main
 BIDS folder (with `dataset_description.json`, `participants.tsv` and the
-`sub-*` folders) in `data/`, next to `physprep/` and `fmriprep/`:
+`sub-*` folders) next to `physprep/` and `fmriprep/`:
 
 ```bash
-BIDS_ROOT=data/friends/friends BIDSPHYS_ROOT=data/friends/physprep BIDSDER_ROOT=data/friends/fmriprep npm run dev
+BIDS_ROOT=/path/to/dataset BIDSPHYS_ROOT=/path/to/physio BIDSDER_ROOT=/path/to/derivatives npm run dev
 ```
 
 Only the physio files are read from `BIDSPHYS_ROOT`. The dataset description,
@@ -186,15 +179,16 @@ folder `data/quality/<name>/`.
 
 ```bash
 # Main BIDS folder is data/<name>, physio and derivatives inside it
-npx vite-node scripts/compute-quality-metrics.ts ds006644
+npx vite-node scripts/compute-quality-metrics.ts <name>
 
 # Physio and derivatives stored next to the main BIDS folder (CNeuroMod): give all three
-npx vite-node scripts/compute-quality-metrics.ts friends --bids-root data/friends/friends --physio-root data/friends/physprep --deriv-root data/friends/fmriprep
+npx vite-node scripts/compute-quality-metrics.ts <name> --bids-root /path/to/dataset --physio-root /path/to/physio --deriv-root /path/to/derivatives
 ```
 
 Without `--bids-root`, the script uses `data/<name>` as the main BIDS folder.
-For friends that is `data/friends`, which only holds other folders, so it
-would find no dataset description, participants or BOLD sidecars.
+If that folder only holds other folders (e.g. CNeuroMod's `data/friends`, with
+the main BIDS folder one level down in `data/friends/friends`), it finds no
+dataset description, participants or BOLD sidecars: give `--bids-root`.
 
 The script prints the three folders it uses before it starts. Check them if
 it reports `0 readable scans`.
