@@ -1,7 +1,8 @@
-// Dictionary of physio.tsv column names. Quality metrics and waveforms are
-// computed only for columns found in PHYSIO_CHANNELS; everything else
-// (scanner triggers, stimulus markers, unknown columns) is excluded and
-// reported. Relative imports only: this module is also loaded by Node scripts.
+// Which physio.tsv columns are physiological signals. Every column is, unless
+// its name is in NON_PHYSIO_CHANNELS (scanner triggers, markers, time stamps):
+// those are excluded and reported. PHYSIO_CHANNELS only labels a column's
+// signal type; a name it does not know is still shown, with no signal type.
+// Relative imports only: this module is also loaded by Node scripts.
 
 export type SignalType =
   | 'cardiac'
@@ -13,7 +14,8 @@ export type SignalType =
 
 /**
  * Physiological column names (lower case, no separators; see channelKeys)
- * -> signal type. Covers the BIDS
+ * -> signal type. Labels only: it does not decide which columns are shown.
+ * Covers the BIDS
  * recommended names (cardiac, respiratory) and common vendor/toolbox names
  * (e.g. PPG, ECG, RSP, EDA from physprep/NeuroKit).
  */
@@ -60,7 +62,7 @@ export const PHYSIO_CHANNELS: Record<string, SignalType> = {
   emg: 'muscle',
 };
 
-/** Known non-physiological columns, excluded with a specific reason */
+/** Non-physiological columns, the only ones excluded (whole name, see channelKeys), each with its reason */
 export const NON_PHYSIO_CHANNELS: Record<string, string> = {
   trigger: 'scanner trigger',
   trig: 'scanner trigger',
@@ -92,21 +94,24 @@ export function channelKeys(name: string): string[] {
 }
 
 type ChannelClass =
-  | { physio: true; signal: SignalType }
+  /** signal is null for a name PHYSIO_CHANNELS does not know */
+  | { physio: true; signal: SignalType | null }
   | { physio: false; reason: string };
 
 /** Own-key lookup, so names like "constructor" never hit Object.prototype */
 const has = (dict: object, key: string) => Object.prototype.hasOwnProperty.call(dict, key);
 
+/** Physiological unless the name is in NON_PHYSIO_CHANNELS (or empty) */
 export function classifyChannel(name: string): ChannelClass {
   const keys = channelKeys(name);
-  for (const key of keys) {
-    if (has(PHYSIO_CHANNELS, key)) return { physio: true, signal: PHYSIO_CHANNELS[key] };
-  }
+  if (keys[0] === '') return { physio: false, reason: 'no column name' };
   for (const key of keys) {
     if (has(NON_PHYSIO_CHANNELS, key)) return { physio: false, reason: NON_PHYSIO_CHANNELS[key] };
   }
-  return { physio: false, reason: 'not in the physio channel dictionary' };
+  for (const key of keys) {
+    if (has(PHYSIO_CHANNELS, key)) return { physio: true, signal: PHYSIO_CHANNELS[key] };
+  }
+  return { physio: true, signal: null };
 }
 
 export function isPhysioChannel(name: string): boolean {

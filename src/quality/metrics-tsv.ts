@@ -63,7 +63,7 @@ export interface ScanKeyLike {
 export interface QualityRow extends ScanKeyLike {
   filename: string;
   channel: string;
-  /** From the physio channel dictionary (src/quality/channels.ts), e.g. cardiac */
+  /** From PHYSIO_CHANNELS (src/quality/channels.ts), e.g. cardiac; '' (n/a in the TSV) for an unknown name */
   signalType: string;
   samplingFrequency: number;
   numSamples: number;

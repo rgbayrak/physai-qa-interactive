@@ -21,7 +21,7 @@ npx vite-node scripts/update-bids-rules.ts [x.y.z ...]       # BIDS rules for ne
 
 ### Tests
 
-Tests run against two tiny synthetic BIDS datasets in `test/fixtures/` (sessions/runs with fMRIPrep-style derivatives, and a session-less layout), so they need no downloaded data. They cover every timing badge, sidecar fallbacks, confounds (fMRIPrep and MRIQC names), task events and their inheritance, the trial peaks, downloaded-file counts, annotations and path safety, finding the physio and derivatives folders by their content (`bids-layout.fixtures.test.ts`), the BIDS version check of file and folder names (`bids-structure.test.ts`), the `BIDS_ROOT` start check (`bids-roots-check.test.ts`), the startup banner, dataset description notices (`dataset-notice.test.ts`), where the viewer opens and the first unannotated scan (`navigation.test.ts`), and the dataset quality metrics pipeline, including the run log (TSV round trip, identical output on reruns, physio channel dictionary, participant axes and the PDF writer). Regenerate the fixtures after changing them with:
+Tests run against two tiny synthetic BIDS datasets in `test/fixtures/` (sessions/runs with fMRIPrep-style derivatives, and a session-less layout), so they need no downloaded data. They cover every timing badge, sidecar fallbacks, confounds (fMRIPrep and MRIQC names), task events and their inheritance, the trial peaks, downloaded-file counts, annotations and path safety, finding the physio and derivatives folders by their content (`bids-layout.fixtures.test.ts`), the BIDS version check of file and folder names (`bids-structure.test.ts`), the `BIDS_ROOT` start check (`bids-roots-check.test.ts`), the startup banner, dataset description notices (`dataset-notice.test.ts`), where the viewer opens and the first unannotated scan (`navigation.test.ts`), and the dataset quality metrics pipeline, including the run log (TSV round trip, identical output on reruns, which columns are excluded, participant axes and the PDF writer). Regenerate the fixtures after changing them with:
 
 ```bash
 python3 test/fixtures/make_fixtures.py
@@ -81,7 +81,7 @@ src/
 │   ├── metric-columns.ts      # Metric labels, groups and number format (SQI_COLUMNS; pure)
 │   ├── model.ts               # Labels, summaries, axis choices, scatter data (pure)
 │   ├── metrics-tsv.ts         # TSV/JSON formats shared with the script (pure)
-│   ├── channels.ts            # Physio channel dictionary (pure)
+│   ├── channels.ts            # Excluded (non-physiological) column names and signal types (pure)
 │   ├── envelope.ts            # Min/max downsampling for waveforms (pure)
 │   ├── stats.ts               # Histogram bins, percentiles (pure)
 │   ├── route.ts               # /quality.html#scan?sub=… links (pure)
@@ -207,7 +207,7 @@ A metric is computed in one place and listed in three:
 
 To remove a metric, delete it from the same places. The scatter plot and the Stats tab build their axes, tables and histograms from the metrics that have values in the TSV for each channel, so no plot code changes are needed either way.
 
-To accept a new physio column name (e.g. a vendor-specific label), add it to `PHYSIO_CHANNELS` in `src/quality/channels.ts` with its signal type. Names are matched without case, separators or a trailing number. Columns that are not physiological belong in `NON_PHYSIO_CHANNELS`.
+Every physio column is shown and computed unless it is specifically excluded. To exclude a non-physiological column (e.g. a vendor-specific trigger or marker name), add it to `NON_PHYSIO_CHANNELS` in `src/quality/channels.ts` with its reason. To give a column a signal type (e.g. `cardiac`), add it to `PHYSIO_CHANNELS`; names not listed there are still shown, with no signal type. Names are matched as whole names, without case, separators or a trailing number.
 
 ---
 

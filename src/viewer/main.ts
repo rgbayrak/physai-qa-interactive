@@ -379,7 +379,7 @@ async function loadPhysio(scan: ScanEntry) {
 
     // Keep the current channel/confound when the new scan has it; on the first
     // load after a reload, prefer the one restored from localStorage
-    // Only physiological channels are offered (no trigger etc.; same dictionary as the metrics)
+    // Every column except trigger, time etc. is offered (same exclusions as the metrics)
     const restored = state.restoredSelection;
     const channels = physioColumns(raw.columns);
     populateSelect(els.channelSelect, channels, pickPreferred(channels, [restored?.channel, els.channelSelect.value]));

@@ -2,10 +2,10 @@ import { fetchTasks, fetchRuns } from '@/data/bids-physio-reader';
 import { isPhysioChannel } from '@/quality/channels';
 
 /**
- * Columns of a physio file to offer as channels: only physiological signals,
- * matched against the same dictionary the quality metrics script uses
- * (src/quality/channels.ts), so trigger and other non-physio columns are left
- * out. If none match, every column is offered so the viewer still shows something.
+ * Columns of a physio file to offer as channels: every column except those
+ * the quality metrics script also excludes (trigger, time and other names in
+ * NON_PHYSIO_CHANNELS, src/quality/channels.ts). If that leaves none, every
+ * column is offered so the viewer still shows something.
  */
 export function physioColumns(columns: string[]): string[] {
   const physio = columns.filter(isPhysioChannel);

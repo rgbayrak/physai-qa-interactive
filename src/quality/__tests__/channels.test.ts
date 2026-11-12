@@ -20,16 +20,23 @@ describe('physio channel dictionary', () => {
   });
 
   it('excludes trigger and other scanner/event columns', () => {
-    for (const name of ['trigger', 'Trigger', 'TTL', 'scanner_trigger', 'trigger2', 'stim', 'Marker']) {
+    for (const name of ['trigger', 'Trigger', 'TTL', 'scanner_trigger', 'trigger2', 'stim', 'Marker', 'time', 'Trigger_1']) {
       expect(isPhysioChannel(name), name).toBe(false);
     }
     expect(classifyChannel('trigger')).toEqual({ physio: false, reason: 'scanner trigger' });
+    expect(classifyChannel('')).toEqual({ physio: false, reason: 'no column name' });
   });
 
-  it('excludes unknown columns instead of guessing', () => {
-    expect(classifyChannel('mystery')).toEqual({ physio: false, reason: 'not in the physio channel dictionary' });
-    expect(isPhysioChannel('constructor')).toBe(false);
-    expect(isPhysioChannel('')).toBe(false);
+  it('shows every column not specifically excluded, with no signal type when the name is unknown', () => {
+    // ds003192 columns: time, respiratory_chest, trigger, cardiac, respiratory_CO2, respiratory_O2
+    for (const name of ['respiratory_chest', 'respiratory_CO2', 'respiratory_O2', 'mystery', 'constructor']) {
+      expect(classifyChannel(name), name).toEqual({ physio: true, signal: null });
+    }
+  });
+
+  it('excludes whole names only, so a name containing an excluded word is kept', () => {
+    expect(isPhysioChannel('tidal_volume')).toBe(true);
+    expect(isPhysioChannel('MR_trigger')).toBe(true);
   });
 
   it('tolerates case, separators and lead/channel numbers', () => {
