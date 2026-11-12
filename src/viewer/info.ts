@@ -185,9 +185,33 @@ export function qualityBadgeLabel(channel: string, assessment: string, percentVa
   return label;
 }
 
-/** Timing badge (hover for the explanation) plus a pass/fail badge per channel with a quality entry */
+/** Badge text and hover note when the server downsampled the recording, else null */
+export function downsampleBadge(raw: PhysioRaw): { label: string; detail: string } | null {
+  const from = raw.originalSamplingFrequency;
+  const to = raw.samplingFrequency;
+  if (from == null || !(from > to)) return null;
+  const cutoff = Math.round(0.8 * (to / 2));
+  return {
+    label: `Downsampled: ${from} → ${to} Hz`,
+    detail:
+      `Recorded at ${from} Hz and downsampled to ${to} Hz for viewing and quality metrics. ` +
+      `Low-pass filtered at ${cutoff} Hz first (no time shift) to avoid aliasing; ` +
+      `the trigger channel keeps the peak of each block; timing was checked at ${from} Hz.`,
+  };
+}
+
+/** Downsampling badge (when downsampled), timing badge (hover for the explanation), then a pass/fail badge per channel with a quality entry */
 export function renderQualityBadges(el: HTMLElement, raw: PhysioRaw): void {
   el.innerHTML = '';
+
+  const ds = downsampleBadge(raw);
+  if (ds) {
+    const badge = document.createElement('span');
+    badge.className = 'quality-badge downsampled';
+    badge.textContent = ds.label;
+    badge.title = ds.detail;
+    el.appendChild(badge);
+  }
 
   const timingBadge = document.createElement('span');
   timingBadge.className = `quality-badge timing-${raw.timing.status}`;

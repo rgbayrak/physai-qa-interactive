@@ -2,6 +2,7 @@ import { readdirSync, readFileSync, existsSync, accessSync, constants, mkdirSync
 import { gunzipSync } from 'zlib';
 import { join, dirname, basename, relative } from 'path';
 import { isPlaceholder } from '../src/data/dataset-notice';
+import { downsampleChannels } from './downsample';
 import type { DescriptionField, DescriptionNotice, DescriptionSource } from '../src/data/dataset-notice';
 
 /** Matches physio .tsv.gz files (both _physio.tsv.gz and _desc-preproc_physio.tsv.gz) */
@@ -187,10 +188,11 @@ export function findPhysioFiles(bidsRoot: string, sub: string, ses: string, task
  * Sample indices of rising edges in a trigger channel. The threshold is the
  * midpoint of the channel's range, so it works for 0/1, 0/5V, etc.
  */
-export function detectTriggerOnsets(values: number[]): number[] {
+export function detectTriggerOnsets(values: ArrayLike<number>): number[] {
   let min = Infinity;
   let max = -Infinity;
-  for (const v of values) {
+  for (let i = 0; i < values.length; i++) {
+    const v = values[i];
     if (v < min) min = v;
     if (v > max) max = v;
   }
@@ -221,22 +223,7 @@ export function readPhysio(
   if (!found || !found.sidecarPath) return null;
 
   const sidecar: PhysioSidecar = JSON.parse(readFileSync(found.sidecarPath, 'utf-8'));
-  const tsvBuf = gunzipSync(readFileSync(found.tsvGzPath));
-  const tsvText = tsvBuf.toString('utf-8');
-
-  const numCols = sidecar.Columns.length;
-  const columns: number[][] = Array.from({ length: numCols }, () => []);
-
-  const lines = tsvText.split('\n');
-  for (const line of lines) {
-    if (line.length === 0) continue;
-    // Skip header row if present
-    if (Number.isNaN(Number(line.split('\t')[0]))) continue;
-    const parts = line.split('\t');
-    for (let c = 0; c < numCols; c++) {
-      columns[c].push(Number(parts[c]));
-    }
-  }
+  const columns = parsePhysioTsv(gunzipSync(readFileSync(found.tsvGzPath)), sidecar.Columns.length);
 
   // Read quality sidecar if available
   let quality: Record<string, { assessment: string; percentValid: number }> | null = null;
@@ -265,6 +252,7 @@ export function readPhysio(
   const expectedVolumes =
     boldTiming?.volumeTiming?.length ?? countConfoundVolumes(bidsderRoot, sub, ses, prefix);
 
+  // Trigger timing is checked at the original rate, before any downsampling
   const trigCol = sidecar.Columns.findIndex((c) => c.toLowerCase() === 'trigger');
   const triggerSec =
     trigCol === -1
@@ -272,16 +260,54 @@ export function readPhysio(
       : detectTriggerOnsets(columns[trigCol]).map((i) => sidecar.StartTime + i / fs);
   const timing = verifyTriggerTiming(triggerSec, boldTiming?.tr ?? null, expectedVolumes, fs);
 
+  const ds = downsampleChannels(sidecar.Columns, columns, fs);
+
   return {
     filename: found.tsvGzName,
-    samplingFrequency: fs,
+    samplingFrequency: ds.samplingFrequency,
+    /** Rate in the file; above samplingFrequency when the data were downsampled */
+    originalSamplingFrequency: fs,
     startTime: sidecar.StartTime - timing.offset,
     timing,
     columns: sidecar.Columns,
-    data: columns,
-    numSamples: columns[0].length,
+    data: ds.data,
+    numSamples: ds.data[0]?.length ?? 0,
     quality,
   };
+}
+
+/** Text decoded per step when parsing, well below Node's longest string (~512 MB) */
+const PARSE_CHUNK_BYTES = 32 * 1024 * 1024;
+
+/**
+ * Parse an uncompressed physio TSV into one array per column, a chunk of
+ * lines at a time, so files larger than Node's longest string can be read.
+ * Lines whose first field is not a number (a header row) are skipped.
+ */
+export function parsePhysioTsv(buf: Buffer, numCols: number, chunkBytes = PARSE_CHUNK_BYTES): Float64Array[] {
+  let maxRows = 1;
+  for (let i = buf.indexOf(10); i !== -1; i = buf.indexOf(10, i + 1)) maxRows++;
+  const cols = Array.from({ length: numCols }, () => new Float64Array(maxRows));
+  let rows = 0;
+
+  let start = 0;
+  while (start < buf.length) {
+    let end = buf.length;
+    if (start + chunkBytes < buf.length) {
+      // End the chunk after a newline; a line longer than a chunk ends at its own newline
+      const nl = buf.lastIndexOf(10, start + chunkBytes);
+      end = nl >= start ? nl + 1 : (buf.indexOf(10, start + chunkBytes) + 1 || buf.length);
+    }
+    for (const line of buf.toString('latin1', start, end).split('\n')) {
+      if (line.length === 0) continue;
+      const parts = line.split('\t');
+      if (Number.isNaN(Number(parts[0]))) continue;
+      for (let c = 0; c < numCols; c++) cols[c][rows] = Number(parts[c]);
+      rows++;
+    }
+    start = end;
+  }
+  return cols.map((col) => col.subarray(0, rows));
 }
 
 function scanPrefix(sub: string, ses: string, task: string, run: string): string {

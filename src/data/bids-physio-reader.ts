@@ -14,6 +14,11 @@ interface ChannelQuality {
 export interface PhysioRaw {
   filename: string;
   samplingFrequency: number;
+  /**
+   * Rate in the file. Above samplingFrequency when the server downsampled a
+   * high-rate recording (server/downsample.ts); absent in older responses.
+   */
+  originalSamplingFrequency?: number;
   /** Time (s) of the first sample relative to scan onset (t = 0 = first volume) */
   startTime: number;
   /** How startTime was established and whether trigger pulses confirm it */

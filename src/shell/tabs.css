@@ -139,6 +139,13 @@ summary:focus-visible {
   border: 1px solid #f3d19e;
 }
 
+/* Information, not a pass/fail: neutral */
+.quality-badge.downsampled {
+  background: #eef1f4;
+  color: var(--text-2);
+  border: 1px solid #d5dbe1;
+}
+
 .quality-badge[title] {
   cursor: help;
 }
