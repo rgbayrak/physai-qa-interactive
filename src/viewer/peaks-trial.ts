@@ -29,7 +29,7 @@ export function matchPeakChannel(selected: string, peakChannels: string[], physi
   if (partial) return partial;
 
   const sel = classifyChannel(selected);
-  if (!sel.physio) return null;
+  if (!sel.physio || sel.signal === null) return null;
   const sameType = (name: string) => {
     const c = classifyChannel(name);
     return c.physio && c.signal === sel.signal;

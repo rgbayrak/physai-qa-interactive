@@ -74,17 +74,17 @@ export function resolveDatasetPaths(
 interface PhysioChannels {
   /** The scan with only its physiological columns */
   raw: PhysioResult;
-  /** Signal type of each kept column, same order as raw.columns */
-  signals: SignalType[];
-  /** Columns left out (trigger, markers, unknown names) */
+  /** Signal type of each kept column, same order as raw.columns; null when the name is not known */
+  signals: (SignalType | null)[];
+  /** Columns left out (trigger, markers, time stamps) */
   excluded: { channel: string; reason: string }[];
 }
 
-/** Keep only columns found in the physio channel dictionary (src/quality/channels.ts) */
+/** Keep every column except those in NON_PHYSIO_CHANNELS (src/quality/channels.ts) */
 export function physioChannels(raw: PhysioResult): PhysioChannels {
   const columns: string[] = [];
   const data: number[][] = [];
-  const signals: SignalType[] = [];
+  const signals: (SignalType | null)[] = [];
   const excluded: { channel: string; reason: string }[] = [];
   raw.columns.forEach((channel, i) => {
     const c = classifyChannel(channel);
@@ -115,7 +115,7 @@ export function scanQualityRows(scan: ScanEntry, fullRaw: PhysioResult): Quality
       run: scan.run,
       filename: raw.filename,
       channel,
-      signalType: signals[i],
+      signalType: signals[i] ?? '',
       samplingFrequency: raw.samplingFrequency,
       numSamples: raw.numSamples,
       durationS: raw.numSamples / raw.samplingFrequency,

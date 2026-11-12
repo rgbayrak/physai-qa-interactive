@@ -7,8 +7,14 @@ describe('physioColumns', () => {
     expect(physioColumns(['cardiac', 'respiratory', 'trigger'])).toEqual(['cardiac', 'respiratory']);
   });
 
-  it('falls back to every column when none is in the dictionary', () => {
-    expect(physioColumns(['foo', 'bar'])).toEqual(['foo', 'bar']);
+  it('offers every column not specifically excluded, known name or not', () => {
+    expect(
+      physioColumns(['time', 'respiratory_chest', 'trigger', 'cardiac', 'respiratory_CO2', 'respiratory_O2']),
+    ).toEqual(['respiratory_chest', 'cardiac', 'respiratory_CO2', 'respiratory_O2']);
+  });
+
+  it('falls back to every column when all are excluded', () => {
+    expect(physioColumns(['trigger', 'time'])).toEqual(['trigger', 'time']);
   });
 });
 

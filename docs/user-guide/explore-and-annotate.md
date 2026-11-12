@@ -49,7 +49,7 @@ The **Event** chart for a task scan: one coloured lane per value of the `Conditi
 A stacked channel (RSP) and a confound under the signal of interest (EDA), all on the same time axis. Next to the file name: the Timing badge and the per-channel quality badges.
 ```
 
-Channel and Stack only offer physiological channels, matched against the same list of names as the quality metrics, so `trigger` is left out.
+Channel and Stack offer every column of the physio file except those specifically excluded, the same ones the quality metrics leave out: `trigger`, `time` and other scanner, marker and time stamp columns.
 
 **Peaks (trial).** A trial feature, not final. When the physiological recordings folder has an events file with detected peaks (e.g. physprep's `r_peak` and `systolic_peak`, and their `_corrected` versions), a **Peaks** toggle next to Channel draws them on the signal: blue for detected, green rings for corrected.
 

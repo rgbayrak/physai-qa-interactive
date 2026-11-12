@@ -21,7 +21,7 @@ npx vite-node scripts/compute-quality-metrics.ts <name> --bids-root /path/to/dat
 
 The script finds its folders the same way as the tool (see {doc}`datasets`): `--bids-root`, `--physio-root` and `--deriv-root` match `BIDS_ROOT`, `BIDSPHYS_ROOT` and `BIDSDER_ROOT`. It prints the three folders it uses before computing. Then reload the page.
 
-Only physiological channels are computed. Column names are checked against a list (e.g. `cardiac`, `PPG`, `ECG`, `respiratory`, `RSP`, `EDA`); `trigger` and unknown columns are skipped. The output is deterministic: the same input gives identical files, except the run log.
+Every column of the physio file is computed unless it is specifically excluded: `trigger`, `time` and other scanner, marker and time stamp columns. Known names (e.g. `cardiac`, `PPG`, `ECG`, `respiratory`, `RSP`, `EDA`) get a signal type; other names get `n/a` in `signal_type`. The output is deterministic: the same input gives identical files, except the run log.
 
 ## What it writes
 

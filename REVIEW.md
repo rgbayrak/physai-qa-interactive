@@ -19,9 +19,10 @@ dataset-wide script (`scripts/compute-quality-metrics.ts`) calls it.
   Windows that cannot be computed (e.g. flat) are skipped, and the result is the mean of the remaining windows.
 - `NaN` (shown as N/A, or `n/a` in the TSV) means the metric does not apply to
   that channel or could not be computed.
-- The dataset-wide script computes metrics only for channels found in the physio
-  channel dictionary (`src/quality/channels.ts`). Trigger, marker and unknown
-  columns are excluded and listed in `dataset.json`.
+- The dataset-wide script computes metrics for every column except those
+  specifically excluded in `NON_PHYSIO_CHANNELS` (`src/quality/channels.ts`):
+  trigger, marker, time stamp and similar columns, listed in `dataset.json`.
+  Unknown names are computed, with no signal type.
 
 | Group | Metric (TSV column) | Applies to |
 |---|---|---|
