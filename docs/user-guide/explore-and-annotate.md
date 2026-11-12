@@ -73,6 +73,15 @@ The physiological sidecar's `StartTime` is the reference: it is the time of the 
 
 **Quality badges.** When a `_desc-quality.json` sidecar is present (per run, or run-less), per-channel pass/fail badges appear next to the timing badge (see {ref}`the stacked channel figure <fig-stack>`).
 
+## Downsampling badge
+
+Recordings sampled at 2000 Hz or more are downsampled to about 1000 Hz, by a whole-number factor: 10 000 Hz becomes 1000 Hz, 2500 Hz becomes 1250 Hz. A grey **Downsampled** badge, the first one next to the file name, shows the original and new rates; hover over it for the details. Recordings under 2000 Hz are shown as they are, with no badge.
+
+- **No aliasing.** Each channel is low-pass filtered at 0.8 × the new Nyquist frequency (400 Hz at 1000 Hz) before samples are dropped, so nothing above the new Nyquist frequency folds back into the signal.
+- **No time shift.** The filter is symmetric, so peaks stay where they were, and the kept samples sit exactly on the original time grid.
+- **Trigger channel.** It is not filtered: each kept sample takes the highest value of its block, so short pulses still show. The timing check runs on the original, full-rate data.
+- **Signal quality metrics** are computed from the downsampled data, in the viewer and in `quality_metrics.tsv`, whose `sampling_frequency` column gives the new rate.
+
 ## Annotations
 
 The **Annotations** box has two parts:

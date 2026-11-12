@@ -58,7 +58,7 @@ src/
 │   ├── state.ts               # The single ViewerState object
 │   ├── annotations.ts         # Annotation model <-> stored JSON (pure)
 │   ├── annotation-panel.ts    # Annotation list rendering, progress bar colour
-│   ├── info.ts                # Dataset info line, On disk data summary, timing/quality badges
+│   ├── info.ts                # Dataset info line, On disk data summary, downsampling/timing/quality badges
 │   ├── controls.ts            # Dropdowns, stacked-channel checkboxes
 │   ├── navigation.ts          # Prev/next stepping, search resolution (pure)
 │   ├── persistence.ts         # Last-viewed scan in localStorage
@@ -101,6 +101,7 @@ src/
 
 server/
 ├── bids-layout.ts          # Pure BIDS filesystem logic (testable, no Vite dependency)
+├── downsample.ts           # Brings recordings at 2 kHz or more down to about 1 kHz: low-pass filter (no time shift), block maximum for triggers
 ├── bids-physio-plugin.ts   # Vite plugin: checks the folders and prints the banner at start, reads the dataset once the dev server listens, serves every /api/* endpoint
 ├── bids-roots-check.ts     # Stops the dev server when BIDS_ROOT (or BIDSPHYS_ROOT, BIDSDER_ROOT) is missing or not a BIDS dataset
 ├── startup-banner.ts       # Welcome banner printed when the dev server starts

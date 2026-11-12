@@ -312,7 +312,11 @@ export function runQualityMetrics(opts: QualityRunOptions): QualityRunResult {
       subjectsWithRows.add(scan.sub);
       writeFileSync(join(waveDir, `${id}_waveforms.json`), JSON.stringify(waveformFile(raw, opts.buckets)));
       const skipped = excluded.length ? ` (excluded: ${excluded.map((e) => e.channel).join(', ')})` : '';
-      log(`  [${i + 1}/${scans.length}] ${id}: ${scanRows.map((r) => r.channel).join(', ')}${skipped}`);
+      const downsampled =
+        raw.originalSamplingFrequency !== raw.samplingFrequency
+          ? ` (downsampled ${raw.originalSamplingFrequency} → ${raw.samplingFrequency} Hz)`
+          : '';
+      log(`  [${i + 1}/${scans.length}] ${id}: ${scanRows.map((r) => r.channel).join(', ')}${skipped}${downsampled}`);
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
       failedScans.push({ scan: id, reason });
