@@ -5,6 +5,11 @@ server's terminal output: the lines starting with `[bids-physio]` show which
 folders the server reads (`BIDS root`, `Physio root`, `Derivatives root`) and
 how many physio files it found.
 
+```{contents} On this page
+:local:
+:depth: 1
+```
+
 ## The dev server stops with "No BIDS dataset given"
 
 There is no default dataset. Tell the server which folder to serve:
