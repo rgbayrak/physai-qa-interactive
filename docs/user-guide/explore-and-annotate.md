@@ -1,4 +1,4 @@
-# Explore and Annotate tab
+# Tab: Explore and Annotate
 
 The **Explore and Annotate** tab shows one scan at a time: its physiological signals, auxiliary charts on the same time axis, and the Annotations box where you rate and mark the recording.
 
@@ -24,6 +24,13 @@ The signal charts on the left; the Annotations box and the On disk data summary 
 
 - **Focus chart** (top): drag to select a time window, which zooms in when you release; double-click to zoom out. The Y-axis fits the visible data. Hover for the value under the pointer.
 - **Context chart** (bottom): shows the whole recording. Drag the window to move along it, or drag its edges to change its length. The window length is shown over it.
+
+```{figure} ../images/zoom-scroll.gif
+:alt: Hovering over the cardiac signal shows the time and value under the pointer; dragging on the focus chart zooms into a time window, and dragging the window on the context chart moves along the recording
+:name: fig-zoom-scroll
+
+Hover readout, brush to zoom and drag the context window.
+```
 
 All charts share one time axis: **t = 0 is scan onset**, the start of the first BOLD volume. A dashed purple **scan onset (t = 0)** line marks it. Physiological data recorded before the scan (negative times) is out of view.
 
@@ -88,6 +95,13 @@ The **Annotations** box has two parts:
 
 - **Full Recording:** rate the whole recording's **Signal Quality** (Good, Bad, Fixable, Unknown) and write **Notes**.
 - **Time Windows:** switch **Annotate** On, then drag on the focus chart to mark a time window and give it a label. Delete a window with its ×. Labels cannot be edited; to change one, delete the window and draw it again.
+
+```{figure} ../images/eval-ml-annot.gif
+:alt: A respiratory recording rated Good under Signal Quality in the Annotations box, then the Next button steps to the next scan and the annotated count goes up
+:name: fig-rate-and-step
+
+Rating a recording's signal quality and stepping to the next scan.
+```
 
 ```{figure} ../images/explore-annotate-time-window.png
 :alt: A time window from 330.38 s to 360.71 s labelled motion, shaded on the zoomed-in focus chart, with Annotate On and the window listed under Time Windows; the framewise displacement chart below peaks in the same window

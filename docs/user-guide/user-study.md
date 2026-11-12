@@ -1,15 +1,11 @@
-# USER STUDY
+# >> USER STUDY << 
 
 **Duration:** after the software setup (steps 1-4 below), the session takes about 50 minutes.
 
-| Part | Content | 
-|---|---|
-| Intro | Consent, About you | 
-| A | Load a dataset and start the pipeline | 
-| B | Explore and annotate (scenario) | 
-| C | Stats tab | 
-| D | Questionnaires | 
-| E | Open questions | 
+```{contents} On this page
+:local:
+:depth: 1
+```
 
 ## Getting the data and starting the tool
 
@@ -72,10 +68,6 @@ These commands are for the macOS and Linux terminal. On Windows, use PowerShell 
 **Ease scale (1-7):** *Overall, how difficult or easy was this task?*
 1 = very difficult, 4 = neither, 7 = very easy.
 
-## Consent
-
-*Facilitator: add your institution's approved consent text and signature line here before printing.*
-
 ## About you
 
 | Question | Answer |
@@ -128,43 +120,43 @@ Check that the script from task 2 has finished, then reload the page: the scatte
 
 Rate each statement: 1 = strongly disagree, 5 = strongly agree.
 
-| # | Statement | 1 | 2 | 3 | 4 | 5 |
-|---|---|---|---|---|---|---|
-| 1 | I think that I would like to use this tool frequently. | | | | | |
-| 2 | I found the tool unnecessarily complex. | | | | | |
-| 3 | I found the various functions in this tool were well integrated. | | | | | |
-| 4 | I thought there was too much inconsistency in this tool. | | | | | |
-| 5 | I would imagine that most people would learn to use this tool very quickly. | | | | | |
+| # | Statement | Rate 1-5 | Comments |
+|---|---|---|---|
+| 1 | I think that I would like to use this tool frequently. | | |
+| 2 | I found the tool unnecessarily complex. | | |
+| 3 | I found the various functions in this tool were well integrated. | | |
+| 4 | I thought there was too much inconsistency in this tool. | | |
+| 5 | I would imagine that most people would learn to use this tool very quickly. | | |
 
 ### D2. Usefulness (Perceived Usefulness)
 
 Think about checking the quality of physiological data in your own research.
 Rate each statement: 1 = strongly disagree, 4 = neither, 7 = strongly agree.
 
-| # | Using this tool in my work would... | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
-|---|---|---|---|---|---|---|---|---|
-| 1 | ...let me check issues in my data more quickly. | | | | | | | |
-| 2 | ...improve my quality assessment. | | | | | | | |
-| 3 | ...make my quality assessment more effective. | | | | | | | |
-| 4 | ...make it easier to check data quality. | | | | | | | |
-| 5 | Overall, I would find this tool useful in my work. | | | | | | | |
+| # | Using this tool in my work would... | Rate 1-7 | Comments |
+|---|---|---|---|
+| 1 | ...let me check issues in my data more quickly. | | |
+| 2 | ...improve my quality assessment. | | |
+| 3 | ...make my quality assessment more effective. | | |
+| 4 | ...make it easier to check data quality. | | |
+| 5 | Overall, I would find this tool useful in my work. | | |
 
 ### D3. Usefulness of each feature
 
-1 = not useful, 3 = moderately useful, 5 = very useful. Tick N/A if you did not use it.
+1 = not useful, 3 = moderately useful, 5 = very useful. Put N/A if you did not use it.
 
-| Feature | 1 | 2 | 3 | 4 | 5 | N/A |
-|---|---|---|---|---|---|---|
-| Dataset-wide quality metrics | | | | | | |
-| Signal viewer (zoom, overview window and its length, stacked channels) | | | | | | |
-| Head-motion confounds next to the signals | | | | | | |
-| Timing badge (trigger verification) | | | | | | |
-| Signal quality rating and notes for the whole recording | | | | | | |
-| Time-window annotation | | | | | | |
-| Annotated count, progress bar and opening on the earliest unannotated scan | | | | | | |
-| Scatter plot (viewed scan highlighted, color legend) | | | | | | |
-| Stats tab (waveforms, metric tables, group histograms, Metrics shown) | | | | | | |
-| PDF report (saved with the metrics) | | | | | | |
+| Feature | Rate 1-5 | Comments |
+|---|---|---|
+| Dataset-wide quality metrics | | |
+| Signal viewer (zoom, overview window and its length, stacked channels) | | |
+| Head-motion confounds next to the signals | | |
+| Timing badge (trigger verification) | | |
+| Signal quality rating and notes for the whole recording | | |
+| Time-window annotation | | |
+| Annotated count, progress bar and opening on the earliest unannotated scan | | |
+| Scatter plot (viewed scan highlighted, color legend) | | |
+| Stats tab (waveforms, metric tables, group histograms, Metrics shown) | | |
+| PDF report (saved with the metrics) | | |
 
 ## Part E: Open questions
 

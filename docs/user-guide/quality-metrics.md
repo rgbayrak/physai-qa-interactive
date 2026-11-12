@@ -1,4 +1,4 @@
-# Stats tab
+# Tab: Stats
 
 Signal quality metrics are computed once per dataset by a script, and then shown in two places: a scatter plot at the bottom of **Explore and Annotate**, and the **Stats** tab. Both stay hidden until the metrics exist.
 

@@ -39,6 +39,68 @@ table.docutils span.pre {
   overflow-wrap: normal;
 }
 
+/* Tables: rounded outer border, a light header row and thin row lines.
+   border-collapse must be separate for border-radius to apply; the corner
+   cells are rounded too (not overflow: hidden, which would stop a wide
+   table from scrolling on a phone). */
+table.docutils {
+  /* The theme makes tables display: block (so wide ones scroll sideways),
+     which stretches the border to the full column. fit-content shrinks it
+     to the rows; max-width keeps the sideways scroll for wide tables. */
+  width: fit-content;
+  max-width: 100%;
+  margin-left: 0;
+  margin-right: 0;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid #dde1e5;
+  border-radius: 8px;
+}
+table.docutils th,
+table.docutils td {
+  border: none;
+  border-bottom: 1px solid #e8ebee;
+  padding: 0.5em 0.8em;
+  vertical-align: top;
+}
+table.docutils tbody tr:last-child td {
+  border-bottom: none;
+}
+table.docutils thead th {
+  background: #f4f6f8;
+  border-bottom: 1px solid #dde1e5;
+  text-align: left;
+  font-weight: 600;
+}
+table.docutils tbody tr:hover td {
+  background: #f9fafb;
+}
+table.docutils thead tr:first-child th:first-child { border-top-left-radius: 8px; }
+table.docutils thead tr:first-child th:last-child { border-top-right-radius: 8px; }
+table.docutils tbody tr:last-child td:first-child { border-bottom-left-radius: 8px; }
+table.docutils tbody tr:last-child td:last-child { border-bottom-right-radius: 8px; }
+
+/* Figures: full-width screenshots and GIFs at 90% of the text column,
+   centred. Smaller images and ones with their own :width: are unaffected. */
+figure img {
+  display: block;
+  max-width: 90%;
+  height: auto;
+  margin: 0 auto;
+}
+
+/* "On this page" box ({contents}): light grey instead of the theme's pink */
+nav.contents {
+  background-color: #f4f6f8;
+  width: 60%;  /* 40% narrower than the text column; full width on phones */
+}
+@media (max-width: 39rem) {
+  nav.contents { width: auto; }
+}
+nav.contents > p.topic-title {
+  background-color: #e8ebee;
+}
+
 /* The docs do not load the app's src/shell/tabs.css, so its tokens are
    repeated here with the same values */
 :root {
