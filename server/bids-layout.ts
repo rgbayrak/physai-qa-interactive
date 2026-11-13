@@ -1,24 +1,22 @@
-import { readdirSync, readFileSync, existsSync, accessSync, constants, mkdirSync, writeFileSync } from 'fs';
+import { readFileSync, mkdirSync, writeFileSync } from 'fs';
 import { gunzipSync } from 'zlib';
 import { join, dirname, basename, relative } from 'path';
 import { isPlaceholder } from '../src/data/dataset-notice';
 import { downsampleChannels } from './downsample';
+import {
+  CONFOUNDS_PATTERNS,
+  candidates,
+  entitiesMatch,
+  inheritedSidecar,
+  isReadable,
+  qualitySidecar,
+  scanKey,
+  withoutDesc,
+} from './bids-index';
+import type { BidsIndex, FileKind, IndexedFile } from './bids-index';
 import type { DescriptionField, DescriptionNotice, DescriptionSource } from '../src/data/dataset-notice';
 
-/** Matches physio .tsv.gz files (both _physio.tsv.gz and _desc-preproc_physio.tsv.gz) */
-const PHYSIO_GZ_RE = /_physio\.tsv\.gz$/;
-
-/**
- * Per-volume confounds TSVs (plain or gzipped), in order of preference:
- * fMRIPrep ≥ 20.2, fMRIPrep 1.4–20.1, fMRIPrep < 1.4, then MRIQC's
- * *_timeseries.tsv (same column names: framewise_displacement, rot_x, …).
- */
-const CONFOUNDS_PATTERNS = [
-  /_desc-confounds_timeseries\.tsv(\.gz)?$/,
-  /_desc-confounds_regressors\.tsv(\.gz)?$/,
-  /_bold_confounds\.tsv(\.gz)?$/,
-  /_timeseries\.tsv(\.gz)?$/,
-];
+export { isReadable };
 
 /** Motion/intensity confound columns exposed to the viewer, in dropdown order */
 const CONFOUND_COLUMNS = [
@@ -52,136 +50,68 @@ export interface ScanEntry {
   run: string;
 }
 
-/** Check if a path is actually readable (resolves symlinks, not a broken annex pointer) */
-export function isReadable(filePath: string): boolean {
-  try {
-    accessSync(filePath, constants.R_OK);
-    return true;
-  } catch {
-    return false;
-  }
+const byNumeric = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true });
+
+/** Scans in hierarchy order: sub, ses, task, then run ('' first), all compared as numbers where they are */
+function compareScans(a: ScanEntry, b: ScanEntry): number {
+  return byNumeric(a.sub, b.sub) || byNumeric(a.ses, b.ses) || byNumeric(a.task, b.task) || byNumeric(a.run, b.run);
 }
 
 /**
- * List physio .tsv.gz filenames in a func dir that are actually readable.
- * Filters out broken symlinks (e.g. locked DataLad/git-annex files that are
- * not downloaded). Unlocked annex pointer files pass; see
- * hasGzipContent in server/availability.ts.
+ * Every scan in the index: one per sub/ses/task/run with a readable physio
+ * file (see selectScanFiles in server/bids-index.ts), in hierarchy order.
+ * Physio for some subjects or sessions only is fine; run-less and run scans
+ * of one task are both listed.
  */
-function listReadablePhysio(funcDir: string): string[] {
-  if (!existsSync(funcDir)) return [];
-  return readdirSync(funcDir).filter(
-    (f) => PHYSIO_GZ_RE.test(f) && isReadable(join(funcDir, f)),
-  );
+export function buildScans(index: BidsIndex): ScanEntry[] {
+  return [...index.scans.values()]
+    .map((f) => ({ sub: f.entities.sub, ses: f.entities.ses ?? '', task: f.entities.task, run: f.entities.run ?? '' }))
+    .sort(compareScans);
 }
 
-/** Resolve the func directory for a subject, optionally within a session */
-function funcDir(bidsRoot: string, sub: string, ses: string): string {
-  return ses
-    ? join(bidsRoot, `sub-${sub}`, `ses-${ses}`, 'func')
-    : join(bidsRoot, `sub-${sub}`, 'func');
-}
-
-export function getSubjects(bidsRoot: string): SubjectInfo[] {
-  // A missing folder has no subjects; resolveBidsRoots notes the bad path
-  if (!existsSync(bidsRoot)) return [];
-  const entries = readdirSync(bidsRoot, { withFileTypes: true });
-  return entries
-    .filter((e) => e.isDirectory() && e.name.startsWith('sub-'))
-    .map((e) => {
-      const subId = e.name.replace('sub-', '');
-      const subDir = join(bidsRoot, e.name);
-      const sesDirs = readdirSync(subDir, { withFileTypes: true })
-        .filter((s) => s.isDirectory() && s.name.startsWith('ses-'))
-        .map((s) => s.name.replace('ses-', ''));
-
-      if (sesDirs.length > 0) {
-        // Has session directories — filter to those with readable physio
-        const sessions = sesDirs
-          .filter((ses) => listReadablePhysio(funcDir(bidsRoot, subId, ses)).length > 0)
-          .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-        return { id: subId, sessions };
-      }
-
-      // No session directories — check for func/ directly under subject
-      if (listReadablePhysio(funcDir(bidsRoot, subId, '')).length > 0) {
-        return { id: subId, sessions: [''] };
-      }
-      return { id: subId, sessions: [] };
-    })
-    .filter((s) => s.sessions.length > 0)
-    .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
-}
-
-export function getTasks(bidsRoot: string, sub: string, ses: string): string[] {
-  const fd = funcDir(bidsRoot, sub, ses);
-  const readable = listReadablePhysio(fd);
-  const taskSet = new Set<string>();
-  for (const f of readable) {
-    const m = f.match(/task-([^_]+)/);
-    if (m) taskSet.add(m[1]);
+/** Subjects with at least one scan, and their sessions ('' for physio outside a session) */
+export function getSubjects(index: BidsIndex): SubjectInfo[] {
+  const sessions = new Map<string, Set<string>>();
+  for (const s of buildScans(index)) {
+    const set = sessions.get(s.sub) ?? new Set<string>();
+    set.add(s.ses);
+    sessions.set(s.sub, set);
   }
-  return [...taskSet].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  return [...sessions]
+    .map(([id, set]) => ({ id, sessions: [...set].sort(byNumeric) }))
+    .sort((a, b) => byNumeric(a.id, b.id));
 }
 
-export function getRuns(bidsRoot: string, sub: string, ses: string, task: string): string[] {
-  const fd = funcDir(bidsRoot, sub, ses);
-  const readable = listReadablePhysio(fd);
-  const runSet = new Set<string>();
-  for (const f of readable) {
-    // Only consider files matching this task
-    if (!f.includes(`task-${task}`)) continue;
-    const m = f.match(/run-([^_]+)/);
-    if (m) runSet.add(m[1]);
-  }
-  return [...runSet].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+export function getTasks(index: BidsIndex, sub: string, ses: string): string[] {
+  const tasks = buildScans(index)
+    .filter((s) => s.sub === sub && s.ses === ses)
+    .map((s) => s.task);
+  return [...new Set(tasks)].sort(byNumeric);
 }
 
-export function findPhysioFiles(bidsRoot: string, sub: string, ses: string, task: string, run: string) {
-  const fd = funcDir(bidsRoot, sub, ses);
-  const readable = listReadablePhysio(fd);
+/** Run labels of a task (as the physio file names write them); empty when its scans have no run */
+export function getRuns(index: BidsIndex, sub: string, ses: string, task: string): string[] {
+  const runs = buildScans(index)
+    .filter((s) => s.sub === sub && s.ses === ses && s.task === task && s.run !== '')
+    .map((s) => s.run);
+  return [...new Set(runs)].sort(byNumeric);
+}
 
-  // Build prefix: sub-XX[_ses-XX]_task-XX[_run-XX]
-  const basePrefix = ses ? `sub-${sub}_ses-${ses}_task-${task}` : `sub-${sub}_task-${task}`;
-  const prefix = run ? `${basePrefix}_run-${run}` : basePrefix;
-
-  const tsvGzName = readable.find((f) => f.startsWith(prefix));
-  if (!tsvGzName) return null;
-  const tsvGzPath = join(fd, tsvGzName);
-
-  // Sidecar resolution cascade:
-  // 1. Per-file JSON sidecar in funcDir
-  const perFileJson = join(fd, tsvGzName.replace('.tsv.gz', '.json'));
-  let sidecarPath: string | null = null;
-  if (isReadable(perFileJson)) {
-    sidecarPath = perFileJson;
-  } else {
-    // 2. Subject-level sidecar (run stripped): sub-XX/sub-XX_task-YY_physio.json
-    const subDir = join(bidsRoot, `sub-${sub}`);
-    const subLevelName = `sub-${sub}_task-${task}_physio.json`;
-    const subLevelPath = join(subDir, subLevelName);
-    if (isReadable(subLevelPath)) {
-      sidecarPath = subLevelPath;
-    } else {
-      // 3. Top-level fallbacks
-      for (const candidate of ['preproc_physio.json', 'physio.json']) {
-        const p = join(bidsRoot, candidate);
-        if (isReadable(p)) {
-          sidecarPath = p;
-          break;
-        }
-      }
-    }
-  }
-
-  // Look for quality sidecar: *_desc-quality.json, run-level first (e.g.
-  // ..._run-01_desc-quality.json), then the run-less name
-  const qualityJsonPath =
-    [prefix, basePrefix]
-      .map((p) => join(fd, `${p}_desc-quality.json`))
-      .find((p) => isReadable(p)) ?? null;
-
-  return { tsvGzPath, tsvGzName, sidecarPath, qualityJsonPath };
+/** The scan's physio file (run compared as a number), its inherited sidecar and its quality sidecar */
+export function findPhysioFiles(index: BidsIndex, sub: string, ses: string, task: string, run: string) {
+  const file = index.scans.get(scanKey(sub, ses, task, run));
+  if (!file) return null;
+  const sidecar = inheritedSidecar(index, file);
+  return {
+    file,
+    tsvGzPath: file.path,
+    tsvGzName: file.name,
+    /** The nearest sidecar; sidecarPaths lists every one merged, top level first */
+    sidecarPath: sidecar ? sidecar.paths[sidecar.paths.length - 1] : null,
+    sidecarPaths: sidecar?.paths ?? [],
+    sidecar: sidecar?.values ?? null,
+    qualityJsonPath: qualitySidecar(index, file),
+  };
 }
 
 /**
@@ -206,23 +136,16 @@ export function detectTriggerOnsets(values: ArrayLike<number>): number[] {
 }
 
 /**
- * A scan's physio recording from physioRoot. BOLD timing for the trigger check
- * comes from bidsRoot (the main BIDS folder, normally the same as physioRoot),
- * then the derivatives.
+ * A scan's physio recording and its inherited sidecar. BOLD timing for the
+ * trigger check comes from the raw datasets (BIDS_ROOT first), then the
+ * derivatives (see readBoldTiming).
  */
-export function readPhysio(
-  physioRoot: string,
-  sub: string,
-  ses: string,
-  task: string,
-  run: string,
-  bidsderRoot: string = physioRoot,
-  bidsRoot: string = physioRoot,
-) {
-  const found = findPhysioFiles(physioRoot, sub, ses, task, run);
-  if (!found || !found.sidecarPath) return null;
+export function readPhysio(index: BidsIndex, sub: string, ses: string, task: string, run: string) {
+  const found = findPhysioFiles(index, sub, ses, task, run);
+  if (!found || !found.sidecar) return null;
 
-  const sidecar: PhysioSidecar = JSON.parse(readFileSync(found.sidecarPath, 'utf-8'));
+  const sidecar = found.sidecar as unknown as PhysioSidecar;
+  if (!Array.isArray(sidecar.Columns) || typeof sidecar.SamplingFrequency !== 'number') return null;
   const columns = parsePhysioTsv(gunzipSync(readFileSync(found.tsvGzPath)), sidecar.Columns.length);
 
   // Read quality sidecar if available
@@ -247,10 +170,9 @@ export function readPhysio(
   }
 
   const fs = sidecar.SamplingFrequency;
-  const prefix = scanPrefix(sub, ses, task, run);
-  const boldTiming = readBoldTiming(bidsRoot, bidsderRoot, sub, ses, prefix, task);
-  const expectedVolumes =
-    boldTiming?.volumeTiming?.length ?? countConfoundVolumes(bidsderRoot, sub, ses, prefix);
+  const scan = scanEntities(sub, ses, task, run);
+  const boldTiming = readBoldTiming(index, scan);
+  const expectedVolumes = boldTiming?.volumeTiming?.length ?? countConfoundVolumes(index, scan);
 
   // Trigger timing is checked at the original rate, before any downsampling
   const trigCol = sidecar.Columns.findIndex((c) => c.toLowerCase() === 'trigger');
@@ -310,19 +232,60 @@ export function parsePhysioTsv(buf: Buffer, numCols: number, chunkBytes = PARSE_
   return cols.map((col) => col.subarray(0, rows));
 }
 
-function scanPrefix(sub: string, ses: string, task: string, run: string): string {
-  let prefix = ses ? `sub-${sub}_ses-${ses}_task-${task}` : `sub-${sub}_task-${task}`;
-  if (run) prefix += `_run-${run}`;
-  return prefix;
+/** The scan's entities: sub, task, and ses and run when given */
+function scanEntities(sub: string, ses: string, task: string, run: string): Record<string, string> {
+  const e: Record<string, string> = { sub };
+  if (ses) e.ses = ses;
+  e.task = task;
+  if (run) e.run = run;
+  return e;
 }
 
 /**
- * Match a filename against a scan prefix. Run is a BIDS index, so it compares
- * numerically: run-01 matches run-1, and run-1 does not match run-10.
+ * How a file's entities (desc- aside) relate to the scan's: 0 the same, 1 more
+ * (e.g. echo-, space-: the scan's own file), 2 fewer (inherited, e.g. a
+ * top-level task-<task>_bold.json), null when they conflict.
  */
-function matchesPrefix(filename: string, prefix: string): boolean {
-  const pattern = prefix.replace(/_run-0*(\d+)$/, '_run-0*$1');
-  return new RegExp(`^${pattern}_`).test(filename);
+function relation(file: IndexedFile, scan: Record<string, string>): 0 | 1 | 2 | null {
+  const own = withoutDesc(file.entities);
+  const more = entitiesMatch(scan, own);
+  const fewer = entitiesMatch(own, scan);
+  if (more && fewer) return 0;
+  if (more) return 1;
+  if (fewer) return 2;
+  return null;
+}
+
+/** BIDS_ROOT's dataset first, then other raw datasets, then derivatives */
+const datasetRank = (f: IndexedFile) => (f.dataset.main ? 0 : f.dataset.type === 'raw' ? 1 : 2);
+
+/**
+ * Files of one kind that match the scan, best first: by dataset (main, raw,
+ * derivatives), then the scan's own files, then its multi-echo or derivative
+ * variants (name order, so echo-1 first), then inherited ones (most specific
+ * first). `keep` filters further.
+ */
+function matchingFiles(
+  index: BidsIndex,
+  kind: FileKind,
+  scan: Record<string, string>,
+  keep: (f: IndexedFile, rel: 0 | 1 | 2) => boolean = () => true,
+): IndexedFile[] {
+  const ranked: { f: IndexedFile; rel: 0 | 1 | 2 }[] = [];
+  for (const f of candidates(index, kind, scan.sub, scan.ses ?? '')) {
+    const rel = relation(f, scan);
+    if (rel !== null && keep(f, rel)) ranked.push({ f, rel });
+  }
+  return ranked
+    .sort(
+      (a, b) =>
+        datasetRank(a.f) - datasetRank(b.f) ||
+        a.rel - b.rel ||
+        (a.rel === 2 ? Object.keys(b.f.entities).length - Object.keys(a.f.entities).length : 0) ||
+        byNumeric(a.f.name, b.f.name) ||
+        byNumeric(a.f.path, b.f.path),
+    )
+    .map((r) => r.f);
 }
 
 export type TimingStatus ='verified' | 'corrected' | 'mismatch' | 'unverified';
@@ -408,38 +371,13 @@ interface BoldTiming {
 }
 
 /**
- * TR and volume onsets from the BOLD sidecar: scan-level sidecar in the main
- * BIDS folder (exact name, then e.g. per-echo names), then top-level task
- * inheritance there, then the derivatives' BOLD sidecars. Never read from a
- * separate physio folder.
- * Returns null if no timing is found.
+ * TR and volume onsets from the BOLD sidecars that match the scan (see
+ * matchingFiles): raw datasets first (the scan's own sidecar, then e.g.
+ * per-echo ones, then inherited ones such as task-<task>_bold.json), then the
+ * derivatives'. Returns null if no timing is found.
  */
-function readBoldTiming(
-  bidsRoot: string,
-  bidsderRoot: string,
-  sub: string,
-  ses: string,
-  prefix: string,
-  task: string,
-): BoldTiming | null {
-  const rawFd = funcDir(bidsRoot, sub, ses);
-  const candidates = [join(rawFd, `${prefix}_bold.json`)];
-  // Other raw sidecars of the run, e.g. multi-echo …_run-1_echo-1_bold.json
-  if (existsSync(rawFd)) {
-    const others = readdirSync(rawFd)
-      .filter((f) => matchesPrefix(f, prefix) && f.endsWith('_bold.json'))
-      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-    for (const f of others) candidates.push(join(rawFd, f));
-  }
-  candidates.push(join(bidsRoot, `task-${task}_bold.json`));
-  const derFd = funcDir(bidsderRoot, sub, ses);
-  if (existsSync(derFd)) {
-    for (const f of readdirSync(derFd)) {
-      if (matchesPrefix(f, prefix) && f.endsWith('_bold.json')) candidates.push(join(derFd, f));
-    }
-  }
-
-  for (const path of candidates) {
+function readBoldTiming(index: BidsIndex, scan: Record<string, string>): BoldTiming | null {
+  for (const { path } of matchingFiles(index, 'bold', scan)) {
     if (!isReadable(path)) continue;
     const meta = JSON.parse(readFileSync(path, 'utf-8'));
     if (Array.isArray(meta.VolumeTiming) && meta.VolumeTiming.length > 1) {
@@ -453,22 +391,19 @@ function readBoldTiming(
   return null;
 }
 
+/** Position of a confounds file's pattern in CONFOUNDS_PATTERNS (lower is preferred) */
+export const confoundsPatternRank = (name: string) => CONFOUNDS_PATTERNS.findIndex((p) => p.test(name));
+
 /**
- * The scan's confounds file in the derivatives func folder: the first readable
- * match of the most preferred CONFOUNDS_PATTERNS entry. Multi-echo runs
- * (…_echo-1_…, …_echo-2_…) share their motion, so the lowest echo is used.
+ * The scan's confounds file, anywhere in the index: the first readable match
+ * of the most preferred CONFOUNDS_PATTERNS entry. Multi-echo runs (…_echo-1_…,
+ * …_echo-2_…) share their motion, so the lowest echo is used.
  */
-function findConfoundsFile(bidsderRoot: string, sub: string, ses: string, prefix: string): string | null {
-  const fd = funcDir(bidsderRoot, sub, ses);
-  if (!existsSync(fd)) return null;
-  const files = readdirSync(fd)
-    .filter((f) => matchesPrefix(f, prefix))
-    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-  for (const pattern of CONFOUNDS_PATTERNS) {
-    const name = files.find((f) => pattern.test(f) && isReadable(join(fd, f)));
-    if (name) return join(fd, name);
-  }
-  return null;
+function findConfoundsFile(index: BidsIndex, scan: Record<string, string>): IndexedFile | null {
+  const files = matchingFiles(index, 'confounds', scan).sort(
+    (a, b) => confoundsPatternRank(a.name) - confoundsPatternRank(b.name),
+  );
+  return files.find((f) => isReadable(f.path)) ?? null;
 }
 
 function readConfoundsText(path: string): string {
@@ -477,23 +412,17 @@ function readConfoundsText(path: string): string {
 }
 
 /** Number of volumes (data rows) in the confounds file, or null if there is none */
-function countConfoundVolumes(bidsderRoot: string, sub: string, ses: string, prefix: string): number | null {
-  const path = findConfoundsFile(bidsderRoot, sub, ses, prefix);
-  if (!path) return null;
-  return readConfoundsText(path).split('\n').filter((l) => l.length > 0).length - 1;
+function countConfoundVolumes(index: BidsIndex, scan: Record<string, string>): number | null {
+  const file = findConfoundsFile(index, scan);
+  if (!file) return null;
+  return readConfoundsText(file.path).split('\n').filter((l) => l.length > 0).length - 1;
 }
 
-export function readConfounds(
-  bidsRoot: string,
-  bidsderRoot: string,
-  sub: string,
-  ses: string,
-  task: string,
-  run: string,
-) {
-  const prefix = scanPrefix(sub, ses, task, run);
-  const filePath = findConfoundsFile(bidsderRoot, sub, ses, prefix);
-  if (!filePath) return null;
+export function readConfounds(index: BidsIndex, sub: string, ses: string, task: string, run: string) {
+  const scan = scanEntities(sub, ses, task, run);
+  const file = findConfoundsFile(index, scan);
+  if (!file) return null;
+  const filePath = file.path;
 
   const lines = readConfoundsText(filePath).split('\n').filter((l) => l.length > 0);
   if (lines.length < 2) return null;
@@ -514,7 +443,7 @@ export function readConfounds(
   }
 
   // Volume onsets on the scan-onset axis (t = 0 = first volume)
-  const bold = readBoldTiming(bidsRoot, bidsderRoot, sub, ses, prefix, task);
+  const bold = readBoldTiming(index, scan);
   const volumeTimes = bold
     ? Array.from({ length: rows.length }, (_, i) => bold.volumeTiming?.[i] ?? i * bold.tr)
     : null;
@@ -528,41 +457,22 @@ export function readConfounds(
 }
 
 /**
- * The scan's BIDS events file, following BIDS inheritance: the run's own file
- * in the imaging func folder, then the run-less file there (it applies to
- * every run), then a top-level task-<task>_events.tsv. Null if there is none.
+ * The scan's BIDS events file, following BIDS inheritance: the run's own file,
+ * then the run-less file (it applies to every run), then a top-level
+ * task-<task>_events.tsv. A run-less scan never picks up a run's file.
+ * `inDataset` picks the datasets searched. Null if there is none.
  */
-function findEventsFile(imagingRoot: string, sub: string, ses: string, task: string, run: string): string | null {
-  const fd = funcDir(imagingRoot, sub, ses);
-  const files = existsSync(fd) ? readdirSync(fd).filter((f) => f.endsWith('_events.tsv')) : [];
-
-  /** Events file for `prefix` in fd; a run-less prefix never picks up a run's file */
-  const inFuncDir = (prefix: string, withRun: boolean): string | null => {
-    const candidates = files.filter((f) => matchesPrefix(f, prefix));
-    const name =
-      candidates.find((f) => f === `${prefix}_events.tsv`) ??
-      candidates.find((f) => withRun || !/_run-/.test(f.slice(prefix.length)));
-    return name ? join(fd, name) : null;
-  };
-
-  const candidates = [
-    run ? inFuncDir(scanPrefix(sub, ses, task, run), true) : null,
-    inFuncDir(scanPrefix(sub, ses, task, ''), false),
-    join(imagingRoot, `task-${task}_events.tsv`),
-  ];
-  return candidates.find((p): p is string => p !== null && isReadable(p)) ?? null;
+function findEventsFile(
+  index: BidsIndex,
+  scan: Record<string, string>,
+  inDataset: (f: IndexedFile) => boolean,
+): string | null {
+  const files = matchingFiles(index, 'events', scan, (f) => inDataset(f) && ('run' in scan || !('run' in f.entities)));
+  return files.find((f) => isReadable(f.path))?.path ?? null;
 }
 
-/**
- * Task events (BIDS *_events.tsv): onset and duration in seconds from the
- * first volume (the viewer's t = 0), plus every other column as text. Rows
- * without a numeric onset are dropped; an n/a duration counts as 0.
- * Read from the main BIDS folder (BidsRoots.bidsRoot), never from a separate physio folder.
- */
-export function readEvents(imagingRoot: string, sub: string, ses: string, task: string, run: string) {
-  const filePath = findEventsFile(imagingRoot, sub, ses, task, run);
-  if (!filePath) return null;
-
+/** Parse an events TSV; null without an onset column or rows */
+function parseEventsFile(filePath: string) {
   const lines = readFileSync(filePath, 'utf-8')
     .split(/\r?\n/)
     .filter((l) => l.trim().length > 0);
@@ -593,17 +503,31 @@ export function readEvents(imagingRoot: string, sub: string, ses: string, task: 
   return { filename: basename(filePath), onset, duration, columns };
 }
 
+/**
+ * Task events (BIDS *_events.tsv): onset and duration in seconds from the
+ * first volume (the viewer's t = 0), plus every other column as text. Rows
+ * without a numeric onset are dropped; an n/a duration counts as 0.
+ * Read from the raw datasets (BIDS_ROOT first), never from derivatives.
+ */
+export function readEvents(index: BidsIndex, sub: string, ses: string, task: string, run: string) {
+  const path = findEventsFile(index, scanEntities(sub, ses, task, run), (f) => f.dataset.type === 'raw');
+  return path ? parseEventsFile(path) : null;
+}
+
 /** Peak rows in a physprep events file: r_peak, systolic_peak, …, each optionally _corrected */
 const PEAK_TYPE_RE = /peak(_corrected)?$/i;
 
 /**
  * TRIAL (not a supported feature yet): detected and corrected peaks from a
- * physprep-style events file in the physio folder (onset, duration,
- * trial_type such as r_peak / r_peak_corrected, channel such as ECG / PPG).
- * Only peak rows with a channel are kept. Null if there are none.
+ * physprep-style events file in the physio file's own dataset (onset,
+ * duration, trial_type such as r_peak / r_peak_corrected, channel such as
+ * ECG / PPG). Only peak rows with a channel are kept. Null if there are none.
  */
-export function readPeaks(physioRoot: string, sub: string, ses: string, task: string, run: string) {
-  const events = readEvents(physioRoot, sub, ses, task, run);
+export function readPeaks(index: BidsIndex, sub: string, ses: string, task: string, run: string) {
+  const physio = index.scans.get(scanKey(sub, ses, task, run));
+  if (!physio) return null;
+  const path = findEventsFile(index, scanEntities(sub, ses, task, run), (f) => f.dataset === physio.dataset);
+  const events = path ? parseEventsFile(path) : null;
   const types = events?.columns.trial_type;
   const channels = events?.columns.channel;
   if (!events || !types || !channels) return null;
@@ -757,133 +681,24 @@ export function writeAnnotations(root: string, payload: AnnotationsFile): void {
   writeFileSync(filePath, JSON.stringify(payload, null, 2));
 }
 
-export interface BidsRoots {
-  /** Main BIDS folder: dataset_description.json, participants.tsv, events, BOLD sidecars */
-  bidsRoot: string;
-  /** Folder holding the *_physio.tsv.gz files and their sidecars; normally bidsRoot */
-  physioRoot: string;
-  /** Derivatives folder: confounds and the derivatives' dataset_description.json */
-  derivRoot: string;
-  /** How each root was chosen, for the startup log */
-  notes: string[];
-}
-
-/** Sub-folders of dir, sorted, skipping hidden ones */
-function childDirs(dir: string): string[] {
-  if (!existsSync(dir)) return [];
-  return readdirSync(dir, { withFileTypes: true })
-    .filter((e) => e.isDirectory() && !e.name.startsWith('.'))
-    .map((e) => e.name)
-    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-}
-
 /**
- * First file name in dir's sub-XX/[ses-YY/]func/ folders that passes test,
- * or null. Names are listed whether or not the files are downloaded, and the
- * search stops at the first match.
+ * Folders whose dataset_description.json describes the dataset:
+ * - physio: the dataset of the first scan's physio file (in hierarchy
+ *   order), else BIDSPHYS_ROOT; null when that is the main folder
+ * - derivatives: the dataset of the best confounds file in the index
+ *   (CONFOUNDS_PATTERNS order, then path), else BIDSDER_ROOT
  */
-function findInFuncDirs(dir: string, test: (name: string) => boolean): string | null {
-  for (const sub of childDirs(dir).filter((d) => d.startsWith('sub-'))) {
-    const subDir = join(dir, sub);
-    const sessions = childDirs(subDir).filter((d) => d.startsWith('ses-'));
-    for (const fd of [join(subDir, 'func'), ...sessions.map((s) => join(subDir, s, 'func'))]) {
-      if (!existsSync(fd)) continue;
-      const hit = readdirSync(fd).find(test);
-      if (hit) return hit;
-    }
-  }
-  return null;
-}
-
-/** Rank of the best confounds pattern found in dir (lower is better), or null */
-function confoundsRank(dir: string): number | null {
-  let best: number | null = null;
-  findInFuncDirs(dir, (f) => {
-    const rank = CONFOUNDS_PATTERNS.findIndex((p) => p.test(f));
-    if (rank !== -1 && (best === null || rank < best)) best = rank;
-    return best === 0; // keep looking until the most preferred pattern is seen
-  });
-  return best;
-}
-
-/**
- * Physio and derivatives roots for a main BIDS folder, found by what the
- * folders contain (sub-XX/[ses-YY/]func/ files), never by folder name.
- *
- * - Physio: the main folder when it has *_physio.tsv.gz files; else the
- *   first folder inside it, or inside its derivatives/, that has them.
- * - Derivatives: the folder inside derivatives/ with confounds files,
- *   preferring fMRIPrep's over MRIQC's (CONFOUNDS_PATTERNS order).
- *
- * Physio or derivatives stored outside the main folder are not searched for:
- * pass them as overrides (BIDSPHYS_ROOT, BIDSDER_ROOT), which always win.
- */
-export function resolveBidsRoots(
-  bidsRoot: string,
-  overrides: { physioRoot?: string; derivRoot?: string } = {},
-): BidsRoots {
-  const notes: string[] = [];
-  const missing = (label: string, dir: string) =>
-    `${label} ${dir} does not exist (check the path, or install the DataLad subdataset with datalad get -n)`;
-  if (!existsSync(bidsRoot)) notes.push(missing('BIDS_ROOT', bidsRoot));
-  if (overrides.physioRoot && !existsSync(overrides.physioRoot)) notes.push(missing('BIDSPHYS_ROOT', overrides.physioRoot));
-  if (overrides.derivRoot && !existsSync(overrides.derivRoot)) notes.push(missing('BIDSDER_ROOT', overrides.derivRoot));
-  const derivativesDir = join(bidsRoot, 'derivatives');
-  const isPhysio = (f: string) => PHYSIO_GZ_RE.test(f);
-
-  let physioRoot = overrides.physioRoot;
-  if (physioRoot) notes.push('physio root given explicitly');
-  else if (findInFuncDirs(bidsRoot, isPhysio)) {
-    physioRoot = bidsRoot;
-    notes.push('physio files found in the main BIDS folder');
-  } else {
-    const candidates = [
-      ...childDirs(bidsRoot).filter((d) => !d.startsWith('sub-') && d !== 'derivatives').map((d) => join(bidsRoot, d)),
-      ...childDirs(derivativesDir).map((d) => join(derivativesDir, d)),
-    ].filter((d) => findInFuncDirs(d, isPhysio));
-    physioRoot = candidates[0] ?? bidsRoot;
-    if (candidates.length === 0) notes.push('no *_physio.tsv.gz files found; set BIDSPHYS_ROOT if they are stored elsewhere');
-    else notes.push(`physio files found in ${physioRoot}`);
-    if (candidates.length > 1) {
-      notes.push(`physio files also in ${candidates.slice(1).join(', ')}; set BIDSPHYS_ROOT to choose`);
-    }
-  }
-
-  let derivRoot = overrides.derivRoot;
-  if (derivRoot) notes.push('derivatives root given explicitly');
-  else {
-    const ranked = childDirs(derivativesDir)
-      .map((d) => ({ dir: join(derivativesDir, d), rank: confoundsRank(join(derivativesDir, d)) }))
-      .filter((c): c is { dir: string; rank: number } => c.rank !== null)
-      .sort((a, b) => a.rank - b.rank); // stable: name order within a rank
-    derivRoot = ranked[0]?.dir ?? derivativesDir;
-    if (ranked.length === 0) notes.push('no confounds files found; set BIDSDER_ROOT if the derivatives are stored elsewhere');
-    else notes.push(`confounds found in ${derivRoot}`);
-    if (ranked.length > 1) {
-      notes.push(`confounds also in ${ranked.slice(1).map((c) => c.dir).join(', ')}; set BIDSDER_ROOT to choose`);
-    }
-  }
-
-  return { bidsRoot, physioRoot, derivRoot, notes };
-}
-
-export function buildScans(bidsRoot: string, subjects: SubjectInfo[]): ScanEntry[] {
-  const scans: ScanEntry[] = [];
-  for (const subj of subjects) {
-    for (const ses of subj.sessions) {
-      for (const task of getTasks(bidsRoot, subj.id, ses)) {
-        const runs = getRuns(bidsRoot, subj.id, ses, task);
-        if (runs.length > 0) {
-          for (const run of runs) {
-            scans.push({ sub: subj.id, ses, task, run });
-          }
-        } else {
-          scans.push({ sub: subj.id, ses, task, run: '' });
-        }
-      }
-    }
-  }
-  return scans;
+export function descriptionFolders(index: BidsIndex): { physio: string | null; derivatives: string | null } {
+  const first = buildScans(index)[0];
+  const physioFile = first ? index.scans.get(scanKey(first.sub, first.ses, first.task, first.run)) : undefined;
+  const physio = physioFile?.dataset.root ?? index.physioRoot ?? null;
+  const confounds = index.files
+    .filter((f) => f.kind === 'confounds')
+    .sort((a, b) => confoundsPatternRank(a.name) - confoundsPatternRank(b.name) || byNumeric(a.path, b.path))[0];
+  return {
+    physio: physio && physio !== index.bidsRoot ? physio : null,
+    derivatives: confounds?.dataset.root ?? index.derivRoot ?? null,
+  };
 }
 
 export interface DatasetInfo {
@@ -949,19 +764,22 @@ function sourceDatasetLink(desc: Record<string, unknown> | null): string | null 
 }
 
 /**
- * Dataset-level metadata from dataset_description.json (main + derivatives).
- * When the main BIDS folder has none, the title and authors come from the
- * physio folder's description, then the derivatives', and
- * description.mainMissing says where to get the main one. Placeholder titles
- * and authors (n/a, Unknown, Author 1, …) are dropped and listed in
- * description.missingFields.
+ * Dataset-level metadata from dataset_description.json: BIDS_ROOT's, and the
+ * derivatives' above the confounds (see descriptionFolders). When the main
+ * BIDS folder has none, the title and authors come from the physio files'
+ * dataset, then the derivatives', and description.mainMissing says where to
+ * get the main one. Placeholder titles and authors (n/a, Unknown, Author 1,
+ * …) are dropped and listed in description.missingFields.
  */
-export function readDatasetInfo(bidsRoot: string, bidsderRoot: string, physioRoot: string = bidsRoot): DatasetInfo {
+export function readDatasetInfo(index: BidsIndex): DatasetInfo {
+  const { bidsRoot } = index;
+  const folders = descriptionFolders(index);
+  const bidsderRoot = folders.derivatives ?? join(bidsRoot, 'derivatives');
   const mainPath = join(bidsRoot, 'dataset_description.json');
   const main = readJsonIfReadable(mainPath);
-  const der = readJsonIfReadable(join(bidsderRoot, 'dataset_description.json'));
-  const physioPath = join(physioRoot, 'dataset_description.json');
-  const physio = physioRoot !== bidsRoot ? readJsonIfReadable(physioPath) : null;
+  const der = folders.derivatives ? readJsonIfReadable(join(folders.derivatives, 'dataset_description.json')) : null;
+  const physioPath = join(folders.physio ?? bidsRoot, 'dataset_description.json');
+  const physio = folders.physio ? readJsonIfReadable(physioPath) : null;
   const str = (v: unknown) => (typeof v === 'string' && v.length > 0 ? v : null);
 
   // Title and authors: main, else physio, else derivatives

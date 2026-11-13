@@ -1,15 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import {
-  getSubjects,
-  buildScans,
-  readPhysio,
-  readDatasetInfo,
-  isReadable,
-  findPhysioFiles,
-  resolveBidsRoots,
-} from './bids-layout';
-import type { BidsRoots, ScanEntry } from './bids-layout';
+import { getSubjects, buildScans, readPhysio, readDatasetInfo, isReadable, findPhysioFiles } from './bids-layout';
+import type { ScanEntry } from './bids-layout';
+import { buildBidsIndex, indexSummaryLines } from './bids-index';
+import type { BidsIndex, IndexRoots } from './bids-index';
 import { descriptionNoticeLines, noticeText } from '../src/data/dataset-notice';
 import { computeSQI } from '../src/data/sqi-metrics';
 import { minMaxEnvelope, roundSig } from '../src/quality/envelope';
@@ -46,14 +40,14 @@ const WAVEFORM_BUCKETS = 2000;
 
 const DATASET_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
-interface DatasetPaths extends BidsRoots {
+interface DatasetPaths extends IndexRoots {
   dataset: string;
 }
 
 /**
  * Locate a dataset under dataDir. The main BIDS folder is data/<dataset>
  * unless bidsRoot is given; physio and derivatives stored outside it are
- * passed as physioRoot and derivRoot (see resolveBidsRoots).
+ * passed as physioRoot and derivRoot, and walked too (see buildBidsIndex).
  */
 export function resolveDatasetPaths(
   dataDir: string,
@@ -63,12 +57,12 @@ export function resolveDatasetPaths(
   if (!DATASET_NAME_RE.test(dataset)) {
     throw new Error(`Invalid dataset name "${dataset}" (letters, digits, '.', '_' and '-' only)`);
   }
-  // Same lookup as the dev server (server/bids-layout.ts)
-  const roots = resolveBidsRoots(overrides.bidsRoot ?? join(dataDir, dataset), {
+  return {
+    dataset,
+    bidsRoot: overrides.bidsRoot ?? join(dataDir, dataset),
     physioRoot: overrides.physioRoot,
     derivRoot: overrides.derivRoot,
-  });
-  return { dataset, ...roots };
+  };
 }
 
 interface PhysioChannels {
@@ -201,14 +195,13 @@ function readParticipants(bidsRoot: string): ParticipantsTable | null {
 const byNumeric = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true });
 
 /**
- * Units of a scan's columns from its physio sidecar, where it describes a
- * column as an object with a string "Units" (e.g. "cardiac": {"Units": "mV"}).
+ * Units of a scan's columns from its inherited physio sidecar, where it
+ * describes a column as an object with a string "Units" (e.g. "cardiac": {"Units": "mV"}).
  */
-function readChannelUnits(physioRoot: string, scan: ScanEntry): Record<string, string> {
-  const found = findPhysioFiles(physioRoot, scan.sub, scan.ses, scan.task, scan.run);
-  if (!found?.sidecarPath) return {};
+function readChannelUnits(index: BidsIndex, scan: ScanEntry): Record<string, string> {
   try {
-    const sidecar = JSON.parse(readFileSync(found.sidecarPath, 'utf-8')) as Record<string, unknown>;
+    const sidecar = findPhysioFiles(index, scan.sub, scan.ses, scan.task, scan.run)?.sidecar;
+    if (!sidecar) return {};
     const units: Record<string, string> = {};
     for (const [key, value] of Object.entries(sidecar)) {
       const u = (value as { Units?: unknown } | null)?.Units;
@@ -238,6 +231,8 @@ interface QualityRunResult {
   outDir: string;
   rows: QualityRow[];
   summary: DatasetQualityFile;
+  /** The files found, e.g. to count the physio files downloaded */
+  index: BidsIndex;
 }
 
 /** Compute metrics for every readable scan and write the TSV, dataset.json, waveforms and index */
@@ -248,14 +243,17 @@ export function runQualityMetrics(opts: QualityRunOptions): QualityRunResult {
     physioRoot: opts.physioRoot,
     derivRoot: opts.derivRoot,
   });
-  // A missing main BIDS folder is not fatal: the physio metrics are still
-  // computed; only the dataset info, participants and BOLD timing are empty
-  if (!existsSync(paths.physioRoot)) throw new Error(`Physio folder not found: ${paths.physioRoot}`);
+  // A missing main BIDS folder is not fatal when the physio is elsewhere: the
+  // physio metrics are still computed; only the dataset info, participants
+  // and BOLD timing are empty
+  const physioDir = paths.physioRoot ?? paths.bidsRoot;
+  if (!existsSync(physioDir)) throw new Error(`Physio folder not found: ${physioDir}`);
   log(`Main BIDS folder: ${paths.bidsRoot}${existsSync(paths.bidsRoot) ? '' : ' (not found)'}`);
-  log(`Physio folder: ${paths.physioRoot}`);
-  log(`Derivatives folder: ${paths.derivRoot}`);
-  for (const note of paths.notes) log(`  ${note}`);
-  const info = readDatasetInfo(paths.bidsRoot, paths.derivRoot, paths.physioRoot);
+  if (paths.physioRoot) log(`Physio folder: ${paths.physioRoot}`);
+  if (paths.derivRoot) log(`Derivatives folder: ${paths.derivRoot}`);
+  const index = buildBidsIndex(paths);
+  for (const line of indexSummaryLines(index)) log(`  ${line}`);
+  const info = readDatasetInfo(index);
   for (const line of descriptionNoticeLines(info.description)) log(`Warning: ${noticeText(line)}`);
 
   const outRoot = opts.outRoot ?? join(opts.dataDir, 'quality');
@@ -267,9 +265,9 @@ export function runQualityMetrics(opts: QualityRunOptions): QualityRunResult {
   // The PDF report describes the old metrics: remove it, Stats builds and saves a new one when it next opens
   rmSync(join(outDir, REPORT_PDF_NAME), { force: true });
 
-  const subjects = getSubjects(paths.physioRoot);
-  const scans = buildScans(paths.physioRoot, subjects);
-  log(`${paths.dataset}: ${scans.length} readable scans from ${subjects.length} subjects (${paths.physioRoot})`);
+  const subjects = getSubjects(index);
+  const scans = buildScans(index);
+  log(`${paths.dataset}: ${scans.length} readable scans from ${subjects.length} subjects`);
 
   const rows: QualityRow[] = [];
   const failedScans: { scan: string; reason: string }[] = [];
@@ -283,7 +281,7 @@ export function runQualityMetrics(opts: QualityRunOptions): QualityRunResult {
   scans.forEach((scan, i) => {
     const id = scanId(scan);
     try {
-      const raw = readPhysio(paths.physioRoot, scan.sub, scan.ses, scan.task, scan.run, paths.derivRoot, paths.bidsRoot);
+      const raw = readPhysio(index, scan.sub, scan.ses, scan.task, scan.run);
       if (!raw) {
         failedScans.push({ scan: id, reason: 'physio file or sidecar not found' });
         log(`  [${i + 1}/${scans.length}] ${id}: skipped (physio file or sidecar not found)`);
@@ -303,7 +301,7 @@ export function runQualityMetrics(opts: QualityRunOptions): QualityRunResult {
       rows.push(...scanRows);
       scanRows.forEach((r) => channels.add(r.channel));
       // First unit seen for a channel wins (scans are in sorted order, so this is deterministic)
-      const units = readChannelUnits(paths.physioRoot, scan);
+      const units = readChannelUnits(index, scan);
       for (const r of scanRows) {
         if (units[r.channel] && !channelUnits.has(r.channel)) channelUnits.set(r.channel, units[r.channel]);
       }
@@ -345,5 +343,5 @@ export function runQualityMetrics(opts: QualityRunOptions): QualityRunResult {
   writeFileSync(join(outDir, DATASET_JSON_NAME), JSON.stringify(summary, null, 2) + '\n');
   log(`Wrote ${rows.length} rows to ${join(outDir, METRICS_TSV_NAME)}`);
 
-  return { outDir, rows, summary };
+  return { outDir, rows, summary, index };
 }

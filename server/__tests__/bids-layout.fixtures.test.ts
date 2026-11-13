@@ -13,8 +13,10 @@ import {
   readPeaks,
   readDatasetInfo,
   buildScans,
-  resolveBidsRoots,
+  descriptionFolders,
 } from '../bids-layout';
+import { buildBidsIndex, indexSummaryLines } from '../bids-index';
+import type { IndexRoots } from '../bids-index';
 
 /**
  * Exact-value tests against the synthetic datasets in test/fixtures
@@ -29,6 +31,10 @@ const SES_ROOT = join(FIXTURES, 'bids-sessions');
 const SES_DER = join(SES_ROOT, 'derivatives', 'fmriprep');
 const NOSES_ROOT = join(FIXTURES, 'bids-nosessions');
 
+const index = (bidsRoot: string, extra: Omit<IndexRoots, 'bidsRoot'> = {}) => buildBidsIndex({ bidsRoot, ...extra });
+const SES = index(SES_ROOT);
+const NOSES = index(NOSES_ROOT);
+
 const FS = 50;
 const TR = 2;
 const N_VOLUMES = 10;
@@ -36,20 +42,20 @@ const N_SAMPLES = 1100;
 
 describe('fixture: bids-sessions layout', () => {
   it('finds sub-01 and sub-02, and skips sub-03 whose physio is a broken symlink', () => {
-    expect(getSubjects(SES_ROOT)).toEqual([
+    expect(getSubjects(SES)).toEqual([
       { id: '01', sessions: ['01', '02'] },
       { id: '02', sessions: ['01', '02'] },
     ]);
+    expect(SES.stats.unreadablePhysio).toBe(1);
   });
 
   it('lists tasks and runs', () => {
-    expect(getTasks(SES_ROOT, '01', '01')).toEqual(['rest']);
-    expect(getRuns(SES_ROOT, '01', '01', 'rest')).toEqual(['01']);
+    expect(getTasks(SES, '01', '01')).toEqual(['rest']);
+    expect(getRuns(SES, '01', '01', 'rest')).toEqual(['01']);
   });
 
   it('builds one scan per subject/session in hierarchy order', () => {
-    const scans = buildScans(SES_ROOT, getSubjects(SES_ROOT));
-    expect(scans).toEqual([
+    expect(buildScans(SES)).toEqual([
       { sub: '01', ses: '01', task: 'rest', run: '01' },
       { sub: '01', ses: '02', task: 'rest', run: '01' },
       { sub: '02', ses: '01', task: 'rest', run: '01' },
@@ -58,7 +64,7 @@ describe('fixture: bids-sessions layout', () => {
   });
 
   it('uses the per-file sidecar and finds the run-level quality sidecar', () => {
-    const found = findPhysioFiles(SES_ROOT, '01', '01', 'rest', '01');
+    const found = findPhysioFiles(SES, '01', '01', 'rest', '01');
     expect(found?.sidecarPath).toBe(
       join(SES_ROOT, 'sub-01', 'ses-01', 'func', 'sub-01_ses-01_task-rest_run-01_physio.json'),
     );
@@ -67,8 +73,12 @@ describe('fixture: bids-sessions layout', () => {
     );
   });
 
+  it('finds the scan with an unpadded run label too', () => {
+    expect(findPhysioFiles(SES, '01', '01', 'rest', '1')?.tsvGzName).toBe('sub-01_ses-01_task-rest_run-01_physio.tsv.gz');
+  });
+
   it('reads dataset and derivatives metadata', () => {
-    expect(readDatasetInfo(SES_ROOT, SES_DER)).toEqual({
+    expect(readDatasetInfo(SES)).toEqual({
       name: 'Synthetic physio fixture (sessions)',
       bidsVersion: '1.9.0',
       datasetType: 'raw',
@@ -87,7 +97,7 @@ describe('fixture: bids-sessions layout', () => {
 });
 
 describe('fixture: bids-sessions physio and timing', () => {
-  const read = (sub: string, ses: string) => readPhysio(SES_ROOT, sub, ses, 'rest', '01', SES_DER)!;
+  const read = (sub: string, ses: string) => readPhysio(SES, sub, ses, 'rest', '01')!;
 
   it('reads all samples and columns', () => {
     const r = read('01', '01');
@@ -140,7 +150,7 @@ describe('fixture: bids-sessions physio and timing', () => {
 
 describe('fixture: bids-sessions confounds', () => {
   it('extracts only motion columns, in dropdown order, with n/a as NaN', () => {
-    const c = readConfounds(SES_ROOT, SES_DER, '01', '01', 'rest', '01')!;
+    const c = readConfounds(SES, '01', '01', 'rest', '01')!;
     expect(c.filename).toBe('sub-01_ses-01_task-rest_run-01_desc-confounds_timeseries.tsv');
     expect(c.numVolumes).toBe(N_VOLUMES);
     expect(Object.keys(c.columns)).toEqual(['framewise_displacement', 'trans_x', 'rot_x']);
@@ -149,18 +159,18 @@ describe('fixture: bids-sessions confounds', () => {
   });
 
   it('places volumes at i * RepetitionTime from the raw BOLD sidecar', () => {
-    const c = readConfounds(SES_ROOT, SES_DER, '01', '01', 'rest', '01')!;
+    const c = readConfounds(SES, '01', '01', 'rest', '01')!;
     expect(c.volumeTimes).toEqual(Array.from({ length: N_VOLUMES }, (_, i) => i * TR));
   });
 
   it('matches run-01 to unpadded run-1 derivatives and uses their VolumeTiming', () => {
-    const c = readConfounds(SES_ROOT, SES_DER, '02', '01', 'rest', '01')!;
+    const c = readConfounds(SES, '02', '01', 'rest', '01')!;
     expect(c.filename).toBe('sub-02_ses-01_task-rest_run-1_desc-confounds_timeseries.tsv');
     expect(c.volumeTimes).toEqual(Array.from({ length: N_VOLUMES }, (_, i) => i * TR));
   });
 
   it('reads MRIQC *_timeseries.tsv, using the lowest echo of a multi-echo run', () => {
-    const c = readConfounds(NOSES_ROOT, join(NOSES_ROOT, 'derivatives', 'mriqc'), '01', '', 'motor', '')!;
+    const c = readConfounds(NOSES, '01', '', 'motor', '')!;
     expect(c.filename).toBe('sub-01_task-motor_echo-1_timeseries.tsv');
     expect(Object.keys(c.columns)).toEqual(['framewise_displacement', 'dvars', 'trans_x', 'rot_x']);
     expect(c.columns.framewise_displacement[0]).toBeNaN();
@@ -169,14 +179,14 @@ describe('fixture: bids-sessions confounds', () => {
     expect(c.volumeTimes).toEqual(Array.from({ length: N_VOLUMES }, (_, i) => i * TR));
   });
 
-  it('returns null when there are no derivatives', () => {
-    expect(readConfounds(NOSES_ROOT, NOSES_ROOT, '01', '', 'motor', '')).toBeNull();
+  it('returns null for a scan without confounds', () => {
+    expect(readConfounds(NOSES, '02', '', 'motor', '')).toBeNull();
   });
 });
 
 describe('fixture: events', () => {
   it('reads onsets, durations and the other columns as text', () => {
-    const e = readEvents(NOSES_ROOT, '01', '', 'motor', '')!;
+    const e = readEvents(NOSES, '01', '', 'motor', '')!;
     expect(e.filename).toBe('sub-01_task-motor_events.tsv');
     // the row without an onset is dropped; an n/a duration counts as 0
     expect(e.onset).toEqual([0, 6, 12]);
@@ -189,15 +199,14 @@ describe('fixture: events', () => {
 
   it('uses the run-less events file for every run (BIDS inheritance)', () => {
     for (const run of ['1', '02']) {
-      expect(readEvents(NOSES_ROOT, '01', '', 'motor', run)?.filename).toBe('sub-01_task-motor_events.tsv');
+      expect(readEvents(NOSES, '01', '', 'motor', run)?.filename).toBe('sub-01_task-motor_events.tsv');
     }
   });
 
   it('returns null when the scan has no events file', () => {
-    expect(readEvents(NOSES_ROOT, '02', '', 'motor', '')).toBeNull();
-    expect(readEvents(SES_ROOT, '01', '01', 'rest', '01')).toBeNull();
+    expect(readEvents(NOSES, '02', '', 'motor', '')).toBeNull();
+    expect(readEvents(SES, '01', '01', 'rest', '01')).toBeNull();
   });
-
 });
 
 describe('physio stored outside the main BIDS folder', () => {
@@ -218,7 +227,7 @@ describe('physio stored outside the main BIDS folder', () => {
       copy(rel, main);
     }
     for (const rel of [
-      'physio.json',
+      'task-motor_physio.json',
       'sub-01/sub-01_task-motor_physio.json',
       'sub-01/func/sub-01_task-motor_physio.tsv.gz',
       'sub-02/func/sub-02_task-motor_physio.tsv.gz',
@@ -228,47 +237,43 @@ describe('physio stored outside the main BIDS folder', () => {
   });
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
-  it('keeps an explicit physio root and the main folder for everything else', () => {
-    expect(resolveBidsRoots(main, { physioRoot: phys })).toMatchObject({
-      bidsRoot: main,
-      physioRoot: phys,
-      derivRoot: join(main, 'derivatives'), // no confounds anywhere: nothing found
-    });
+  it('walks the main folder, then the physio folder', () => {
+    expect(index(main, { physioRoot: phys }).walked).toEqual([main, phys]);
   });
 
   it('does not search outside the main folder for physio', () => {
-    // phys/ is a sibling of main/: without BIDSPHYS_ROOT it is not used
-    const r = resolveBidsRoots(main);
-    expect(r.physioRoot).toBe(main);
-    expect(r.notes.join(' ')).toMatch(/set BIDSPHYS_ROOT/);
+    // phys/ is a sibling of main/: without BIDSPHYS_ROOT it is not walked
+    const idx = index(main);
+    expect(idx.walked).toEqual([main]);
+    expect(getSubjects(idx)).toEqual([]);
   });
 
-  it('finds scans in the physio root only', () => {
-    expect(buildScans(phys, getSubjects(phys))).toEqual(buildScans(NOSES_ROOT, getSubjects(NOSES_ROOT)));
-    expect(getSubjects(main)).toEqual([]);
+  it('finds the same scans in the physio folder', () => {
+    expect(buildScans(index(main, { physioRoot: phys }))).toEqual(buildScans(NOSES));
   });
 
   it('reads BOLD timing and events from the main folder', () => {
-    const r = readPhysio(phys, '01', '', 'motor', '', join(main, 'derivatives', 'fmriprep'), main)!;
-    expect(r.timing.status).toBe('verified'); // TR from main/task-motor_bold.json
-    expect(readEvents(main, '01', '', 'motor', '')?.filename).toBe('sub-01_task-motor_events.tsv');
-    expect(readDatasetInfo(main, join(main, 'derivatives', 'fmriprep')).name).toBe(
-      'Synthetic physio fixture (no sessions)',
-    );
+    const idx = index(main, { physioRoot: phys });
+    expect(readPhysio(idx, '01', '', 'motor', '')!.timing.status).toBe('verified'); // TR from main/task-motor_bold.json
+    expect(readEvents(idx, '01', '', 'motor', '')?.filename).toBe('sub-01_task-motor_events.tsv');
+    expect(readDatasetInfo(idx).name).toBe('Synthetic physio fixture (no sessions)');
+    expect(readConfounds(idx, '01', '', 'motor', '')).toBeNull(); // no derivatives anywhere
   });
 
-  it('never reads BOLD sidecars from the physio root', () => {
+  it("prefers the main folder's BOLD sidecars over the physio folder's", () => {
+    writeFileSync(join(phys, 'task-motor_bold.json'), JSON.stringify({ RepetitionTime: 3 }));
+    // main has TR 2, which the triggers match
+    expect(readPhysio(index(main, { physioRoot: phys }), '01', '', 'motor', '')!.timing.status).toBe('verified');
+    // without main's sidecar, the physio folder's TR 3 is used, and the triggers do not match it
     const empty = join(dir, 'empty');
     mkdirSync(empty, { recursive: true });
-    cpSync(join(NOSES_ROOT, 'task-motor_bold.json'), join(phys, 'task-motor_bold.json'));
-    const r = readPhysio(phys, '01', '', 'motor', '', join(empty, 'derivatives'), empty)!;
-    expect(r.timing.status).toBe('unverified'); // no TR: the sidecar in phys/ is ignored
+    expect(readPhysio(index(empty, { physioRoot: phys }), '01', '', 'motor', '')!.timing.status).toBe('mismatch');
     rmSync(join(phys, 'task-motor_bold.json'));
   });
 });
 
-describe('resolveBidsRoots: found by content, not folder names', () => {
-  // Empty files are enough: roots are chosen from file names only
+describe('index: found by content, not folder names', () => {
+  // Empty files are enough: files are indexed from their names only
   let dir: string;
   const touch = (path: string) => {
     mkdirSync(dirname(path), { recursive: true });
@@ -281,68 +286,64 @@ describe('resolveBidsRoots: found by content, not folder names', () => {
 
   it('notes a folder that does not exist instead of crashing, and finds no subjects in it', () => {
     const gone = join(dir, 'no-such-folder');
-    const r = resolveBidsRoots(gone, { physioRoot: join(gone, 'phys'), derivRoot: join(gone, 'der') });
-    expect(r.notes).toEqual(
-      expect.arrayContaining([
-        expect.stringContaining(`BIDS_ROOT ${gone} does not exist`),
-        expect.stringContaining(`BIDSPHYS_ROOT ${join(gone, 'phys')} does not exist`),
-        expect.stringContaining(`BIDSDER_ROOT ${join(gone, 'der')} does not exist`),
-      ]),
-    );
-    expect(resolveBidsRoots(gone).physioRoot).toBe(gone);
-    expect(getSubjects(gone)).toEqual([]);
+    const idx = index(gone, { physioRoot: join(gone, 'phys'), derivRoot: join(gone, 'der') });
+    expect(idx.notes).toEqual([
+      expect.stringContaining(`BIDS_ROOT ${gone} does not exist`),
+      expect.stringContaining(`BIDSPHYS_ROOT ${join(gone, 'phys')} does not exist`),
+      expect.stringContaining(`BIDSDER_ROOT ${join(gone, 'der')} does not exist`),
+    ]);
+    expect(idx.walked).toEqual([]);
+    expect(getSubjects(idx)).toEqual([]);
   });
 
-  it('uses the main folder for physio, and finds the derivatives with confounds, in plain BIDS', () => {
-    expect(resolveBidsRoots(SES_ROOT)).toMatchObject({ bidsRoot: SES_ROOT, physioRoot: SES_ROOT, derivRoot: SES_DER });
+  it('finds the derivatives with confounds in plain BIDS', () => {
+    expect(descriptionFolders(SES).derivatives).toBe(SES_DER);
     // MRIQC timeseries count as confounds too, whatever the folder is called
-    expect(resolveBidsRoots(NOSES_ROOT)).toMatchObject({
-      physioRoot: NOSES_ROOT,
-      derivRoot: join(NOSES_ROOT, 'derivatives', 'mriqc'),
-    });
+    expect(descriptionFolders(NOSES).derivatives).toBe(join(NOSES_ROOT, 'derivatives', 'mriqc'));
   });
 
   it('finds physio in any folder inside the main folder, or inside its derivatives/', () => {
     const main = join(dir, 'a');
     touch(join(main, 'sub-01', 'ses-1', 'func', 'sub-01_ses-1_task-x_bold.json'));
     touch(join(main, 'recordings-v2', 'sub-01', 'ses-1', 'func', 'sub-01_ses-1_task-x_physio.tsv.gz'));
-    expect(resolveBidsRoots(main).physioRoot).toBe(join(main, 'recordings-v2'));
+    expect(findPhysioFiles(index(main), '01', '1', 'x', '')?.tsvGzPath).toBe(
+      join(main, 'recordings-v2', 'sub-01', 'ses-1', 'func', 'sub-01_ses-1_task-x_physio.tsv.gz'),
+    );
 
     const main2 = join(dir, 'b');
     touch(join(main2, 'sub-01', 'func', 'sub-01_task-x_bold.json'));
-    touch(join(main2, 'derivatives', 'cleaned', 'sub-01', 'func', 'sub-01_task-x_desc-clean_physio.tsv.gz'));
-    expect(resolveBidsRoots(main2).physioRoot).toBe(join(main2, 'derivatives', 'cleaned'));
+    const clean = join(main2, 'derivatives', 'cleaned', 'sub-01', 'func', 'sub-01_task-x_desc-clean_physio.tsv.gz');
+    touch(clean);
+    const found = findPhysioFiles(index(main2), '01', '', 'x', '');
+    expect(found?.tsvGzPath).toBe(clean);
+    expect(found?.file.dataset).toMatchObject({ root: join(main2, 'derivatives', 'cleaned'), type: 'derivative' });
   });
 
-  it('prefers fMRIPrep confounds over MRIQC timeseries, then folder name order', () => {
+  it('prefers fMRIPrep confounds over MRIQC timeseries, then path order', () => {
     const main = join(dir, 'c');
     touch(join(main, 'sub-01', 'func', 'sub-01_task-x_physio.tsv.gz'));
     touch(join(main, 'derivatives', 'aaa-qc', 'sub-01', 'func', 'sub-01_task-x_timeseries.tsv'));
     touch(join(main, 'derivatives', 'zzz-prep', 'sub-01', 'func', 'sub-01_task-x_desc-confounds_timeseries.tsv'));
-    const r = resolveBidsRoots(main);
-    expect(r.derivRoot).toBe(join(main, 'derivatives', 'zzz-prep'));
-    expect(r.notes.join(' ')).toMatch(/also in .*aaa-qc.*set BIDSDER_ROOT/);
+    expect(descriptionFolders(index(main)).derivatives).toBe(join(main, 'derivatives', 'zzz-prep'));
   });
 
-  it('picks the first physio folder by name when several have physio, and says so', () => {
+  it('loads one physio file when two folders have the same scan, and says so', () => {
     const main = join(dir, 'd');
     touch(join(main, 'sub-01', 'func', 'sub-01_task-x_bold.json'));
     touch(join(main, 'two', 'sub-01', 'func', 'sub-01_task-x_physio.tsv.gz'));
     touch(join(main, 'one', 'sub-01', 'func', 'sub-01_task-x_physio.tsv.gz'));
-    const r = resolveBidsRoots(main);
-    expect(r.physioRoot).toBe(join(main, 'one'));
-    expect(r.notes.join(' ')).toMatch(/also in .*two.*set BIDSPHYS_ROOT/);
-  });
-
-  it('lets explicit physio and derivatives roots win', () => {
-    const r = resolveBidsRoots(SES_ROOT, { physioRoot: '/elsewhere/physio', derivRoot: '/elsewhere/der' });
-    expect(r).toMatchObject({ bidsRoot: SES_ROOT, physioRoot: '/elsewhere/physio', derivRoot: '/elsewhere/der' });
+    const idx = index(main);
+    expect(findPhysioFiles(idx, '01', '', 'x', '')?.tsvGzPath).toBe(join(main, 'one', 'sub-01', 'func', 'sub-01_task-x_physio.tsv.gz'));
+    expect(idx.duplicates.map((d) => d.others.map((o) => o.path))).toEqual([
+      [join(main, 'two', 'sub-01', 'func', 'sub-01_task-x_physio.tsv.gz')],
+    ]);
+    expect(indexSummaryLines(idx).join('\n')).toContain('same scan not loaded yet: two/sub-01/func/sub-01_task-x_physio.tsv.gz');
   });
 });
 
 describe('fixture: peaks (trial)', () => {
   it('keeps peak rows with a channel, flagging the corrected ones', () => {
-    expect(readPeaks(SES_ROOT, '01', '02', 'rest', '01')).toEqual({
+    expect(readPeaks(SES, '01', '02', 'rest', '01')).toEqual({
       filename: 'sub-01_ses-02_task-rest_run-01_events.tsv',
       time: [0.694, 0.694, 1.046, 1.171, 1.171],
       channel: ['ECG', 'ECG', 'ECG', 'PPG', 'PPG'],
@@ -351,47 +352,51 @@ describe('fixture: peaks (trial)', () => {
   });
 
   it('returns null for events without peaks or without a channel column', () => {
-    expect(readPeaks(NOSES_ROOT, '01', '', 'motor', '')).toBeNull(); // task events only
-    expect(readPeaks(SES_ROOT, '01', '01', 'rest', '01')).toBeNull(); // no events file
+    expect(readPeaks(NOSES, '01', '', 'motor', '')).toBeNull(); // task events only
+    expect(readPeaks(SES, '01', '01', 'rest', '01')).toBeNull(); // no events file
   });
 });
 
 describe('fixture: bids-nosessions', () => {
   it('reports session-less subjects as sessions [""] and scans with no run', () => {
-    const subjects = getSubjects(NOSES_ROOT);
-    expect(subjects).toEqual([
+    expect(getSubjects(NOSES)).toEqual([
       { id: '01', sessions: [''] },
       { id: '02', sessions: [''] },
     ]);
-    expect(buildScans(NOSES_ROOT, subjects)).toEqual([
+    expect(buildScans(NOSES)).toEqual([
       { sub: '01', ses: '', task: 'motor', run: '' },
       { sub: '02', ses: '', task: 'motor', run: '' },
     ]);
   });
 
-  it('sub-01: subject-level sidecar and run-less quality sidecar', () => {
-    const found = findPhysioFiles(NOSES_ROOT, '01', '', 'motor', '');
+  it('sub-01: subject-level sidecar over the top-level one, and run-less quality sidecar', () => {
+    const found = findPhysioFiles(NOSES, '01', '', 'motor', '');
+    expect(found?.sidecarPaths).toEqual([
+      join(NOSES_ROOT, 'task-motor_physio.json'),
+      join(NOSES_ROOT, 'sub-01', 'sub-01_task-motor_physio.json'),
+    ]);
     expect(found?.sidecarPath).toBe(join(NOSES_ROOT, 'sub-01', 'sub-01_task-motor_physio.json'));
+    expect(found?.sidecar?.Columns).toEqual(['cardiac', 'respiratory', 'trigger']); // the nearest wins
     expect(found?.qualityJsonPath).toBe(join(NOSES_ROOT, 'sub-01', 'func', 'sub-01_task-motor_desc-quality.json'));
   });
 
   it('sub-01: skips the TSV header row and verifies triggers against top-level task-motor_bold.json', () => {
-    const r = readPhysio(NOSES_ROOT, '01', '', 'motor', '')!;
+    const r = readPhysio(NOSES, '01', '', 'motor', '')!;
     expect(r.numSamples).toBe(N_SAMPLES);
     expect(r.data[0].every((v) => Number.isFinite(v))).toBe(true);
     expect(r.timing.status).toBe('verified');
   });
 
-  it('sub-02: falls back to the top-level physio.json', () => {
-    const found = findPhysioFiles(NOSES_ROOT, '02', '', 'motor', '');
-    expect(found?.sidecarPath).toBe(join(NOSES_ROOT, 'physio.json'));
-    const r = readPhysio(NOSES_ROOT, '02', '', 'motor', '')!;
+  it('sub-02: inherits the top-level task-motor_physio.json', () => {
+    const found = findPhysioFiles(NOSES, '02', '', 'motor', '');
+    expect(found?.sidecarPath).toBe(join(NOSES_ROOT, 'task-motor_physio.json'));
+    const r = readPhysio(NOSES, '02', '', 'motor', '')!;
     expect(r.columns).toEqual(['cardiac', 'respiratory']);
     expect(r.timing.status).toBe('unverified');
   });
 
   it('reads dataset metadata with missing fields as null', () => {
-    expect(readDatasetInfo(NOSES_ROOT, NOSES_ROOT)).toEqual({
+    expect(readDatasetInfo(NOSES)).toEqual({
       name: 'Synthetic physio fixture (no sessions)',
       bidsVersion: '1.9.0',
       datasetType: null,
@@ -424,7 +429,7 @@ describe('readDatasetInfo: missing or placeholder dataset description', () => {
   it('drops placeholder titles and authors and lists them as missing', () => {
     const main = join(dir, 'placeholder');
     write(join(main, 'dataset_description.json'), desc({ Name: 'n/a', Authors: ['Unknown', '[Author 1]', '', 'Ada'] }));
-    const info = readDatasetInfo(main, join(main, 'derivatives'));
+    const info = readDatasetInfo(index(main));
     expect(info.name).toBeNull();
     expect(info.authors).toEqual(['Ada']); // a real one-word name is kept
     expect(info.description).toMatchObject({ source: 'main', missingFields: ['Name'], mainMissing: null });
@@ -435,13 +440,14 @@ describe('readDatasetInfo: missing or placeholder dataset description', () => {
     const phys = join(dir, 'fallback', 'phys');
     const der = join(dir, 'fallback', 'der');
     write(join(der, 'dataset_description.json'), desc({ Name: 'Pipeline output', DatasetType: 'derivative' }));
-    expect(readDatasetInfo(main, der, phys)).toMatchObject({
+    const idx = index(main, { physioRoot: phys, derivRoot: der });
+    expect(readDatasetInfo(idx)).toMatchObject({
       name: 'Pipeline output',
       license: null, // other fields never come from a fallback
       description: { source: 'derivatives', file: join(der, 'dataset_description.json') },
     });
     write(join(phys, 'dataset_description.json'), desc({ Name: 'Physio outputs', Authors: ['Lab'], License: 'CC0' }));
-    const info = readDatasetInfo(main, der, phys);
+    const info = readDatasetInfo(idx);
     expect(info).toMatchObject({ name: 'Physio outputs', authors: ['Lab'], license: null });
     expect(info.description).toMatchObject({
       source: 'physio',
@@ -456,7 +462,7 @@ describe('readDatasetInfo: missing or placeholder dataset description', () => {
       '[submodule "physprep"]\n\tpath = physprep\n\turl = https://example.org/physprep.git\n' +
         '[submodule "data"]\n\tpath = data\n\turl = ./data\n\tdatalad-url = https://example.org/main.git\n',
     );
-    const m = readDatasetInfo(join(ds, 'data'), join(ds, 'der')).description.mainMissing!;
+    const m = readDatasetInfo(index(join(ds, 'data'), { derivRoot: join(ds, 'der') })).description.mainMissing!;
     expect(m.url).toBe('https://example.org/main.git'); // datalad-url wins over a relative url
     expect(m.command).toBe(`cd ${ds} && datalad get -n data && datalad get data/dataset_description.json`);
   });
@@ -468,13 +474,13 @@ describe('readDatasetInfo: missing or placeholder dataset description', () => {
       join(phys, 'dataset_description.json'),
       desc({ Name: 'Physio', SourceDatasets: [{ URL: 'bids::' }, { URL: '../raw' }, { DOI: 'doi:10.1234/abcd' }] }),
     );
-    expect(readDatasetInfo(main, join(dir, 'none'), phys).description.mainMissing?.url).toBe(
+    expect(readDatasetInfo(index(main, { physioRoot: phys })).description.mainMissing?.url).toBe(
       'https://doi.org/10.1234/abcd',
     );
   });
 
   it('reports no description at all', () => {
-    const info = readDatasetInfo(join(dir, 'empty'), join(dir, 'empty-der'));
+    const info = readDatasetInfo(index(join(dir, 'empty'), { derivRoot: join(dir, 'empty-der') }));
     expect(info.name).toBeNull();
     expect(info.description).toMatchObject({ file: null, source: 'none', missingFields: ['Name', 'Authors'] });
   });

@@ -4,6 +4,7 @@ import { gzipSync } from 'zlib';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { countPhysioFiles, listPhysioPaths, parseAnnexMissing } from '../availability';
+import { buildBidsIndex } from '../bids-index';
 import { appendQualityRun } from '../quality-run-log';
 import { parseLastRun } from '../../src/quality/run-log';
 
@@ -31,19 +32,41 @@ afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
 describe('physio file count', () => {
   it('lists every physio file, downloaded or not, with and without sessions', () => {
-    expect(listPhysioPaths(dir)).toEqual([
-      'sub-01/func/sub-01_task-rest_physio.tsv.gz',
-      'sub-02/ses-01/func/sub-02_ses-01_task-rest_physio.tsv.gz',
-      'sub-03/func/sub-03_task-rest_physio.tsv.gz',
-    ]);
+    expect(listPhysioPaths(buildBidsIndex({ bidsRoot: dir }))).toEqual(
+      [
+        'sub-01/func/sub-01_task-rest_physio.tsv.gz',
+        'sub-02/ses-01/func/sub-02_ses-01_task-rest_physio.tsv.gz',
+        'sub-03/func/sub-03_task-rest_physio.tsv.gz',
+      ].map((path) => ({ root: dir, path })),
+    );
   });
 
   it('counts only files with gzip content as downloaded when git-annex is not used', () => {
-    expect(countPhysioFiles(dir, false)).toEqual({ onDisk: 3, downloaded: 1, source: 'files on disk' });
+    expect(countPhysioFiles(buildBidsIndex({ bidsRoot: dir }), false)).toEqual({
+      onDisk: 3,
+      downloaded: 1,
+      source: 'files on disk',
+    });
+  });
+
+  it('counts physio in an extra folder too', () => {
+    const extra = mkdtempSync(join(tmpdir(), 'physio-availability-extra-'));
+    mkdirSync(join(extra, 'sub-04', 'beh'), { recursive: true });
+    writeFileSync(join(extra, 'sub-04', 'beh', 'sub-04_task-rest_physio.tsv.gz'), gzipSync('1\t2\n'));
+    expect(countPhysioFiles(buildBidsIndex({ bidsRoot: dir, physioRoot: extra }), false)).toEqual({
+      onDisk: 4,
+      downloaded: 2,
+      source: 'files on disk',
+    });
+    rmSync(extra, { recursive: true, force: true });
   });
 
   it('is zero for a folder without physio files', () => {
-    expect(countPhysioFiles(join(dir, 'missing'), false)).toEqual({ onDisk: 0, downloaded: 0, source: 'files on disk' });
+    expect(countPhysioFiles(buildBidsIndex({ bidsRoot: join(dir, 'missing') }), false)).toEqual({
+      onDisk: 0,
+      downloaded: 0,
+      source: 'files on disk',
+    });
   });
 
   it('reads the paths git-annex reports as missing', () => {

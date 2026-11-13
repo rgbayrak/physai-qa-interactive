@@ -1,14 +1,13 @@
-import { readdirSync, openSync, readSync, closeSync, existsSync } from 'fs';
+import { openSync, readSync, closeSync } from 'fs';
 import { execFileSync } from 'child_process';
-import { join } from 'path';
-import { isReadable } from './bids-layout';
+import { relative, sep } from 'path';
+import { isReadable } from './bids-index';
+import type { BidsIndex } from './bids-index';
 
 // How many physio files a dataset lists, and how many of them are downloaded.
 // DataLad datasets list every file, but a file that was never fetched
 // (datalad get) is a dangling symlink, or in "unlocked" mode a small pointer
 // file. git-annex knows which is which; without it, the file itself is checked.
-
-const PHYSIO_GZ_RE = /_physio\.tsv\.gz$/;
 
 export interface PhysioFileCount {
   /** Physio files listed in the dataset, downloaded or not */
@@ -19,23 +18,15 @@ export interface PhysioFileCount {
   source: 'git-annex' | 'files on disk';
 }
 
-/** Physio files in every sub-XX/func and sub-XX/ses-YY/func folder, as paths relative to root (with '/') */
-export function listPhysioPaths(root: string): string[] {
-  const paths: string[] = [];
-  const funcFiles = (rel: string) => {
-    const dir = join(root, rel);
-    if (!existsSync(dir)) return;
-    for (const f of readdirSync(dir)) if (PHYSIO_GZ_RE.test(f)) paths.push(`${rel}/${f}`);
-  };
-  if (!existsSync(root)) return paths;
-  for (const sub of readdirSync(root, { withFileTypes: true })) {
-    if (!sub.isDirectory() || !sub.name.startsWith('sub-')) continue;
-    funcFiles(`${sub.name}/func`);
-    for (const ses of readdirSync(join(root, sub.name), { withFileTypes: true })) {
-      if (ses.isDirectory() && ses.name.startsWith('ses-')) funcFiles(`${sub.name}/${ses.name}/func`);
-    }
-  }
-  return paths.sort();
+/**
+ * Every *_physio.tsv.gz in the index, downloaded or not, in any folder:
+ * the folder walked and the path relative to it (with '/'), sorted.
+ */
+export function listPhysioPaths(index: BidsIndex): { root: string; path: string }[] {
+  return index.files
+    .filter((f) => f.kind === 'physio')
+    .map((f) => ({ root: f.root, path: relative(f.root, f.path).split(sep).join('/') }))
+    .sort((a, b) => a.root.localeCompare(b.root) || a.path.localeCompare(b.path));
 }
 
 /** Readable and gzip content (not a dangling symlink, nor an unlocked git-annex pointer file) */
@@ -84,19 +75,29 @@ function annexMissing(root: string): Set<string> | null {
 }
 
 /**
- * Count physio files listed under root and those downloaded: with git-annex
- * when it can answer (physio files kept in plain git count as downloaded),
- * otherwise by checking each file's content.
+ * Count the physio files in the index and those downloaded: with git-annex
+ * (run in each folder walked) when it can answer for all of them (physio
+ * files kept in plain git count as downloaded), otherwise by checking each
+ * file's content.
  */
-export function countPhysioFiles(root: string, useAnnex = true): PhysioFileCount {
-  const paths = listPhysioPaths(root);
-  const missing = useAnnex && paths.length > 0 ? annexMissing(root) : null;
-  if (missing) {
-    return { onDisk: paths.length, downloaded: paths.filter((p) => !missing.has(p)).length, source: 'git-annex' };
+export function countPhysioFiles(index: BidsIndex, useAnnex = true): PhysioFileCount {
+  const paths = listPhysioPaths(index);
+  const roots = [...new Set(paths.map((p) => p.root))];
+  const missing = new Map<string, Set<string>>();
+  if (useAnnex && paths.length > 0) {
+    for (const root of roots) {
+      const m = annexMissing(root);
+      if (!m) break;
+      missing.set(root, m);
+    }
+  }
+  if (roots.length > 0 && missing.size === roots.length) {
+    const downloaded = paths.filter((p) => !missing.get(p.root)!.has(p.path)).length;
+    return { onDisk: paths.length, downloaded, source: 'git-annex' };
   }
   return {
     onDisk: paths.length,
-    downloaded: paths.filter((p) => hasGzipContent(join(root, p))).length,
+    downloaded: index.files.filter((f) => f.kind === 'physio' && hasGzipContent(f.path)).length,
     source: 'files on disk',
   };
 }

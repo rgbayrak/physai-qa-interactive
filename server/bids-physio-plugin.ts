@@ -14,12 +14,13 @@ import {
   writeAnnotations,
   buildScans,
   readDatasetInfo,
-  resolveBidsRoots,
   validateScanKey,
   validateChannel,
   annotationProgress,
 } from './bids-layout';
 import type { AnnotationsFile, ScanKey } from './bids-layout';
+import { buildBidsIndex, indexSummaryLines } from './bids-index';
+import type { BidsIndex } from './bids-index';
 import { countPhysioFiles } from './availability';
 import { checkStructure } from './bids-structure';
 import { checkRootSettings, noPhysioLines } from './bids-roots-check';
@@ -38,17 +39,17 @@ function rejectInvalid(res: ServerResponse, key: ScanKey): boolean {
 }
 
 // BIDS_ROOT is always the main BIDS folder (dataset_description.json,
-// participants.tsv, events, BOLD sidecars). Physio files normally live there
-// too; when they are stored elsewhere, BIDSPHYS_ROOT points at them, and
-// BIDSDER_ROOT at derivatives outside BIDS_ROOT/derivatives/. Without them,
-// both are found inside BIDS_ROOT by their files (see resolveBidsRoots).
+// participants.tsv, events, BOLD sidecars). It is walked once at start-up and
+// every physio, sidecar, confounds and events file in it is indexed wherever
+// it sits (server/bids-index.ts). BIDSPHYS_ROOT and BIDSDER_ROOT are extra
+// folders walked too, for physio or derivatives stored outside BIDS_ROOT.
 // There is no default dataset: BIDS_ROOT must be set. The folders are set
 // when the dev server starts (resolveRoots), not when this file loads,
 // because scripts run with vite-node load this plugin too.
 let BIDS_ROOT = '';
-let BIDSPHYS_ROOT = '';
-let BIDSDER_ROOT = '';
-let ROOT_NOTES: string[] = [];
+let BIDSPHYS_ROOT: string | undefined;
+let BIDSDER_ROOT: string | undefined;
+let INDEX: BidsIndex;
 
 const DATA_DIR = join(process.cwd(), 'data');
 
@@ -86,14 +87,9 @@ function resolveRoots() {
     printLines(check.lines, console.error);
     process.exit(1);
   }
-  const roots = resolveBidsRoots(check.bidsRoot, {
-    physioRoot: check.physioRoot,
-    derivRoot: check.derivRoot,
-  });
-  BIDS_ROOT = roots.bidsRoot;
-  BIDSPHYS_ROOT = roots.physioRoot;
-  BIDSDER_ROOT = roots.derivRoot;
-  ROOT_NOTES = roots.notes;
+  BIDS_ROOT = check.bidsRoot;
+  BIDSPHYS_ROOT = check.physioRoot;
+  BIDSDER_ROOT = check.derivRoot;
   ANNOTATIONS_ROOT = join(process.env.ANNOTATIONS_ROOT ?? join(DATA_DIR, 'annotations'), datasetName());
 }
 
@@ -121,26 +117,27 @@ export function bidsPhysioPlugin(): Plugin {
   let cachedDatasetJson: string;
   let scans: ReturnType<typeof buildScans> = [];
 
-  /** Subjects, scans (from the physio root) and dataset info (from BIDS_ROOT), read once and logged */
+  /** Index the folders once, then cache subjects, scans and dataset info, and log what was found */
   function cacheDataset() {
     printBannerOnce();
     resolveRoots();
-    const subjects = getSubjects(BIDSPHYS_ROOT);
+    INDEX = buildBidsIndex({ bidsRoot: BIDS_ROOT, physioRoot: BIDSPHYS_ROOT, derivRoot: BIDSDER_ROOT });
+    const subjects = getSubjects(INDEX);
     cachedSubjectsJson = JSON.stringify({ subjects });
-    scans = buildScans(BIDSPHYS_ROOT, subjects);
+    scans = buildScans(INDEX);
     cachedScansJson = JSON.stringify({ scans });
     console.log(`[bids-physio] BIDS root: ${BIDS_ROOT}`);
-    console.log(`[bids-physio] Physio root: ${BIDSPHYS_ROOT}`);
-    console.log(`[bids-physio] Derivatives root: ${BIDSDER_ROOT}`);
-    for (const note of ROOT_NOTES) console.log(`[bids-physio]   ${note}`);
+    if (BIDSPHYS_ROOT) console.log(`[bids-physio] Physio root: ${BIDSPHYS_ROOT}`);
+    if (BIDSDER_ROOT) console.log(`[bids-physio] Derivatives root: ${BIDSDER_ROOT}`);
+    for (const line of indexSummaryLines(INDEX)) console.log(`[bids-physio]   ${line}`);
     console.log(`[bids-physio] Cached ${subjects.length} subjects, ${scans.length} scans`);
-    if (scans.length === 0) printLines(noPhysioLines(BIDSPHYS_ROOT, !!process.env.BIDSPHYS_ROOT), console.warn);
+    if (scans.length === 0) printLines(noPhysioLines(INDEX.walked, !!BIDSPHYS_ROOT), console.warn);
     // Downloaded vs listed physio files, counted once (git-annex when it can answer)
-    const physioFiles = countPhysioFiles(BIDSPHYS_ROOT);
+    const physioFiles = countPhysioFiles(INDEX);
     console.log(
       `[bids-physio] Physio files: ${physioFiles.downloaded} of ${physioFiles.onDisk} downloaded (${physioFiles.source})`,
     );
-    const info = readDatasetInfo(BIDS_ROOT, BIDSDER_ROOT, BIDSPHYS_ROOT);
+    const info = readDatasetInfo(INDEX);
     for (const line of descriptionNoticeLines(info.description)) console.warn(`[bids-physio] ${noticeText(line)}`);
     // File and folder names against the rules of the declared BIDSVersion (names only, nothing downloaded)
     const structure = checkStructure(BIDS_ROOT, info.bidsVersion);
@@ -196,7 +193,7 @@ export function bidsPhysioPlugin(): Plugin {
           }
           if (rejectInvalid(res, { sub, ses })) return;
           res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify({ tasks: getTasks(BIDSPHYS_ROOT, sub, ses) }));
+          res.end(JSON.stringify({ tasks: getTasks(INDEX, sub, ses) }));
           return;
         }
 
@@ -212,7 +209,7 @@ export function bidsPhysioPlugin(): Plugin {
           }
           if (rejectInvalid(res, { sub, ses, task })) return;
           res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify({ runs: getRuns(BIDSPHYS_ROOT, sub, ses, task) }));
+          res.end(JSON.stringify({ runs: getRuns(INDEX, sub, ses, task) }));
           return;
         }
 
@@ -230,7 +227,7 @@ export function bidsPhysioPlugin(): Plugin {
           }
           if (rejectInvalid(res, { sub, ses, task, run })) return;
 
-          const result = readPhysio(BIDSPHYS_ROOT, sub, ses, task, run, BIDSDER_ROOT, BIDS_ROOT);
+          const result = readPhysio(INDEX, sub, ses, task, run);
           if (!result) {
             res.statusCode = 404;
             res.end(JSON.stringify({ error: 'Physio file not found' }));
@@ -258,7 +255,7 @@ export function bidsPhysioPlugin(): Plugin {
 
           // Many scans have no fMRIPrep confounds: that is not an error, so
           // reply null (200) rather than 404, which the browser logs as a failure
-          const result = readConfounds(BIDS_ROOT, BIDSDER_ROOT, sub, ses, task, run);
+          const result = readConfounds(INDEX, sub, ses, task, run);
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify(result ?? null));
           return;
@@ -278,16 +275,16 @@ export function bidsPhysioPlugin(): Plugin {
           }
           if (rejectInvalid(res, { sub, ses, task, run })) return;
 
-          // Events sit with the imaging data in BIDS_ROOT, not in a separate physio folder.
+          // Events come from the raw datasets (BIDS_ROOT first), never the derivatives.
           // No events file (e.g. rest) is not an error: reply null (200), not 404
-          const result = readEvents(BIDS_ROOT, sub, ses, task, run);
+          const result = readEvents(INDEX, sub, ses, task, run);
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify(result ?? null));
           return;
         }
 
         // TRIAL: detected/corrected peaks from the events file in the physio
-        // folder itself (e.g. physprep/), not the imaging folders. null if none.
+        // file's own dataset (e.g. physprep/). null if none.
         if (req.url?.startsWith('/api/bids/peaks')) {
           const url = new URL(req.url, 'http://localhost');
           const sub = url.searchParams.get('sub');
@@ -303,7 +300,7 @@ export function bidsPhysioPlugin(): Plugin {
           if (rejectInvalid(res, { sub, ses, task, run })) return;
 
           res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify(readPeaks(BIDSPHYS_ROOT, sub, ses, task, run) ?? null));
+          res.end(JSON.stringify(readPeaks(INDEX, sub, ses, task, run) ?? null));
           return;
         }
 
