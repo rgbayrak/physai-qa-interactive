@@ -2,7 +2,8 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { mkdtempSync, mkdirSync, readFileSync, existsSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { buildScans, getSubjects, readPhysio, resolveBidsRoots } from '../bids-layout';
+import { buildScans, readPhysio } from '../bids-layout';
+import { buildBidsIndex } from '../bids-index';
 import {
   runQualityMetrics,
   resolveDatasetPaths,
@@ -35,9 +36,10 @@ afterAll(() => {
 describe('runQualityMetrics (bids-sessions fixture)', () => {
   const root = join(FIXTURES, 'bids-sessions');
 
-  const der = join(root, 'derivatives', 'fmriprep');
-  const allRaw = () =>
-    buildScans(root, getSubjects(root)).map((s) => ({ scan: s, raw: readPhysio(root, s.sub, s.ses, s.task, s.run, der)! }));
+  const allRaw = () => {
+    const index = buildBidsIndex({ bidsRoot: root });
+    return buildScans(index).map((s) => ({ scan: s, raw: readPhysio(index, s.sub, s.ses, s.task, s.run)! }));
+  };
 
   it('writes one row per scan and physiological channel, in scan order', () => {
     const { rows, summary, outDir } = runQualityMetrics({ dataDir: FIXTURES, dataset: 'bids-sessions', outRoot: out });
@@ -157,21 +159,15 @@ describe('resolveDatasetPaths', () => {
     });
   });
 
-  it('gives the dev server the same roots', () => {
-    const root = join(FIXTURES, 'bids-sessions');
-    expect(resolveDatasetPaths(FIXTURES, 'bids-sessions')).toEqual({
-      dataset: 'bids-sessions',
-      ...resolveBidsRoots(root),
-    });
-    // an explicit derivatives root wins
-    expect(resolveBidsRoots(root, { derivRoot: '/elsewhere' }).derivRoot).toBe('/elsewhere');
-  });
-
-  it('defaults to <root>/derivatives/fmriprep and physio in the main folder for plain BIDS', () => {
+  it('defaults to data/<dataset> with no extra folders, which the walk covers for plain BIDS', () => {
     const p = resolveDatasetPaths(FIXTURES, 'bids-sessions');
-    expect(p.bidsRoot).toBe(join(FIXTURES, 'bids-sessions'));
-    expect(p.physioRoot).toBe(join(FIXTURES, 'bids-sessions'));
-    expect(p.derivRoot).toBe(join(FIXTURES, 'bids-sessions', 'derivatives', 'fmriprep'));
+    expect(p).toEqual({
+      dataset: 'bids-sessions',
+      bidsRoot: join(FIXTURES, 'bids-sessions'),
+      physioRoot: undefined,
+      derivRoot: undefined,
+    });
+    expect(buildBidsIndex(p).walked).toEqual([join(FIXTURES, 'bids-sessions')]);
   });
 });
 
@@ -187,7 +183,7 @@ describe('runQualityMetrics (physio in a separate folder)', () => {
     };
     for (const rel of ['dataset_description.json', 'task-motor_bold.json']) copy(rel, main);
     for (const rel of [
-      'physio.json',
+      'task-motor_physio.json',
       'sub-01/sub-01_task-motor_physio.json',
       'sub-01/func/sub-01_task-motor_physio.tsv.gz',
       'sub-02/func/sub-02_task-motor_physio.tsv.gz',
@@ -214,7 +210,7 @@ describe('participants', () => {
     const ds = join(dir, 'ds');
     // Minimal copy: the fixture plus participants files
     mkdirSync(join(ds, 'sub-01', 'func'), { recursive: true });
-    for (const f of ['dataset_description.json', 'physio.json', 'task-motor_bold.json']) {
+    for (const f of ['dataset_description.json', 'task-motor_physio.json', 'task-motor_bold.json']) {
       writeFileSync(join(ds, f), readFileSync(join(src, f)));
     }
     for (const f of ['sub-01_task-motor_physio.tsv.gz', 'sub-01_task-motor_desc-quality.json']) {
@@ -243,7 +239,7 @@ describe('participants', () => {
 
 describe('waveformFile', () => {
   it('maps bucket centres onto the scan-onset axis', () => {
-    const raw = readPhysio(join(FIXTURES, 'bids-nosessions'), '01', '', 'motor', '')!;
+    const raw = readPhysio(buildBidsIndex({ bidsRoot: join(FIXTURES, 'bids-nosessions') }), '01', '', 'motor', '')!;
     const wf = waveformFile(raw, 10);
     expect(wf.times).toHaveLength(10);
     const firstCentre = (Math.floor(raw.numSamples / 10) - 1) / 2;

@@ -84,17 +84,17 @@ export function checkRootSettings(settings: RootSettings, cwd: string): RootsChe
   if (derivRoot && !isDir(derivRoot)) {
     lines.push(
       `BIDSDER_ROOT folder not found: ${derivRoot}`,
-      '    Set it to the derivatives folder with the confounds files, or leave it out if it is inside BIDS_ROOT/derivatives/.',
+      '    Set it to the derivatives folder with the confounds files, or leave it out if it is inside BIDS_ROOT.',
     );
   }
 
   return lines.length ? { ok: false, lines } : { ok: true, bidsRoot, physioRoot, derivRoot };
 }
 
-/** Warning lines when no physio files were found under physioRoot (the server still starts) */
-export function noPhysioLines(physioRoot: string, physioGiven: boolean): string[] {
+/** Warning lines when no physio files were found in the folders walked (the server still starts) */
+export function noPhysioLines(folders: string[], physioGiven: boolean): string[] {
   return [
-    `No readable physio files under ${physioRoot}.`,
+    `No readable physio files under ${folders.join(', ')}.`,
     physioGiven
       ? '    Check that BIDSPHYS_ROOT is the folder with the *_physio.tsv.gz files.'
       : '    If the physio is stored outside BIDS_ROOT, set BIDSPHYS_ROOT=<folder with *_physio.tsv.gz>.',

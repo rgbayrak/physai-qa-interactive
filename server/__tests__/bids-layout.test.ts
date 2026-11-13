@@ -9,6 +9,7 @@ import {
   readPhysio,
   buildScans,
 } from '../bids-layout';
+import { buildBidsIndex } from '../bids-index';
 
 /**
  * Dataset-agnostic BIDS layout test suite.
@@ -33,8 +34,9 @@ const datasets = [
   { name: 'ds000210', root: join(BASE, 'ds000210') },
 ].filter((d) => existsSync(d.root));
 
-describe.each(datasets)('BIDS layout: $name', ({ root }) => {
-  // Discover subjects once per dataset; all subsequent tests derive from this.
+describe.each(datasets)('BIDS layout: $name', ({ root: bidsRoot }) => {
+  // Index and discover subjects once per dataset; all subsequent tests derive from this.
+  const root = buildBidsIndex({ bidsRoot });
   const subjects = getSubjects(root);
 
   it('discovers at least one subject with readable physio', () => {
@@ -123,7 +125,7 @@ describe.each(datasets)('BIDS layout: $name', ({ root }) => {
   });
 
   it('buildScans produces a scan for every subject/session/task/run combination', () => {
-    const scans = buildScans(root, subjects);
+    const scans = buildScans(root);
     expect(scans.length).toBeGreaterThan(0);
 
     for (const scan of scans) {

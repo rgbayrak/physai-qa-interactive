@@ -67,8 +67,9 @@ describe('checkRootSettings', () => {
 
 describe('noPhysioLines', () => {
   it('suggests BIDSPHYS_ROOT unless it was given, and datalad get', () => {
-    expect(noPhysioLines('/x', false).join('\n')).toContain('set BIDSPHYS_ROOT=');
-    expect(noPhysioLines('/x', true).join('\n')).toContain('Check that BIDSPHYS_ROOT');
-    expect(noPhysioLines('/x', true).join('\n')).toContain('datalad get');
+    expect(noPhysioLines(['/x'], false).join('\n')).toContain('set BIDSPHYS_ROOT=');
+    expect(noPhysioLines(['/x'], true).join('\n')).toContain('Check that BIDSPHYS_ROOT');
+    expect(noPhysioLines(['/x'], true).join('\n')).toContain('datalad get');
+    expect(noPhysioLines(['/x', '/y'], true)[0]).toBe('No readable physio files under /x, /y.');
   });
 });

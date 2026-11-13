@@ -25,7 +25,7 @@ bids-nosessions/    no sessions, no runs
           task-motor_bold.json, run-less quality sidecar  -> verified
           task events (two trial types, a numeric column, an n/a duration);
           MRIQC multi-echo derivatives (echo-1 is used)
-  sub-02  top-level physio.json fallback, no trigger      -> unverified
+  sub-02  top-level task-motor_physio.json (inherited), no trigger -> unverified
 """
 
 from __future__ import annotations
@@ -222,8 +222,9 @@ def make_nosessions(root: Path) -> None:
     })
     # Top-level BOLD inheritance for task-motor
     write_json(root / "task-motor_bold.json", {"RepetitionTime": TR, "TaskName": "motor"})
-    # Top-level physio sidecar, used by sub-02 (no per-file or subject-level sidecar)
-    write_json(root / "physio.json", physio_sidecar(False))
+    # Top-level physio sidecar (BIDS inheritance), used by sub-02 (no per-file or
+    # subject-level sidecar); sub-01's subject-level sidecar overrides it
+    write_json(root / "task-motor_physio.json", physio_sidecar(False))
 
     # sub-01: subject-level sidecar, header row, triggers, run-less quality sidecar
     func1 = root / "sub-01" / "func"
@@ -239,7 +240,7 @@ def make_nosessions(root: Path) -> None:
     write_text(mriqc_func1 / "sub-01_task-motor_echo-1_timeseries.tsv", mriqc_timeseries_tsv(0.05))
     write_text(mriqc_func1 / "sub-01_task-motor_echo-2_timeseries.tsv", mriqc_timeseries_tsv(0.5))
 
-    # sub-02: top-level physio.json, no trigger
+    # sub-02: top-level task-motor_physio.json, no trigger
     write_gz(root / "sub-02" / "func" / "sub-02_task-motor_physio.tsv.gz", physio_tsv(None))
 
 
