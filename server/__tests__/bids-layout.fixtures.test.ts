@@ -4,8 +4,6 @@ import { tmpdir } from 'os';
 import { dirname, join } from 'path';
 import {
   getSubjects,
-  getTasks,
-  getRuns,
   findPhysioFiles,
   readPhysio,
   readConfounds,
@@ -49,22 +47,18 @@ describe('fixture: bids-sessions layout', () => {
     expect(SES.stats.unreadablePhysio).toBe(1);
   });
 
-  it('lists tasks and runs', () => {
-    expect(getTasks(SES, '01', '01')).toEqual(['rest']);
-    expect(getRuns(SES, '01', '01', 'rest')).toEqual(['01']);
-  });
-
   it('builds one scan per subject/session in hierarchy order', () => {
-    expect(buildScans(SES)).toEqual([
-      { sub: '01', ses: '01', task: 'rest', run: '01' },
-      { sub: '01', ses: '02', task: 'rest', run: '01' },
-      { sub: '02', ses: '01', task: 'rest', run: '01' },
-      { sub: '02', ses: '02', task: 'rest', run: '01' },
+    expect(buildScans(SES).map((s) => s.id)).toEqual([
+      'func/sub-01_ses-01_task-rest_run-01',
+      'func/sub-01_ses-02_task-rest_run-01',
+      'func/sub-02_ses-01_task-rest_run-01',
+      'func/sub-02_ses-02_task-rest_run-01',
     ]);
+    expect(buildScans(SES)[0]).toMatchObject({ datatype: 'func', sub: '01', ses: '01', task: 'rest', run: '01' });
   });
 
   it('uses the per-file sidecar and finds the run-level quality sidecar', () => {
-    const found = findPhysioFiles(SES, '01', '01', 'rest', '01');
+    const found = findPhysioFiles(SES, 'func/sub-01_ses-01_task-rest_run-01');
     expect(found?.sidecarPath).toBe(
       join(SES_ROOT, 'sub-01', 'ses-01', 'func', 'sub-01_ses-01_task-rest_run-01_physio.json'),
     );
@@ -73,8 +67,11 @@ describe('fixture: bids-sessions layout', () => {
     );
   });
 
-  it('finds the scan with an unpadded run label too', () => {
-    expect(findPhysioFiles(SES, '01', '01', 'rest', '1')?.tsvGzName).toBe('sub-01_ses-01_task-rest_run-01_physio.tsv.gz');
+  it('names the scan by the run label the file uses', () => {
+    expect(findPhysioFiles(SES, 'func/sub-01_ses-01_task-rest_run-01')?.tsvGzName).toBe(
+      'sub-01_ses-01_task-rest_run-01_physio.tsv.gz',
+    );
+    expect(findPhysioFiles(SES, 'func/sub-01_ses-01_task-rest_run-1')).toBeNull();
   });
 
   it('reads dataset and derivatives metadata', () => {
@@ -97,7 +94,11 @@ describe('fixture: bids-sessions layout', () => {
 });
 
 describe('fixture: bids-sessions physio and timing', () => {
-  const read = (sub: string, ses: string) => readPhysio(SES, sub, ses, 'rest', '01')!;
+  const read = (sub: string, ses: string) => readPhysio(SES, `func/sub-${sub}_ses-${ses}_task-rest_run-01`)!;
+
+  it('says which datatype folder the physio file is in', () => {
+    expect(read('01', '01').datatype).toBe('func');
+  });
 
   it('reads all samples and columns', () => {
     const r = read('01', '01');
@@ -150,7 +151,7 @@ describe('fixture: bids-sessions physio and timing', () => {
 
 describe('fixture: bids-sessions confounds', () => {
   it('extracts only motion columns, in dropdown order, with n/a as NaN', () => {
-    const c = readConfounds(SES, '01', '01', 'rest', '01')!;
+    const c = readConfounds(SES, 'func/sub-01_ses-01_task-rest_run-01')!;
     expect(c.filename).toBe('sub-01_ses-01_task-rest_run-01_desc-confounds_timeseries.tsv');
     expect(c.numVolumes).toBe(N_VOLUMES);
     expect(Object.keys(c.columns)).toEqual(['framewise_displacement', 'trans_x', 'rot_x']);
@@ -159,18 +160,18 @@ describe('fixture: bids-sessions confounds', () => {
   });
 
   it('places volumes at i * RepetitionTime from the raw BOLD sidecar', () => {
-    const c = readConfounds(SES, '01', '01', 'rest', '01')!;
+    const c = readConfounds(SES, 'func/sub-01_ses-01_task-rest_run-01')!;
     expect(c.volumeTimes).toEqual(Array.from({ length: N_VOLUMES }, (_, i) => i * TR));
   });
 
   it('matches run-01 to unpadded run-1 derivatives and uses their VolumeTiming', () => {
-    const c = readConfounds(SES, '02', '01', 'rest', '01')!;
+    const c = readConfounds(SES, 'func/sub-02_ses-01_task-rest_run-01')!;
     expect(c.filename).toBe('sub-02_ses-01_task-rest_run-1_desc-confounds_timeseries.tsv');
     expect(c.volumeTimes).toEqual(Array.from({ length: N_VOLUMES }, (_, i) => i * TR));
   });
 
   it('reads MRIQC *_timeseries.tsv, using the lowest echo of a multi-echo run', () => {
-    const c = readConfounds(NOSES, '01', '', 'motor', '')!;
+    const c = readConfounds(NOSES, 'func/sub-01_task-motor')!;
     expect(c.filename).toBe('sub-01_task-motor_echo-1_timeseries.tsv');
     expect(Object.keys(c.columns)).toEqual(['framewise_displacement', 'dvars', 'trans_x', 'rot_x']);
     expect(c.columns.framewise_displacement[0]).toBeNaN();
@@ -180,13 +181,13 @@ describe('fixture: bids-sessions confounds', () => {
   });
 
   it('returns null for a scan without confounds', () => {
-    expect(readConfounds(NOSES, '02', '', 'motor', '')).toBeNull();
+    expect(readConfounds(NOSES, 'func/sub-02_task-motor')).toBeNull();
   });
 });
 
 describe('fixture: events', () => {
   it('reads onsets, durations and the other columns as text', () => {
-    const e = readEvents(NOSES, '01', '', 'motor', '')!;
+    const e = readEvents(NOSES, 'func/sub-01_task-motor')!;
     expect(e.filename).toBe('sub-01_task-motor_events.tsv');
     // the row without an onset is dropped; an n/a duration counts as 0
     expect(e.onset).toEqual([0, 6, 12]);
@@ -198,14 +199,25 @@ describe('fixture: events', () => {
   });
 
   it('uses the run-less events file for every run (BIDS inheritance)', () => {
-    for (const run of ['1', '02']) {
-      expect(readEvents(NOSES, '01', '', 'motor', run)?.filename).toBe('sub-01_task-motor_events.tsv');
+    // The fixture's scans have no run: copy its events next to physio files with runs
+    const dir = mkdtempSync(join(tmpdir(), 'bids-events-runs-'));
+    try {
+      const func = join(dir, 'sub-01', 'func');
+      mkdirSync(func, { recursive: true });
+      cpSync(join(NOSES_ROOT, 'sub-01', 'func', 'sub-01_task-motor_events.tsv'), join(func, 'sub-01_task-motor_events.tsv'));
+      for (const run of ['1', '02']) writeFileSync(join(func, `sub-01_task-motor_run-${run}_physio.tsv.gz`), '');
+      const idx = index(dir);
+      for (const run of ['1', '02']) {
+        expect(readEvents(idx, `func/sub-01_task-motor_run-${run}`)?.filename).toBe('sub-01_task-motor_events.tsv');
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 
   it('returns null when the scan has no events file', () => {
-    expect(readEvents(NOSES, '02', '', 'motor', '')).toBeNull();
-    expect(readEvents(SES, '01', '01', 'rest', '01')).toBeNull();
+    expect(readEvents(NOSES, 'func/sub-02_task-motor')).toBeNull();
+    expect(readEvents(SES, 'func/sub-01_ses-01_task-rest_run-01')).toBeNull();
   });
 });
 
@@ -254,20 +266,20 @@ describe('physio stored outside the main BIDS folder', () => {
 
   it('reads BOLD timing and events from the main folder', () => {
     const idx = index(main, { physioRoot: phys });
-    expect(readPhysio(idx, '01', '', 'motor', '')!.timing.status).toBe('verified'); // TR from main/task-motor_bold.json
-    expect(readEvents(idx, '01', '', 'motor', '')?.filename).toBe('sub-01_task-motor_events.tsv');
+    expect(readPhysio(idx, 'func/sub-01_task-motor')!.timing.status).toBe('verified'); // TR from main/task-motor_bold.json
+    expect(readEvents(idx, 'func/sub-01_task-motor')?.filename).toBe('sub-01_task-motor_events.tsv');
     expect(readDatasetInfo(idx).name).toBe('Synthetic physio fixture (no sessions)');
-    expect(readConfounds(idx, '01', '', 'motor', '')).toBeNull(); // no derivatives anywhere
+    expect(readConfounds(idx, 'func/sub-01_task-motor')).toBeNull(); // no derivatives anywhere
   });
 
   it("prefers the main folder's BOLD sidecars over the physio folder's", () => {
     writeFileSync(join(phys, 'task-motor_bold.json'), JSON.stringify({ RepetitionTime: 3 }));
     // main has TR 2, which the triggers match
-    expect(readPhysio(index(main, { physioRoot: phys }), '01', '', 'motor', '')!.timing.status).toBe('verified');
+    expect(readPhysio(index(main, { physioRoot: phys }), 'func/sub-01_task-motor')!.timing.status).toBe('verified');
     // without main's sidecar, the physio folder's TR 3 is used, and the triggers do not match it
     const empty = join(dir, 'empty');
     mkdirSync(empty, { recursive: true });
-    expect(readPhysio(index(empty, { physioRoot: phys }), '01', '', 'motor', '')!.timing.status).toBe('mismatch');
+    expect(readPhysio(index(empty, { physioRoot: phys }), 'func/sub-01_task-motor')!.timing.status).toBe('mismatch');
     rmSync(join(phys, 'task-motor_bold.json'));
   });
 });
@@ -306,7 +318,7 @@ describe('index: found by content, not folder names', () => {
     const main = join(dir, 'a');
     touch(join(main, 'sub-01', 'ses-1', 'func', 'sub-01_ses-1_task-x_bold.json'));
     touch(join(main, 'recordings-v2', 'sub-01', 'ses-1', 'func', 'sub-01_ses-1_task-x_physio.tsv.gz'));
-    expect(findPhysioFiles(index(main), '01', '1', 'x', '')?.tsvGzPath).toBe(
+    expect(findPhysioFiles(index(main), 'func/sub-01_ses-1_task-x')?.tsvGzPath).toBe(
       join(main, 'recordings-v2', 'sub-01', 'ses-1', 'func', 'sub-01_ses-1_task-x_physio.tsv.gz'),
     );
 
@@ -314,7 +326,7 @@ describe('index: found by content, not folder names', () => {
     touch(join(main2, 'sub-01', 'func', 'sub-01_task-x_bold.json'));
     const clean = join(main2, 'derivatives', 'cleaned', 'sub-01', 'func', 'sub-01_task-x_desc-clean_physio.tsv.gz');
     touch(clean);
-    const found = findPhysioFiles(index(main2), '01', '', 'x', '');
+    const found = findPhysioFiles(index(main2), 'func/sub-01_task-x');
     expect(found?.tsvGzPath).toBe(clean);
     expect(found?.file.dataset).toMatchObject({ root: join(main2, 'derivatives', 'cleaned'), type: 'derivative' });
   });
@@ -333,7 +345,7 @@ describe('index: found by content, not folder names', () => {
     touch(join(main, 'two', 'sub-01', 'func', 'sub-01_task-x_physio.tsv.gz'));
     touch(join(main, 'one', 'sub-01', 'func', 'sub-01_task-x_physio.tsv.gz'));
     const idx = index(main);
-    expect(findPhysioFiles(idx, '01', '', 'x', '')?.tsvGzPath).toBe(join(main, 'one', 'sub-01', 'func', 'sub-01_task-x_physio.tsv.gz'));
+    expect(findPhysioFiles(idx, 'func/sub-01_task-x')?.tsvGzPath).toBe(join(main, 'one', 'sub-01', 'func', 'sub-01_task-x_physio.tsv.gz'));
     expect(idx.duplicates.map((d) => d.others.map((o) => o.path))).toEqual([
       [join(main, 'two', 'sub-01', 'func', 'sub-01_task-x_physio.tsv.gz')],
     ]);
@@ -343,7 +355,7 @@ describe('index: found by content, not folder names', () => {
 
 describe('fixture: peaks (trial)', () => {
   it('keeps peak rows with a channel, flagging the corrected ones', () => {
-    expect(readPeaks(SES, '01', '02', 'rest', '01')).toEqual({
+    expect(readPeaks(SES, 'func/sub-01_ses-02_task-rest_run-01')).toEqual({
       filename: 'sub-01_ses-02_task-rest_run-01_events.tsv',
       time: [0.694, 0.694, 1.046, 1.171, 1.171],
       channel: ['ECG', 'ECG', 'ECG', 'PPG', 'PPG'],
@@ -352,8 +364,8 @@ describe('fixture: peaks (trial)', () => {
   });
 
   it('returns null for events without peaks or without a channel column', () => {
-    expect(readPeaks(NOSES, '01', '', 'motor', '')).toBeNull(); // task events only
-    expect(readPeaks(SES, '01', '01', 'rest', '01')).toBeNull(); // no events file
+    expect(readPeaks(NOSES, 'func/sub-01_task-motor')).toBeNull(); // task events only
+    expect(readPeaks(SES, 'func/sub-01_ses-01_task-rest_run-01')).toBeNull(); // no events file
   });
 });
 
@@ -363,14 +375,14 @@ describe('fixture: bids-nosessions', () => {
       { id: '01', sessions: [''] },
       { id: '02', sessions: [''] },
     ]);
-    expect(buildScans(NOSES)).toEqual([
-      { sub: '01', ses: '', task: 'motor', run: '' },
-      { sub: '02', ses: '', task: 'motor', run: '' },
+    expect(buildScans(NOSES).map((s) => [s.id, s.ses, s.run])).toEqual([
+      ['func/sub-01_task-motor', '', ''],
+      ['func/sub-02_task-motor', '', ''],
     ]);
   });
 
   it('sub-01: subject-level sidecar over the top-level one, and run-less quality sidecar', () => {
-    const found = findPhysioFiles(NOSES, '01', '', 'motor', '');
+    const found = findPhysioFiles(NOSES, 'func/sub-01_task-motor');
     expect(found?.sidecarPaths).toEqual([
       join(NOSES_ROOT, 'task-motor_physio.json'),
       join(NOSES_ROOT, 'sub-01', 'sub-01_task-motor_physio.json'),
@@ -381,16 +393,16 @@ describe('fixture: bids-nosessions', () => {
   });
 
   it('sub-01: skips the TSV header row and verifies triggers against top-level task-motor_bold.json', () => {
-    const r = readPhysio(NOSES, '01', '', 'motor', '')!;
+    const r = readPhysio(NOSES, 'func/sub-01_task-motor')!;
     expect(r.numSamples).toBe(N_SAMPLES);
     expect(r.data[0].every((v) => Number.isFinite(v))).toBe(true);
     expect(r.timing.status).toBe('verified');
   });
 
   it('sub-02: inherits the top-level task-motor_physio.json', () => {
-    const found = findPhysioFiles(NOSES, '02', '', 'motor', '');
+    const found = findPhysioFiles(NOSES, 'func/sub-02_task-motor');
     expect(found?.sidecarPath).toBe(join(NOSES_ROOT, 'task-motor_physio.json'));
-    const r = readPhysio(NOSES, '02', '', 'motor', '')!;
+    const r = readPhysio(NOSES, 'func/sub-02_task-motor')!;
     expect(r.columns).toEqual(['cardiac', 'respiratory']);
     expect(r.timing.status).toBe('unverified');
   });

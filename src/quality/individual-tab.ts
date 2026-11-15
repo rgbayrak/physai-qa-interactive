@@ -62,11 +62,19 @@ function scanDetailsHtml(rows: QualityRow[]): string {
   const r = rows[0];
   const timing = TIMING_LABELS[r.timingStatus as TimingStatus] ?? `Timing: ${r.timingStatus || 'n/a'}`;
   // Values as HTML: plain text escaped, channel names in the shared file-name style
+  // Named rows for sub/ses/task/run, then the datatype folder and any other entity (acq-, dir-, …)
+  const NAMED: Record<string, (v: string) => [string, string]> = {
+    sub: (v) => ['subject', `sub-${v}`],
+    ses: (v) => ['session', `ses-${v}`],
+    task: (v) => ['task', v],
+    run: (v) => ['run', `run-${v}`],
+  };
+  const named = Object.keys(NAMED).filter((k) => k in r.entities);
+  const others = Object.entries(r.entities).filter(([k]) => !(k in NAMED));
   const kv: [string, string][] = [
-    ['subject', esc(`sub-${r.sub}`)],
-    ...(r.ses ? ([['session', esc(`ses-${r.ses}`)]] as [string, string][]) : []),
-    ['task', esc(r.task)],
-    ...(r.run ? ([['run', esc(`run-${r.run}`)]] as [string, string][]) : []),
+    ...named.map((k) => NAMED[k](r.entities[k])).map(([k, v]): [string, string] => [k, esc(v)]),
+    ...(r.datatype ? ([['datatype', esc(r.datatype)]] as [string, string][]) : []),
+    ...others.map(([k, v]): [string, string] => [k, esc(`${k}-${v}`)]),
     ['sampling rate', esc(`${r.samplingFrequency} Hz`)],
     ['duration', esc(formatSeconds(r.durationS))],
     ['samples', esc(String(r.numSamples))],

@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
-import { join } from 'path';
+import { dirname, join } from 'path';
 import { getSubjects, buildScans, readPhysio, readDatasetInfo, isReadable, findPhysioFiles } from './bids-layout';
 import type { ScanEntry } from './bids-layout';
 import { buildBidsIndex, indexSummaryLines } from './bids-index';
@@ -17,7 +17,9 @@ import {
   REPORT_PDF_NAME,
   rowsToTsv,
   scanId,
+  waveformFileName,
 } from '../src/quality/metrics-tsv';
+import { toScanKey } from '../src/data/scan-key';
 import type {
   MetricKey,
   QualityRow,
@@ -103,10 +105,7 @@ export function scanQualityRows(scan: ScanEntry, fullRaw: PhysioResult): Quality
     const values = {} as Record<MetricKey, number>;
     for (const c of METRIC_COLUMNS) values[c.key] = m[c.key];
     return {
-      sub: scan.sub,
-      ses: scan.ses,
-      task: scan.task,
-      run: scan.run,
+      ...toScanKey(scan),
       filename: raw.filename,
       channel,
       signalType: signals[i] ?? '',
@@ -200,7 +199,7 @@ const byNumeric = (a: string, b: string) => a.localeCompare(b, undefined, { nume
  */
 function readChannelUnits(index: BidsIndex, scan: ScanEntry): Record<string, string> {
   try {
-    const sidecar = findPhysioFiles(index, scan.sub, scan.ses, scan.task, scan.run)?.sidecar;
+    const sidecar = findPhysioFiles(index, scan.id)?.sidecar;
     if (!sidecar) return {};
     const units: Record<string, string> = {};
     for (const [key, value] of Object.entries(sidecar)) {
@@ -281,7 +280,7 @@ export function runQualityMetrics(opts: QualityRunOptions): QualityRunResult {
   scans.forEach((scan, i) => {
     const id = scanId(scan);
     try {
-      const raw = readPhysio(index, scan.sub, scan.ses, scan.task, scan.run);
+      const raw = readPhysio(index, scan.id);
       if (!raw) {
         failedScans.push({ scan: id, reason: 'physio file or sidecar not found' });
         log(`  [${i + 1}/${scans.length}] ${id}: skipped (physio file or sidecar not found)`);
@@ -305,10 +304,12 @@ export function runQualityMetrics(opts: QualityRunOptions): QualityRunResult {
       for (const r of scanRows) {
         if (units[r.channel] && !channelUnits.has(r.channel)) channelUnits.set(r.channel, units[r.channel]);
       }
-      tasks.add(scan.task);
+      if (scan.task) tasks.add(scan.task);
       rates.add(raw.samplingFrequency);
       subjectsWithRows.add(scan.sub);
-      writeFileSync(join(waveDir, `${id}_waveforms.json`), JSON.stringify(waveformFile(raw, opts.buckets)));
+      const wavePath = join(waveDir, waveformFileName(scan));
+      mkdirSync(dirname(wavePath), { recursive: true });
+      writeFileSync(wavePath, JSON.stringify(waveformFile(raw, opts.buckets)));
       const skipped = excluded.length ? ` (excluded: ${excluded.map((e) => e.channel).join(', ')})` : '';
       const downsampled =
         raw.originalSamplingFrequency !== raw.samplingFrequency

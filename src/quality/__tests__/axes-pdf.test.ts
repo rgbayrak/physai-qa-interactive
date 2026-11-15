@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { METRIC_COLUMNS } from '../metrics-tsv';
+import { makeScanKey } from '../../data/scan-key';
 import type { MetricKey, ParticipantsTable, QualityRow } from '../metrics-tsv';
 import {
   PARTICIPANT_PREFIX,
@@ -22,10 +23,7 @@ function row(sub: string, metrics: Partial<Record<MetricKey, number>> = {}, over
   const m = {} as Record<MetricKey, number>;
   for (const c of METRIC_COLUMNS) m[c.key] = NaN;
   return {
-    sub,
-    ses: '01',
-    task: 'rest',
-    run: '',
+    ...makeScanKey('func', { sub, ses: '01', task: 'rest' }),
     filename: `sub-${sub}_physio.tsv.gz`,
     channel: 'cardiac',
     signalType: 'cardiac',

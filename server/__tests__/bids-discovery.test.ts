@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'fs';
+import { gzipSync } from 'zlib';
 import { tmpdir } from 'os';
 import { dirname, join } from 'path';
-import { buildScans, findPhysioFiles, getRuns, getSubjects, readConfounds, readEvents } from '../bids-layout';
+import { buildScans, findPhysioFiles, getSubjects, readConfounds, readEvents, readPhysio } from '../bids-layout';
 import { buildBidsIndex, entitiesMatch, indexSummaryLines, nameEntities } from '../bids-index';
+import { parseScanId } from '../../src/data/scan-key';
 
 // Bottom-up discovery (server/bids-index.ts) on small datasets written to
 // temporary folders. Files are indexed from their names, so most are empty;
@@ -18,7 +20,7 @@ const dataset = () => {
   write(join(root, 'dataset_description.json'), JSON.stringify({ Name: 'test', BIDSVersion: '1.9.0' }));
   return root;
 };
-const write = (path: string, content = '') => {
+const write = (path: string, content: string | Buffer = '') => {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, content);
 };
@@ -26,6 +28,8 @@ const json = (path: string, obj: object) => write(path, JSON.stringify(obj));
 const index = (bidsRoot: string) => buildBidsIndex({ bidsRoot });
 /** Three volumes of framewise displacement */
 const confounds = 'framewise_displacement\nn/a\n0.1\n0.2\n';
+/** Scan ids in hierarchy order */
+const ids = (bidsRoot: string) => buildScans(index(bidsRoot)).map((s) => s.id);
 
 beforeAll(() => {
   dir = mkdtempSync(join(tmpdir(), 'bids-discovery-'));
@@ -60,23 +64,56 @@ describe('where physio is found', () => {
     write(join(root, 'sub-03', 'beh', 'sub-03_task-game_physio.tsv.gz'));
     const idx = index(root);
     expect(buildScans(idx)).toEqual([
-      { sub: '01', ses: '', task: 'rest', run: '' },
-      { sub: '02', ses: '', task: 'oddball', run: '' },
-      { sub: '03', ses: '', task: 'game', run: '' },
+      parseScanId('func/sub-01_task-rest'),
+      parseScanId('eeg/sub-02_task-oddball'),
+      parseScanId('beh/sub-03_task-game'),
     ]);
+    expect(buildScans(idx)[1]).toEqual({
+      id: 'eeg/sub-02_task-oddball',
+      datatype: 'eeg',
+      sub: '02',
+      ses: '',
+      task: 'oddball',
+      run: '',
+      entities: { sub: '02', task: 'oddball' },
+    });
     expect(idx.stats.physioByDatatype).toEqual({ beh: 1, eeg: 1, func: 1 });
-    expect(findPhysioFiles(idx, '02', '', 'oddball', '')?.file.datatype).toBe('eeg');
+    expect(findPhysioFiles(idx, 'eeg/sub-02_task-oddball')?.file.datatype).toBe('eeg');
   });
 
-  it('counts physio without a task (e.g. anat/) and logs it, without making a scan of it yet', () => {
+  it('makes a scan of physio without a task (e.g. anat/); only physio without sub- is left out', () => {
     const root = dataset();
     write(join(root, 'sub-01', 'func', 'sub-01_task-rest_physio.tsv.gz'));
     write(join(root, 'sub-01', 'anat', 'sub-01_acq-mprage_physio.tsv.gz'));
+    write(join(root, 'task-rest_physio.tsv.gz'));
     const idx = index(root);
-    expect(buildScans(idx)).toHaveLength(1);
-    expect(idx.stats.physioByDatatype).toEqual({ anat: 1, func: 1 });
-    expect(idx.unkeyed.map((f) => f.name)).toEqual(['sub-01_acq-mprage_physio.tsv.gz']);
-    expect(indexSummaryLines(idx).join('\n')).toContain('1 physio files without sub- or task- not loaded');
+    expect(buildScans(idx).map((s) => [s.id, s.task])).toEqual([
+      ['anat/sub-01_acq-mprage', ''],
+      ['func/sub-01_task-rest', 'rest'],
+    ]);
+    expect(idx.stats.physioByDatatype).toEqual({ anat: 1, func: 1, none: 1 });
+    expect(idx.unkeyed.map((f) => f.name)).toEqual(['task-rest_physio.tsv.gz']);
+    expect(indexSummaryLines(idx).join('\n')).toContain('1 physio files without sub- not loaded');
+  });
+
+  it('tells scans apart by every entity but recording- and desc- (acq-, dir-)', () => {
+    const root = dataset();
+    const func = join(root, 'sub-01', 'func');
+    write(join(func, 'sub-01_task-rest_acq-mb_run-1_physio.tsv.gz'));
+    write(join(func, 'sub-01_task-rest_acq-sb_run-1_physio.tsv.gz'));
+    write(join(func, 'sub-01_task-rest_dir-AP_run-1_physio.tsv.gz'));
+    expect(ids(root)).toEqual([
+      'func/sub-01_task-rest_acq-mb_run-1',
+      'func/sub-01_task-rest_acq-sb_run-1',
+      'func/sub-01_task-rest_dir-AP_run-1',
+    ]);
+  });
+
+  it('gives a physio file outside any datatype folder an id without one', () => {
+    const root = dataset();
+    write(join(root, 'sub-01', 'sub-01_task-rest_physio.tsv.gz'));
+    expect(ids(root)).toEqual(['sub-01_task-rest']);
+    expect(buildScans(index(root))[0].datatype).toBe('');
   });
 
   it('for some subjects and sessions only', () => {
@@ -94,7 +131,7 @@ describe('where physio is found', () => {
   it('below extra folder levels', () => {
     const root = dataset();
     write(join(root, 'study', 'raw', 'sub-01', 'func', 'sub-01_task-rest_physio.tsv.gz'));
-    expect(buildScans(index(root))).toEqual([{ sub: '01', ses: '', task: 'rest', run: '' }]);
+    expect(ids(root)).toEqual(['func/sub-01_task-rest']);
   });
 
   it('lists run-less and run scans of one task, with runs compared as numbers', () => {
@@ -105,9 +142,17 @@ describe('where physio is found', () => {
     write(join(root, 'sub-01', 'func', 'sub-01_task-a_run-2_physio.tsv.gz'));
     const idx = index(root);
     expect(buildScans(idx).map((s) => s.run)).toEqual(['', '1', '2', '10']);
-    expect(getRuns(idx, '01', '', 'a')).toEqual(['1', '2', '10']);
-    expect(findPhysioFiles(idx, '01', '', 'a', '01')?.tsvGzName).toBe('sub-01_task-a_run-1_physio.tsv.gz');
-    expect(findPhysioFiles(idx, '01', '', 'a', '')?.tsvGzName).toBe('sub-01_task-a_physio.tsv.gz');
+    expect(findPhysioFiles(idx, 'func/sub-01_task-a_run-1')?.tsvGzName).toBe('sub-01_task-a_run-1_physio.tsv.gz');
+    expect(findPhysioFiles(idx, 'func/sub-01_task-a')?.tsvGzName).toBe('sub-01_task-a_physio.tsv.gz');
+    // The id is the file's own label; another spelling is not looked up
+    expect(findPhysioFiles(idx, 'func/sub-01_task-a_run-01')).toBeNull();
+  });
+
+  it('keeps run-1 and run-01 of one scan together (runs are numbers)', () => {
+    const root = dataset();
+    write(join(root, 'sub-01', 'func', 'sub-01_task-a_run-01_physio.tsv.gz'));
+    write(join(root, 'sub-01', 'func', 'sub-01_task-a_run-1_desc-preproc_physio.tsv.gz'));
+    expect(ids(root)).toEqual(['func/sub-01_task-a_run-1']);
   });
 });
 
@@ -120,7 +165,7 @@ describe('what is skipped', () => {
     const idx = index(root);
     expect(buildScans(idx)).toHaveLength(1);
     expect(idx.stats.physioEvents).toBe(2);
-    expect(findPhysioFiles(idx, '01', '', 'rest', '')?.tsvGzName).toBe('sub-01_task-rest_physio.tsv.gz');
+    expect(findPhysioFiles(idx, 'func/sub-01_task-rest')?.tsvGzName).toBe('sub-01_task-rest_physio.tsv.gz');
   });
 
   it('broken symlinks (not downloaded), hidden folders, sourcedata/, code/ and folder symlinks', () => {
@@ -150,14 +195,15 @@ describe('what is skipped', () => {
   });
 });
 
-describe('one physio file per scan (Step 1)', () => {
-  it('the func/ file when the same run also has physio in eeg/ (EEG-fMRI), the other logged', () => {
+describe('one physio file per scan', () => {
+  it('two scans when the same run has physio in func/ and eeg/ (EEG-fMRI)', () => {
     const root = dataset();
     write(join(root, 'sub-01', 'eeg', 'sub-01_task-rest_physio.tsv.gz'));
     write(join(root, 'sub-01', 'func', 'sub-01_task-rest_physio.tsv.gz'));
     const idx = index(root);
-    expect(findPhysioFiles(idx, '01', '', 'rest', '')?.file.datatype).toBe('func');
-    expect(idx.duplicates[0].others.map((f) => f.datatype)).toEqual(['eeg']);
+    expect(ids(root)).toEqual(['eeg/sub-01_task-rest', 'func/sub-01_task-rest']);
+    expect(findPhysioFiles(idx, 'eeg/sub-01_task-rest')?.file.datatype).toBe('eeg');
+    expect(idx.duplicates).toEqual([]);
   });
 
   it('desc-preproc over the raw file, then name order for recording- files, the others logged', () => {
@@ -168,8 +214,8 @@ describe('one physio file per scan (Step 1)', () => {
     write(join(func, 'sub-01_task-b_recording-resp_physio.tsv.gz'));
     write(join(func, 'sub-01_task-b_recording-cardiac_physio.tsv.gz'));
     const idx = index(root);
-    expect(findPhysioFiles(idx, '01', '', 'rest', '')?.tsvGzName).toBe('sub-01_task-rest_desc-preproc_physio.tsv.gz');
-    expect(findPhysioFiles(idx, '01', '', 'b', '')?.tsvGzName).toBe('sub-01_task-b_recording-cardiac_physio.tsv.gz');
+    expect(findPhysioFiles(idx, 'func/sub-01_task-rest')?.tsvGzName).toBe('sub-01_task-rest_desc-preproc_physio.tsv.gz');
+    expect(findPhysioFiles(idx, 'func/sub-01_task-b')?.tsvGzName).toBe('sub-01_task-b_recording-cardiac_physio.tsv.gz');
     const log = indexSummaryLines(idx).join('\n');
     expect(log).toContain('sub-01/func/sub-01_task-b_recording-cardiac_physio.tsv.gz loaded; same scan not loaded yet: sub-01/func/sub-01_task-b_recording-resp_physio.tsv.gz');
     expect(log).toContain('not loaded yet: sub-01/func/sub-01_task-rest_physio.tsv.gz');
@@ -191,7 +237,7 @@ describe('sidecar inheritance', () => {
     json(join(func, 'sub-01_ses-1_task-rest_run-2_physio.json'), { Columns: ['wrong'] });
     json(join(root, 'sub-01', 'ses-1', 'eeg', 'sub-01_ses-1_task-rest_physio.json'), { StartTime: 99 });
 
-    const found = findPhysioFiles(index(root), '01', '1', 'rest', '1')!;
+    const found = findPhysioFiles(index(root), 'func/sub-01_ses-1_task-rest_run-1')!;
     expect(found.sidecar).toEqual({
       SamplingFrequency: 100,
       StartTime: -1,
@@ -215,21 +261,21 @@ describe('sidecar inheritance', () => {
     json(join(func, 'sub-01_task-rest_physio.json'), { StartTime: 0 });
     json(join(func, 'sub-01_task-rest_recording-cardiac_physio.json'), { SamplingFrequency: 1000 });
     json(join(func, 'sub-01_task-rest_recording-resp_physio.json'), { SamplingFrequency: 25 });
-    expect(findPhysioFiles(index(root), '01', '', 'rest', '')?.sidecar).toEqual({ StartTime: 0, SamplingFrequency: 1000 });
+    expect(findPhysioFiles(index(root), 'func/sub-01_task-rest')?.sidecar).toEqual({ StartTime: 0, SamplingFrequency: 1000 });
   });
 
   it('applies a sidecar without entities (preproc_physio.json) to every physio file below it', () => {
     const root = dataset();
     write(join(root, 'sub-01', 'func', 'sub-01_task-rest_physio.tsv.gz'));
     json(join(root, 'preproc_physio.json'), { SamplingFrequency: 50 });
-    expect(findPhysioFiles(index(root), '01', '', 'rest', '')?.sidecar).toEqual({ SamplingFrequency: 50 });
+    expect(findPhysioFiles(index(root), 'func/sub-01_task-rest')?.sidecar).toEqual({ SamplingFrequency: 50 });
   });
 
   it('never uses a sidecar from another dataset', () => {
     const root = dataset();
     write(join(root, 'sub-01', 'func', 'sub-01_task-rest_physio.tsv.gz'));
     json(join(root, 'derivatives', 'prep', 'task-rest_physio.json'), { SamplingFrequency: 1 });
-    expect(findPhysioFiles(index(root), '01', '', 'rest', '')?.sidecar).toBeNull();
+    expect(findPhysioFiles(index(root), 'func/sub-01_task-rest')?.sidecar).toBeNull();
   });
 });
 
@@ -242,39 +288,106 @@ describe('confounds, BOLD timing and events matched by entities', () => {
     const der = join(root, 'derivatives', 'fmriprep', 'sub-01', 'func');
     write(join(der, 'sub-01_task-rest_echo-2_desc-confounds_timeseries.tsv'), confounds);
     write(join(der, 'sub-01_task-rest_echo-1_desc-confounds_timeseries.tsv'), confounds);
-    const c = readConfounds(index(root), '01', '', 'rest', '')!;
+    const c = readConfounds(index(root), 'func/sub-01_task-rest')!;
     expect(c.filename).toBe('sub-01_task-rest_echo-1_desc-confounds_timeseries.tsv');
     expect(c.volumeTimes).toEqual([0, 1.5, 3]);
   });
 
   it('matches run-1 to run-01 but not run-10, and task-rest not to task-resting', () => {
     const root = dataset();
+    write(join(root, 'sub-01', 'func', 'sub-01_task-rest_run-1_physio.tsv.gz'));
     const der = join(root, 'derivatives', 'fmriprep', 'sub-01', 'func');
     write(join(der, 'sub-01_task-rest_run-10_desc-confounds_timeseries.tsv'), confounds);
     write(join(der, 'sub-01_task-resting_run-1_desc-confounds_timeseries.tsv'), confounds);
-    const idx = index(root);
-    expect(readConfounds(idx, '01', '', 'rest', '1')).toBeNull();
+    expect(readConfounds(index(root), 'func/sub-01_task-rest_run-1')).toBeNull();
     write(join(der, 'sub-01_task-rest_run-01_desc-confounds_timeseries.tsv'), confounds);
-    expect(readConfounds(index(root), '01', '', 'rest', '1')?.filename).toBe(
+    expect(readConfounds(index(root), 'func/sub-01_task-rest_run-1')?.filename).toBe(
       'sub-01_task-rest_run-01_desc-confounds_timeseries.tsv',
     );
   });
 
+  it('matches on the physio file entities, so acq-mb and acq-sb each get their own confounds', () => {
+    const root = dataset();
+    const func = join(root, 'sub-01', 'func');
+    write(join(func, 'sub-01_task-rest_acq-mb_physio.tsv.gz'));
+    write(join(func, 'sub-01_task-rest_acq-sb_physio.tsv.gz'));
+    const der = join(root, 'derivatives', 'fmriprep', 'sub-01', 'func');
+    write(join(der, 'sub-01_task-rest_acq-mb_desc-confounds_timeseries.tsv'), confounds);
+    write(join(der, 'sub-01_task-rest_acq-sb_desc-confounds_timeseries.tsv'), 'framewise_displacement\nn/a\n');
+    const idx = index(root);
+    expect(readConfounds(idx, 'func/sub-01_task-rest_acq-mb')?.numVolumes).toBe(3);
+    expect(readConfounds(idx, 'func/sub-01_task-rest_acq-sb')?.numVolumes).toBe(1);
+  });
+
   it('finds confounds in a derivatives folder wherever it sits inside the main folder', () => {
     const root = dataset();
+    write(join(root, 'sub-01', 'ses-1', 'func', 'sub-01_ses-1_task-rest_physio.tsv.gz'));
     const der = join(root, 'derivatives', 'nested', 'fmriprep-23', 'sub-01', 'ses-1', 'func');
     write(join(der, 'sub-01_ses-1_task-rest_desc-confounds_timeseries.tsv'), confounds);
-    expect(readConfounds(index(root), '01', '1', 'rest', '')?.numVolumes).toBe(3);
+    expect(readConfounds(index(root), 'func/sub-01_ses-1_task-rest')?.numVolumes).toBe(3);
   });
 
   it('reads events from raw datasets only; a run-less scan never takes a run file', () => {
     const root = dataset();
     const events = 'onset\tduration\n1\t2\n';
+    write(join(root, 'sub-01', 'func', 'sub-01_task-rest_physio.tsv.gz'));
+    write(join(root, 'sub-01', 'func', 'sub-01_task-rest_run-1_physio.tsv.gz'));
     write(join(root, 'sub-01', 'func', 'sub-01_task-rest_run-1_events.tsv'), events);
     write(join(root, 'derivatives', 'prep', 'sub-01', 'func', 'sub-01_task-rest_events.tsv'), events);
     const idx = index(root);
-    expect(readEvents(idx, '01', '', 'rest', '1')?.filename).toBe('sub-01_task-rest_run-1_events.tsv');
-    expect(readEvents(idx, '01', '', 'rest', '')).toBeNull();
+    expect(readEvents(idx, 'func/sub-01_task-rest_run-1')?.filename).toBe('sub-01_task-rest_run-1_events.tsv');
+    expect(readEvents(idx, 'func/sub-01_task-rest')).toBeNull();
+  });
+
+  it('returns null for a scan id that is not in the index', () => {
+    const root = dataset();
+    write(join(root, 'sub-01', 'func', 'sub-01_task-rest_physio.tsv.gz'));
+    const idx = index(root);
+    expect(readConfounds(idx, 'func/sub-02_task-rest')).toBeNull();
+    expect(readEvents(idx, 'func/sub-02_task-rest')).toBeNull();
+    expect(readPhysio(idx, 'func/sub-02_task-rest')).toBeNull();
+  });
+});
+
+describe('physio outside func/ (EEG-fMRI)', () => {
+  // BIDS: StartTime is relative to the first sample of the corresponding data, so
+  // eeg/ physio is timed against the EEG recording and never against BOLD volumes
+  const sidecar = { SamplingFrequency: 10, StartTime: 0, Columns: ['cardiac', 'trigger'] };
+  /** 1 s at 10 Hz with a trigger pulse every 0.2 s (5 pulses) */
+  const tsv = Array.from({ length: 10 }, (_, i) => `0.5\t${i % 2}`).join('\n') + '\n';
+  const setup = () => {
+    const root = dataset();
+    for (const dt of ['func', 'eeg']) {
+      write(join(root, 'sub-01', dt, `sub-01_task-rest_physio.tsv.gz`), gzipSync(tsv));
+      json(join(root, 'sub-01', dt, 'sub-01_task-rest_physio.json'), sidecar);
+      write(join(root, 'sub-01', dt, 'sub-01_task-rest_events.tsv'), `onset\tduration\n${dt === 'eeg' ? 7 : 3}\t1\n`);
+    }
+    json(join(root, 'sub-01', 'func', 'sub-01_task-rest_bold.json'), { RepetitionTime: 0.2 });
+    write(join(root, 'derivatives', 'fmriprep', 'sub-01', 'func', 'sub-01_task-rest_desc-confounds_timeseries.tsv'), confounds);
+    return index(root);
+  };
+
+  it('checks triggers against BOLD timing for func/ only', () => {
+    const idx = setup();
+    // func/: 5 pulses at the TR, checked against the 3 confounds volumes
+    expect(readPhysio(idx, 'func/sub-01_task-rest')?.timing.detail).toMatch(/5 trigger pulses vs 3 volumes/);
+    const eeg = readPhysio(idx, 'eeg/sub-01_task-rest')!;
+    expect(eeg.datatype).toBe('eeg');
+    expect(eeg.timing.status).toBe('unverified');
+    expect(eeg.timing.detail).toMatch(/Physio in eeg\/: .*no trigger check/);
+    expect(eeg.timing.triggerTimes).toHaveLength(5);
+  });
+
+  it('gives confounds to func/ physio only', () => {
+    const idx = setup();
+    expect(readConfounds(idx, 'func/sub-01_task-rest')?.numVolumes).toBe(3);
+    expect(readConfounds(idx, 'eeg/sub-01_task-rest')).toBeNull();
+  });
+
+  it('takes events from the physio file datatype folder (or the top level), never from another', () => {
+    const idx = setup();
+    expect(readEvents(idx, 'func/sub-01_task-rest')?.onset).toEqual([3]);
+    expect(readEvents(idx, 'eeg/sub-01_task-rest')?.onset).toEqual([7]);
   });
 });
 

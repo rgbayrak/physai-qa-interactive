@@ -1,0 +1,53 @@
+import { describe, it, expect } from 'vitest';
+import { makeScanKey, parseScanId, sameScanKey, scanEntities, scanPrefix, timeReference } from '../scan-key';
+
+describe('scan key', () => {
+  it('is the datatype folder plus every entity but recording- and desc-, in file-name order', () => {
+    const entities = scanEntities({ sub: '01', ses: '2', task: 'rest', acq: 'mb', run: '1', recording: 'cardiac', desc: 'preproc' });
+    expect(entities).toEqual({ sub: '01', ses: '2', task: 'rest', acq: 'mb', run: '1' });
+    expect(scanPrefix(entities)).toBe('sub-01_ses-2_task-rest_acq-mb_run-1');
+    expect(makeScanKey('func', entities)).toEqual({
+      id: 'func/sub-01_ses-2_task-rest_acq-mb_run-1',
+      datatype: 'func',
+      sub: '01',
+      ses: '2',
+      task: 'rest',
+      run: '1',
+      entities,
+    });
+  });
+
+  it('has empty ses/task/run when the scan has none, and no folder in the id outside a datatype folder', () => {
+    expect(makeScanKey('anat', { sub: '01', acq: 'mprage' })).toMatchObject({ id: 'anat/sub-01_acq-mprage', task: '', run: '' });
+    expect(makeScanKey('', { sub: '01', task: 'rest' }).id).toBe('sub-01_task-rest');
+  });
+
+  it('parses an id back to the same key', () => {
+    for (const id of ['func/sub-01_ses-2_task-rest_acq-mb_run-1', 'eeg/sub-01_task-rest', 'sub-01_task-rest', 'anat/sub-01']) {
+      expect(parseScanId(id)?.id).toBe(id);
+    }
+    expect(parseScanId('func/sub-01_task-rest')).toEqual(makeScanKey('func', { sub: '01', task: 'rest' }));
+  });
+
+  it('rejects ids that are not datatype/prefix with a sub- entity', () => {
+    for (const id of ['', 'func/', 'func/task-rest', 'Func/sub-01', 'a/b/sub-01', 'func/sub-01_rest', 'func/sub-']) {
+      expect(parseScanId(id)).toBeNull();
+    }
+  });
+
+  it('tells func/ and eeg/ recordings of one run apart', () => {
+    expect(sameScanKey(parseScanId('func/sub-01_task-rest')!, parseScanId('eeg/sub-01_task-rest')!)).toBe(false);
+    expect(sameScanKey(parseScanId('func/sub-01_task-rest')!, makeScanKey('func', { sub: '01', task: 'rest' }))).toBe(true);
+  });
+});
+
+describe('timeReference: what t = 0 is', () => {
+  it('is the scan onset for MRI datatypes, the start of the recording otherwise', () => {
+    expect(timeReference('func')).toEqual({ axisLabel: 'Time from scan onset (s)', marker: 'scan onset (t = 0)' });
+    expect(timeReference('eeg')).toEqual({
+      axisLabel: 'Time from start of the EEG recording (s)',
+      marker: 'start of the EEG recording (t = 0)',
+    });
+    expect(timeReference('').axisLabel).toBe('Time from start of the recording (s)');
+  });
+});

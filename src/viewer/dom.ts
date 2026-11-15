@@ -5,6 +5,11 @@ interface ViewerElements {
   taskSelect: HTMLSelectElement;
   runSelect: HTMLSelectElement;
   runLabel: HTMLLabelElement;
+  /** Datatype / Scan dropdown: tells apart scans that share sub/ses/task/run (src/viewer/controls.ts) */
+  variantSelect: HTMLSelectElement;
+  variantLabel: HTMLLabelElement;
+  /** Its heading text, "Datatype" or "Scan" */
+  variantHeading: HTMLElement;
   channelSelect: HTMLSelectElement;
   confoundSelect: HTMLSelectElement;
   confoundLabel: HTMLLabelElement;
@@ -75,6 +80,9 @@ export function getElements(): ViewerElements {
     taskSelect: byId('task-select'),
     runSelect: byId('run-select'),
     runLabel: byId('run-label'),
+    variantSelect: byId('variant-select'),
+    variantLabel: byId('variant-label'),
+    variantHeading: byId('variant-heading'),
     channelSelect: byId('channel-select'),
     confoundSelect: byId('confound-select'),
     confoundLabel: byId('confound-label'),

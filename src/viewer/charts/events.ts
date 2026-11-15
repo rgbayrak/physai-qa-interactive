@@ -27,6 +27,8 @@ interface EventsChartOptions {
   column: string;
   /** Initial time window, normally the focus chart's current one */
   xDomain: [number, number];
+  /** x axis label; what t = 0 is (timeReference, src/data/scan-key.ts) */
+  axisLabel: string;
 }
 
 export interface EventsChartHandle {
@@ -96,7 +98,7 @@ export function buildEventsChart(opts: EventsChartOptions): EventsChartHandle | 
     xScale: { type: 'linear', domain: opts.xDomain },
     // Reversed so the first category is the top lane (the y range runs bottom → top)
     yScale: { type: 'band', domain: [...lanes].reverse(), padding: 0.2 },
-    xAxis: { position: 'bottom', label: 'Time from scan onset (s)' },
+    xAxis: { position: 'bottom', label: opts.axisLabel },
     yAxis: { position: 'left', tickFormat: () => '' },
     tooltip: { enabled: true },
     resize: { enabled: true, debounceMs: 100 },

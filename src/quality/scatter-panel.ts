@@ -44,8 +44,10 @@ interface ScatterPanel {
   setChannel: (channel: string) => void;
 }
 
+/** e.g. "sub-01 ses-02 task-rest run-01 (func)": every entity, then the datatype folder */
 function scanLabel(r: ScanKeyLike): string {
-  return [`sub-${r.sub}`, r.ses && `ses-${r.ses}`, `task-${r.task}`, r.run && `run-${r.run}`].filter(Boolean).join(' ');
+  const entities = Object.entries(r.entities).map(([k, v]) => `${k}-${v}`);
+  return entities.join(' ') + (r.datatype ? ` (${r.datatype})` : '');
 }
 
 /**

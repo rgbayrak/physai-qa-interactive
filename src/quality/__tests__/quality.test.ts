@@ -33,6 +33,7 @@ describe('scatter colour legend', () => {
   });
 });
 import { parseScanHash, scanHash, statsUrl, viewerUrl } from '../route';
+import { makeScanKey } from '../../data/scan-key';
 import {
   METRIC_DEFS,
   availableMetrics,
@@ -52,11 +53,15 @@ import {
 function row(over: Partial<QualityRow> = {}, metrics: Partial<Record<MetricKey, number>> = {}): QualityRow {
   const m = {} as Record<MetricKey, number>;
   for (const c of METRIC_COLUMNS) m[c.key] = NaN;
+  // The scan key follows the sub/ses/task/run given ('' leaves the entity out)
+  const { sub = '01', ses = '01', task = 'rest', run = '01', datatype = 'func' } = over;
+  const key = makeScanKey(datatype, {
+    sub,
+    ...(ses ? { ses } : {}),
+    ...(task ? { task } : {}),
+    ...(run ? { run } : {}),
+  });
   return {
-    sub: '01',
-    ses: '01',
-    task: 'rest',
-    run: '01',
     filename: 'sub-01_ses-01_task-rest_run-01_physio.tsv.gz',
     channel: 'cardiac',
     signalType: 'cardiac',
@@ -67,6 +72,7 @@ function row(over: Partial<QualityRow> = {}, metrics: Partial<Record<MetricKey, 
     sidecarAssessment: 'Pass',
     sidecarPercentValid: 0.95,
     ...over,
+    ...key,
     metrics: { ...m, ...metrics },
   };
 }
@@ -110,9 +116,20 @@ describe('metrics TSV', () => {
     expect(text.split('\n')[1].split('\t')).toHaveLength(TSV_HEADER.length);
   });
 
-  it('builds BIDS scan ids', () => {
-    expect(scanId({ sub: '01', ses: '02', task: 'rest', run: '1' })).toBe('sub-01_ses-02_task-rest_run-1');
-    expect(scanId({ sub: '01', ses: '', task: 'motor', run: '' })).toBe('sub-01_task-motor');
+  it('keys each row by its scan id, with the datatype and the other entities', () => {
+    const text = rowsToTsv([row({ datatype: 'eeg', ses: '' })]);
+    const [header, line] = text.trim().split('\n').map((l) => l.split('\t'));
+    expect(line[header.indexOf('datatype')]).toBe('eeg');
+    expect(line[header.indexOf('scan')]).toBe('eeg/sub-01_task-rest_run-01');
+    expect(scanId(parseQualityTsv(text)[0])).toBe('eeg/sub-01_task-rest_run-01');
+  });
+
+  it('says to compute the metrics again when the TSV is from before scan ids', () => {
+    const old = rowsToTsv([row()])
+      .split('\n')
+      .map((l) => l.split('\t').filter((_, i) => i !== TSV_HEADER.indexOf('scan')).join('\t'))
+      .join('\n');
+    expect(() => parseQualityTsv(old)).toThrow(/missing columns: scan .*compute-quality-metrics/);
   });
 });
 
@@ -167,21 +184,21 @@ describe('stats', () => {
 
 describe('scan links to the Stats tab', () => {
   it('round-trips a scan and builds the Stats address', () => {
-    const scan = { sub: '01', ses: '02', task: 'rest', run: '' };
-    expect(scanHash(scan)).toBe('#scan?sub=01&ses=02&task=rest');
+    const scan = makeScanKey('eeg', { sub: '01', ses: '02', task: 'rest' });
+    expect(scanHash(scan)).toBe('#scan?id=eeg%2Fsub-01_ses-02_task-rest');
     expect(parseScanHash(scanHash(scan))).toEqual(scan);
-    expect(statsUrl(scan)).toBe('/quality.html#scan?sub=01&ses=02&task=rest');
+    expect(statsUrl(scan)).toBe('/quality.html#scan?id=eeg%2Fsub-01_ses-02_task-rest');
     // Explore and Annotate's link names the scan too, so switching tabs keeps it
-    expect(viewerUrl(scan)).toBe('/#scan?sub=01&ses=02&task=rest');
+    expect(viewerUrl(scan)).toBe('/#scan?id=eeg%2Fsub-01_ses-02_task-rest');
     expect(parseScanHash(viewerUrl(scan).slice(1))).toEqual(scan);
   });
 
-  it('has no scan without sub and task, and still reads older #subject links', () => {
+  it('has no scan without a valid id (older sub/task links included)', () => {
     expect(parseScanHash('')).toBeNull();
     expect(parseScanHash('#scan')).toBeNull();
     expect(parseScanHash('#group')).toBeNull();
-    expect(parseScanHash('#subject?dataset=x')).toBeNull();
-    expect(parseScanHash('#subject?sub=03&task=rest&run=01')).toEqual({ sub: '03', ses: '', task: 'rest', run: '01' });
+    expect(parseScanHash('#scan?id=../x')).toBeNull();
+    expect(parseScanHash('#subject?sub=03&task=rest&run=01')).toBeNull();
   });
 });
 

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { stepScan, resolveSearch, isScanStepKey, pickStartScan, firstUnannotatedTarget } from '../navigation';
 import { validStacked, toggleStacked, physioColumns } from '../controls';
+import { makeScanKey } from '@/data/scan-key';
 
 describe('physioColumns', () => {
   it('offers only physiological channels, never trigger', () => {
@@ -18,7 +19,8 @@ describe('physioColumns', () => {
   });
 });
 
-const s = (sub: string, ses: string, run = '01') => ({ sub, ses, task: 'rest', run });
+const s = (sub: string, ses: string, run = '01') =>
+  makeScanKey('func', { sub, ...(ses ? { ses } : {}), task: 'rest', ...(run ? { run } : {}) });
 const scans = [s('01', '01'), s('01', '02'), s('02', '01'), s('02', '02')];
 
 describe('pickStartScan', () => {

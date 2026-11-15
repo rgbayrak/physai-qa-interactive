@@ -1,6 +1,6 @@
 import { readFileSync, mkdirSync, writeFileSync } from 'fs';
 import { gunzipSync } from 'zlib';
-import { join, dirname, basename, relative } from 'path';
+import { join, dirname, basename, relative, isAbsolute } from 'path';
 import { isPlaceholder } from '../src/data/dataset-notice';
 import { downsampleChannels } from './downsample';
 import {
@@ -10,10 +10,12 @@ import {
   inheritedSidecar,
   isReadable,
   qualitySidecar,
-  scanKey,
+  scanOf,
   withoutDesc,
 } from './bids-index';
 import type { BidsIndex, FileKind, IndexedFile } from './bids-index';
+import { scanPrefix } from '../src/data/scan-key';
+import type { ScanKeyLike } from '../src/data/scan-key';
 import type { DescriptionField, DescriptionNotice, DescriptionSource } from '../src/data/dataset-notice';
 
 export { isReadable };
@@ -43,30 +45,34 @@ interface PhysioSidecar {
   Columns: string[];
 }
 
-export interface ScanEntry {
-  sub: string;
-  ses: string;
-  task: string;
-  run: string;
-}
+/** A scan: datatype folder plus entities (src/data/scan-key.ts) */
+export type ScanEntry = ScanKeyLike;
 
 const byNumeric = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true });
 
-/** Scans in hierarchy order: sub, ses, task, then run ('' first), all compared as numbers where they are */
+/**
+ * Scans in hierarchy order: sub, ses, task, run ('' first), then datatype and
+ * the other entities (through the id), compared as numbers where they are
+ */
 function compareScans(a: ScanEntry, b: ScanEntry): number {
-  return byNumeric(a.sub, b.sub) || byNumeric(a.ses, b.ses) || byNumeric(a.task, b.task) || byNumeric(a.run, b.run);
+  return (
+    byNumeric(a.sub, b.sub) ||
+    byNumeric(a.ses, b.ses) ||
+    byNumeric(a.task, b.task) ||
+    byNumeric(a.run, b.run) ||
+    byNumeric(a.datatype, b.datatype) ||
+    byNumeric(a.id, b.id)
+  );
 }
 
 /**
- * Every scan in the index: one per sub/ses/task/run with a readable physio
- * file (see selectScanFiles in server/bids-index.ts), in hierarchy order.
- * Physio for some subjects or sessions only is fine; run-less and run scans
- * of one task are both listed.
+ * Every scan in the index: one per datatype and entity set with a readable
+ * physio file (see selectScanFiles in server/bids-index.ts), in hierarchy
+ * order. Physio for some subjects or sessions only is fine; run-less and run
+ * scans of one task, and scans without a task, are all listed.
  */
 export function buildScans(index: BidsIndex): ScanEntry[] {
-  return [...index.scans.values()]
-    .map((f) => ({ sub: f.entities.sub, ses: f.entities.ses ?? '', task: f.entities.task, run: f.entities.run ?? '' }))
-    .sort(compareScans);
+  return [...index.scans.values()].map(scanOf).sort(compareScans);
 }
 
 /** Subjects with at least one scan, and their sessions ('' for physio outside a session) */
@@ -82,24 +88,9 @@ export function getSubjects(index: BidsIndex): SubjectInfo[] {
     .sort((a, b) => byNumeric(a.id, b.id));
 }
 
-export function getTasks(index: BidsIndex, sub: string, ses: string): string[] {
-  const tasks = buildScans(index)
-    .filter((s) => s.sub === sub && s.ses === ses)
-    .map((s) => s.task);
-  return [...new Set(tasks)].sort(byNumeric);
-}
-
-/** Run labels of a task (as the physio file names write them); empty when its scans have no run */
-export function getRuns(index: BidsIndex, sub: string, ses: string, task: string): string[] {
-  const runs = buildScans(index)
-    .filter((s) => s.sub === sub && s.ses === ses && s.task === task && s.run !== '')
-    .map((s) => s.run);
-  return [...new Set(runs)].sort(byNumeric);
-}
-
-/** The scan's physio file (run compared as a number), its inherited sidecar and its quality sidecar */
-export function findPhysioFiles(index: BidsIndex, sub: string, ses: string, task: string, run: string) {
-  const file = index.scans.get(scanKey(sub, ses, task, run));
+/** The scan's physio file (by scan id), its inherited sidecar and its quality sidecar; null for an unknown id */
+export function findPhysioFiles(index: BidsIndex, scanId: string) {
+  const file = index.scans.get(scanId);
   if (!file) return null;
   const sidecar = inheritedSidecar(index, file);
   return {
@@ -136,12 +127,23 @@ export function detectTriggerOnsets(values: ArrayLike<number>): number[] {
 }
 
 /**
- * A scan's physio recording and its inherited sidecar. BOLD timing for the
- * trigger check comes from the raw datasets (BIDS_ROOT first), then the
- * derivatives (see readBoldTiming).
+ * The entities BOLD sidecars, confounds and events are matched against: the
+ * physio file's own, without recording- and desc- (so acq-, dir-, … match)
  */
-export function readPhysio(index: BidsIndex, sub: string, ses: string, task: string, run: string) {
-  const found = findPhysioFiles(index, sub, ses, task, run);
+function matchEntities(file: IndexedFile): Record<string, string> {
+  return scanOf(file).entities;
+}
+
+/**
+ * A scan's physio recording and its inherited sidecar. For func/ physio the
+ * trigger pulses are checked against the BOLD timing, from the raw datasets
+ * (BIDS_ROOT first), then the derivatives (see readBoldTiming). Physio in
+ * another datatype folder is timed against that folder's data (see
+ * timeReference in src/data/scan-key.ts), so the BOLD check does not apply and
+ * StartTime is used as is.
+ */
+export function readPhysio(index: BidsIndex, scanId: string) {
+  const found = findPhysioFiles(index, scanId);
   if (!found || !found.sidecar) return null;
 
   const sidecar = found.sidecar as unknown as PhysioSidecar;
@@ -170,9 +172,7 @@ export function readPhysio(index: BidsIndex, sub: string, ses: string, task: str
   }
 
   const fs = sidecar.SamplingFrequency;
-  const scan = scanEntities(sub, ses, task, run);
-  const boldTiming = readBoldTiming(index, scan);
-  const expectedVolumes = boldTiming?.volumeTiming?.length ?? countConfoundVolumes(index, scan);
+  const datatype = found.file.datatype ?? '';
 
   // Trigger timing is checked at the original rate, before any downsampling
   const trigCol = sidecar.Columns.findIndex((c) => c.toLowerCase() === 'trigger');
@@ -180,12 +180,28 @@ export function readPhysio(index: BidsIndex, sub: string, ses: string, task: str
     trigCol === -1
       ? []
       : detectTriggerOnsets(columns[trigCol]).map((i) => sidecar.StartTime + i / fs);
-  const timing = verifyTriggerTiming(triggerSec, boldTiming?.tr ?? null, expectedVolumes, fs);
+  let timing: PhysioTiming;
+  if (datatype === 'func') {
+    const scan = matchEntities(found.file);
+    const boldTiming = readBoldTiming(index, scan);
+    const expectedVolumes = boldTiming?.volumeTiming?.length ?? countConfoundVolumes(index, scan);
+    timing = verifyTriggerTiming(triggerSec, boldTiming?.tr ?? null, expectedVolumes, fs);
+  } else {
+    const folder = datatype ? `${datatype}/` : 'no datatype folder';
+    timing = {
+      status: 'unverified',
+      detail: `Physio in ${folder}: StartTime is relative to that data, not to BOLD volumes, so no trigger check; using sidecar StartTime as-is`,
+      offset: 0,
+      triggerTimes: triggerSec,
+    };
+  }
 
   const ds = downsampleChannels(sidecar.Columns, columns, fs);
 
   return {
     filename: found.tsvGzName,
+    /** Datatype folder of the physio file ('' outside one): says what t = 0 is (timeReference) */
+    datatype,
     samplingFrequency: ds.samplingFrequency,
     /** Rate in the file; above samplingFrequency when the data were downsampled */
     originalSamplingFrequency: fs,
@@ -230,15 +246,6 @@ export function parsePhysioTsv(buf: Buffer, numCols: number, chunkBytes = PARSE_
     start = end;
   }
   return cols.map((col) => col.subarray(0, rows));
-}
-
-/** The scan's entities: sub, task, and ses and run when given */
-function scanEntities(sub: string, ses: string, task: string, run: string): Record<string, string> {
-  const e: Record<string, string> = { sub };
-  if (ses) e.ses = ses;
-  e.task = task;
-  if (run) e.run = run;
-  return e;
 }
 
 /**
@@ -418,8 +425,11 @@ function countConfoundVolumes(index: BidsIndex, scan: Record<string, string>): n
   return readConfoundsText(file.path).split('\n').filter((l) => l.length > 0).length - 1;
 }
 
-export function readConfounds(index: BidsIndex, sub: string, ses: string, task: string, run: string) {
-  const scan = scanEntities(sub, ses, task, run);
+/** The scan's motion confounds; null for physio outside func/ (confounds describe BOLD volumes) */
+export function readConfounds(index: BidsIndex, scanId: string) {
+  const physio = index.scans.get(scanId);
+  if (!physio || physio.datatype !== 'func') return null;
+  const scan = matchEntities(physio);
   const file = findConfoundsFile(index, scan);
   if (!file) return null;
   const filePath = file.path;
@@ -459,15 +469,26 @@ export function readConfounds(index: BidsIndex, sub: string, ses: string, task: 
 /**
  * The scan's BIDS events file, following BIDS inheritance: the run's own file,
  * then the run-less file (it applies to every run), then a top-level
- * task-<task>_events.tsv. A run-less scan never picks up a run's file.
- * `inDataset` picks the datasets searched. Null if there is none.
+ * task-<task>_events.tsv. A run-less scan never picks up a run's file. Only
+ * files in the physio file's datatype folder or outside any (top level): event
+ * onsets are relative to their own data, so func/ events do not time eeg/
+ * physio. `inDataset` picks the datasets searched. Null if there is none.
  */
 function findEventsFile(
   index: BidsIndex,
-  scan: Record<string, string>,
+  physio: IndexedFile,
   inDataset: (f: IndexedFile) => boolean,
 ): string | null {
-  const files = matchingFiles(index, 'events', scan, (f) => inDataset(f) && ('run' in scan || !('run' in f.entities)));
+  const scan = matchEntities(physio);
+  const files = matchingFiles(
+    index,
+    'events',
+    scan,
+    (f) =>
+      inDataset(f) &&
+      (f.datatype === physio.datatype || f.datatype === null) &&
+      ('run' in scan || !('run' in f.entities)),
+  );
   return files.find((f) => isReadable(f.path))?.path ?? null;
 }
 
@@ -509,8 +530,10 @@ function parseEventsFile(filePath: string) {
  * without a numeric onset are dropped; an n/a duration counts as 0.
  * Read from the raw datasets (BIDS_ROOT first), never from derivatives.
  */
-export function readEvents(index: BidsIndex, sub: string, ses: string, task: string, run: string) {
-  const path = findEventsFile(index, scanEntities(sub, ses, task, run), (f) => f.dataset.type === 'raw');
+export function readEvents(index: BidsIndex, scanId: string) {
+  const physio = index.scans.get(scanId);
+  if (!physio) return null;
+  const path = findEventsFile(index, physio, (f) => f.dataset.type === 'raw');
   return path ? parseEventsFile(path) : null;
 }
 
@@ -523,10 +546,10 @@ const PEAK_TYPE_RE = /peak(_corrected)?$/i;
  * duration, trial_type such as r_peak / r_peak_corrected, channel such as
  * ECG / PPG). Only peak rows with a channel are kept. Null if there are none.
  */
-export function readPeaks(index: BidsIndex, sub: string, ses: string, task: string, run: string) {
-  const physio = index.scans.get(scanKey(sub, ses, task, run));
+export function readPeaks(index: BidsIndex, scanId: string) {
+  const physio = index.scans.get(scanId);
   if (!physio) return null;
-  const path = findEventsFile(index, scanEntities(sub, ses, task, run), (f) => f.dataset === physio.dataset);
+  const path = findEventsFile(index, physio, (f) => f.dataset === physio.dataset);
   const events = path ? parseEventsFile(path) : null;
   const types = events?.columns.trial_type;
   const channels = events?.columns.channel;
@@ -560,6 +583,10 @@ export interface AnnotationsFile {
   waveform_quality?: 'good' | 'bad' | 'fixable' | 'unknown' | null;
   /** Whole-waveform quality analysis comment; absent in older files */
   waveform_comment?: string;
+  /** Scan id (src/data/scan-key.ts), e.g. func/sub-01_task-rest_run-01: names the scan the file belongs to */
+  scan: string;
+  datatype: string;
+  /** sub/ses/task/run for people reading the file ('' when the scan has none); written from the scan id */
   sub: string;
   ses: string;
   task: string;
@@ -569,67 +596,27 @@ export interface AnnotationsFile {
   annotations: StoredAnnotation[];
 }
 
-/** BIDS labels are alphanumeric only (BIDS spec, "Entities") */
-const LABEL_RE = /^[A-Za-z0-9]+$/;
 /** Channel names are physio column names; allow _ and - but never path separators or dots */
 const CHANNEL_RE = /^[A-Za-z0-9_-]+$/;
 
-export interface ScanKey {
-  sub: string;
-  ses?: string;
-  task?: string;
-  run?: string;
-  channel?: string;
-}
-
 /**
- * Check request-supplied identifiers before they are used to build a file
- * path. Returns an error message, or null if every given field is safe.
- * `ses` and `run` may be '' (session-less / run-less layouts); `sub` may not.
+ * Where a scan's annotations for one channel are stored: under `root`, in the
+ * physio file's folder relative to its dataset (e.g. sub-01/ses-02/eeg/), named
+ * by the scan prefix. Only the index and a checked channel name build the
+ * path: an unknown scan id is never turned into one.
  */
-export function validateScanKey(key: ScanKey): string | null {
-  if (!LABEL_RE.test(key.sub)) return `Invalid sub label: ${JSON.stringify(key.sub)}`;
-  for (const field of ['ses', 'task', 'run'] as const) {
-    const v = key[field];
-    if (v !== undefined && v !== '' && !LABEL_RE.test(v)) {
-      return `Invalid ${field} label: ${JSON.stringify(v)}`;
-    }
-  }
-  if (key.channel !== undefined && !CHANNEL_RE.test(key.channel)) {
-    return `Invalid channel name: ${JSON.stringify(key.channel)}`;
-  }
-  return null;
-}
-
-function annotationsFilePath(
-  root: string,
-  sub: string,
-  ses: string,
-  task: string,
-  run: string,
-  channel: string,
-): string {
-  // Defence in depth: the server validates first, but never build a path from unchecked input
-  const error = validateScanKey({ sub, ses, task, run, channel });
+function annotationsFilePath(root: string, index: BidsIndex, scanId: string, channel: string): string {
+  const error = validateChannel(channel);
   if (error) throw new Error(error);
-  const dir = ses
-    ? join(root, `sub-${sub}`, `ses-${ses}`, 'func')
-    : join(root, `sub-${sub}`, 'func');
-  let base = ses ? `sub-${sub}_ses-${ses}_task-${task}` : `sub-${sub}_task-${task}`;
-  if (run) base += `_run-${run}`;
-  base += `_channel-${channel}_annotations.json`;
-  return join(dir, base);
+  const file = index.scans.get(scanId);
+  if (!file) throw new Error(`Unknown scan: ${JSON.stringify(scanId)}`);
+  const folder = relative(file.dataset.root, file.dir);
+  if (folder.startsWith('..') || isAbsolute(folder)) throw new Error(`Physio file outside its dataset: ${file.path}`);
+  return join(root, folder, `${scanPrefix(scanOf(file).entities)}_channel-${channel}_annotations.json`);
 }
 
-export function readAnnotations(
-  root: string,
-  sub: string,
-  ses: string,
-  task: string,
-  run: string,
-  channel: string,
-): AnnotationsFile | null {
-  const filePath = annotationsFilePath(root, sub, ses, task, run, channel);
+export function readAnnotations(root: string, index: BidsIndex, scanId: string, channel: string): AnnotationsFile | null {
+  const filePath = annotationsFilePath(root, index, scanId, channel);
   if (!isReadable(filePath)) return null;
   try {
     return JSON.parse(readFileSync(filePath, 'utf-8'));
@@ -638,7 +625,7 @@ export function readAnnotations(
   }
 }
 
-/** Channel name check on its own (same rule as validateScanKey); error message or null */
+/** Channel name check before it goes into a file name; error message or null */
 export function validateChannel(channel: string): string | null {
   return CHANNEL_RE.test(channel) ? null : `Invalid channel name: ${JSON.stringify(channel)}`;
 }
@@ -661,24 +648,44 @@ export function isAnnotated(file: AnnotationsFile | null): boolean {
  * and the first one that is not, in the scans' order (hierarchy order), so
  * Explore and Annotate can open it: a skipped scan is never forgotten.
  */
-export function annotationProgress<S extends { sub: string; ses: string; task: string; run: string }>(
+export function annotationProgress<S extends { id: string }>(
   root: string,
+  index: BidsIndex,
   scans: S[],
   channel: string,
 ): { annotated: number; total: number; firstUnannotated: S | null } {
   let annotated = 0;
   let firstUnannotated: S | null = null;
   for (const s of scans) {
-    if (isAnnotated(readAnnotations(root, s.sub, s.ses, s.task, s.run, channel))) annotated++;
+    if (isAnnotated(readAnnotations(root, index, s.id, channel))) annotated++;
     else firstUnannotated ??= s;
   }
   return { annotated, total: scans.length, firstUnannotated };
 }
 
-export function writeAnnotations(root: string, payload: AnnotationsFile): void {
-  const filePath = annotationsFilePath(root, payload.sub, payload.ses, payload.task, payload.run, payload.channel);
+/**
+ * Save a scan's annotations for one channel. The scan fields (scan, datatype,
+ * sub, ses, task, run) are written from the index, not taken from the payload.
+ */
+export function writeAnnotations(root: string, index: BidsIndex, payload: AnnotationsFile): void {
+  const filePath = annotationsFilePath(root, index, payload.scan, payload.channel);
+  const scan = scanOf(index.scans.get(payload.scan)!);
+  const { waveform_quality, waveform_comment, channel, sampling_rate, annotations } = payload;
+  const file: AnnotationsFile = {
+    waveform_quality,
+    waveform_comment,
+    scan: scan.id,
+    datatype: scan.datatype,
+    sub: scan.sub,
+    ses: scan.ses,
+    task: scan.task,
+    run: scan.run,
+    channel,
+    sampling_rate,
+    annotations,
+  };
   mkdirSync(dirname(filePath), { recursive: true });
-  writeFileSync(filePath, JSON.stringify(payload, null, 2));
+  writeFileSync(filePath, JSON.stringify(file, null, 2));
 }
 
 /**
@@ -690,7 +697,7 @@ export function writeAnnotations(root: string, payload: AnnotationsFile): void {
  */
 export function descriptionFolders(index: BidsIndex): { physio: string | null; derivatives: string | null } {
   const first = buildScans(index)[0];
-  const physioFile = first ? index.scans.get(scanKey(first.sub, first.ses, first.task, first.run)) : undefined;
+  const physioFile = first ? index.scans.get(first.id) : undefined;
   const physio = physioFile?.dataset.root ?? index.physioRoot ?? null;
   const confounds = index.files
     .filter((f) => f.kind === 'confounds')

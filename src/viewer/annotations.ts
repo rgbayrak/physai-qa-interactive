@@ -48,6 +48,8 @@ export function toAnnotationsFile(
   return {
     waveform_quality: waveform.quality,
     waveform_comment: waveform.comment,
+    scan: scan.id,
+    datatype: scan.datatype,
     sub: scan.sub,
     ses: scan.ses,
     task: scan.task,

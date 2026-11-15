@@ -71,10 +71,17 @@ export function nearestPoint(points: DataPoint[], t: number): DataPoint {
 }
 
 /**
- * Dashed vertical line at scan onset (t = 0, first BOLD volume), the shared
- * reference for physio and confounds. Hidden when 0 is outside the x domain.
+ * Dashed vertical line at t = 0 (the first BOLD volume for func/ physio, see
+ * timeReference in src/data/scan-key.ts), the shared reference for physio,
+ * events and confounds. Hidden when 0 is outside the x domain. `labelText`
+ * names it when `withLabel` is set.
  */
-export function drawOnsetMarker(chart: ChartInstance, group: GroupSelection, withLabel: boolean): void {
+export function drawOnsetMarker(
+  chart: ChartInstance,
+  group: GroupSelection,
+  withLabel: boolean,
+  labelText = 'scan onset (t = 0)',
+): void {
   const xScale = xScaleOf(chart);
   const [d0, d1] = xScale.domain();
   const height = chart.getDimensions().innerHeight;
@@ -100,7 +107,7 @@ export function drawOnsetMarker(chart: ChartInstance, group: GroupSelection, wit
       .attr('fill', '#7b3fa0')
       .style('font-size', 'var(--fs-xs)') // shared size (src/shell/tabs.css)
       .attr('pointer-events', 'none')
-      .text('scan onset (t = 0)');
+      .text(labelText);
   }
 }
 

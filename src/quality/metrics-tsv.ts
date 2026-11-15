@@ -1,5 +1,10 @@
 import type { ChannelMetrics } from '../data/sqi-metrics';
 import type { DescriptionNotice } from '../data/dataset-notice';
+import { makeScanKey, parseScanId } from '../data/scan-key';
+import type { ScanKeyLike } from '../data/scan-key';
+
+export { sameScanKey, scanId } from '../data/scan-key';
+export type { ScanKeyLike } from '../data/scan-key';
 
 // TSV format for dataset-wide quality metrics: one row per scan and channel.
 // Shared by the Node script that writes it (server/quality-metrics.ts) and the
@@ -30,6 +35,9 @@ const SCAN_COLUMNS = [
   'ses',
   'task',
   'run',
+  'datatype',
+  /** The scan's id (src/data/scan-key.ts), e.g. func/sub-01_task-rest_acq-mb_run-01: the key of the row */
+  'scan',
   'filename',
   'channel',
   'signal_type',
@@ -53,11 +61,9 @@ export const WAVEFORMS_DIR = 'waveforms';
  */
 export const REPORT_PDF_NAME = 'quality_report.pdf';
 
-export interface ScanKeyLike {
-  sub: string;
-  ses: string;
-  task: string;
-  run: string;
+/** A scan's waveform file, under WAVEFORMS_DIR (in a folder per datatype, e.g. func/…_waveforms.json) */
+export function waveformFileName(s: ScanKeyLike): string {
+  return `${s.id}_waveforms.json`;
 }
 
 export interface QualityRow extends ScanKeyLike {
@@ -74,19 +80,6 @@ export interface QualityRow extends ScanKeyLike {
   /** 0-1 from the desc-quality sidecar; NaN if none */
   sidecarPercentValid: number;
   metrics: Record<MetricKey, number>;
-}
-
-/** BIDS-style scan prefix, e.g. sub-01_ses-02_task-rest_run-01 */
-export function scanId(s: ScanKeyLike): string {
-  const parts = [`sub-${s.sub}`];
-  if (s.ses) parts.push(`ses-${s.ses}`);
-  parts.push(`task-${s.task}`);
-  if (s.run) parts.push(`run-${s.run}`);
-  return parts.join('_');
-}
-
-export function sameScanKey(a: ScanKeyLike, b: ScanKeyLike): boolean {
-  return a.sub === b.sub && a.ses === b.ses && a.task === b.task && a.run === b.run;
 }
 
 /** Shortest round-trip form (deterministic); n/a for NaN, inf/-inf for infinities */
@@ -120,6 +113,8 @@ function rowCells(r: QualityRow): string[] {
     formatText(r.ses),
     formatText(r.task),
     formatText(r.run),
+    formatText(r.datatype),
+    formatText(r.id),
     formatText(r.filename),
     formatText(r.channel),
     formatText(r.signalType),
@@ -145,18 +140,21 @@ export function parseQualityTsv(text: string): QualityRow[] {
   const header = lines[0].split('\t');
   const idx = new Map(header.map((h, i) => [h, i]));
   const missing = TSV_HEADER.filter((h) => !idx.has(h));
-  if (missing.length > 0) throw new Error(`Quality metrics TSV is missing columns: ${missing.join(', ')}`);
+  if (missing.length > 0) {
+    throw new Error(
+      `Quality metrics TSV is missing columns: ${missing.join(', ')} (computed by an older version? Run scripts/compute-quality-metrics.ts again)`,
+    );
+  }
 
-  return lines.slice(1).map((line) => {
+  return lines.slice(1).map((line, i) => {
     const cells = line.split('\t');
     const cell = (name: string) => cells[idx.get(name)!] ?? '';
     const metrics = {} as Record<MetricKey, number>;
     for (const c of METRIC_COLUMNS) metrics[c.key] = parseNumber(cell(c.column));
+    const key = parseScanId(parseText(cell('scan')));
+    if (!key) throw new Error(`Quality metrics TSV row ${i + 2}: invalid scan ${JSON.stringify(cell('scan'))}`);
     return {
-      sub: parseText(cell('sub')),
-      ses: parseText(cell('ses')),
-      task: parseText(cell('task')),
-      run: parseText(cell('run')),
+      ...makeScanKey(key.datatype, key.entities),
       filename: parseText(cell('filename')),
       channel: parseText(cell('channel')),
       signalType: parseText(cell('signal_type')),

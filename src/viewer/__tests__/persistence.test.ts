@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { lastViewedKey, saveLastViewed, readLastViewed, resumeFrom } from '../persistence';
 import type { LastViewed } from '../persistence';
+import { parseScanId } from '@/data/scan-key';
 
 /** Minimal in-memory Storage */
 function memoryStorage(): Storage {
@@ -26,10 +27,7 @@ const throwingStorage = {
   },
 } as unknown as Storage;
 
-const scans = [
-  { sub: '01', ses: '01', task: 'rest', run: '01' },
-  { sub: '02', ses: '01', task: 'rest', run: '01' },
-];
+const scans = [parseScanId('func/sub-01_ses-01_task-rest_run-01')!, parseScanId('func/sub-02_ses-01_task-rest_run-01')!];
 
 const saved: LastViewed = {
   ...scans[1],
@@ -80,8 +78,13 @@ describe('resumeFrom', () => {
   });
 
   it('returns null when the saved scan is no longer in the dataset', () => {
-    expect(resumeFrom({ ...saved, sub: '99' }, scans)).toBeNull();
+    expect(resumeFrom({ ...saved, id: 'func/sub-99_ses-01_task-rest_run-01' }, scans)).toBeNull();
     expect(resumeFrom(null, scans)).toBeNull();
+  });
+
+  it('ignores entries saved before scans had ids', () => {
+    const { id: _id, ...old } = saved;
+    expect(resumeFrom(old as unknown as LastViewed, scans)).toBeNull();
   });
 
   it('treats entries saved before stacked channels existed as an empty stack', () => {

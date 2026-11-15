@@ -1,4 +1,4 @@
-import { DATASET_JSON_NAME, METRICS_TSV_NAME, WAVEFORMS_DIR, parseQualityTsv, scanId } from './metrics-tsv';
+import { DATASET_JSON_NAME, METRICS_TSV_NAME, WAVEFORMS_DIR, parseQualityTsv, waveformFileName } from './metrics-tsv';
 import type { DatasetQualityFile, QualityRow, ScanKeyLike, WaveformFile } from './metrics-tsv';
 import { RUN_LOG_NAME, parseLastRun } from './run-log';
 import type { QualityRun } from './run-log';
@@ -87,7 +87,6 @@ export async function saveReport(pdf: Blob): Promise<ReportStatus> {
 }
 
 export async function fetchWaveforms(dataset: string, scan: ScanKeyLike): Promise<WaveformFile | null> {
-  return fetchJson<WaveformFile>(
-    `${QUALITY_BASE}/${encodeURIComponent(dataset)}/${WAVEFORMS_DIR}/${scanId(scan)}_waveforms.json`,
-  );
+  const file = waveformFileName(scan).split('/').map(encodeURIComponent).join('/');
+  return fetchJson<WaveformFile>(`${QUALITY_BASE}/${encodeURIComponent(dataset)}/${WAVEFORMS_DIR}/${file}`);
 }
