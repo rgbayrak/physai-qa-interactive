@@ -23,6 +23,7 @@ function metricsFor(columns: Record<string, number[]>): Record<string, ChannelMe
   const names = Object.keys(columns);
   const raw: PhysioRaw = {
     filename: 'synthetic_physio.tsv.gz',
+    datatype: 'func',
     samplingFrequency: FS,
     startTime: 0,
     timing: { status: 'unverified', detail: '', offset: 0, triggerTimes: [] },

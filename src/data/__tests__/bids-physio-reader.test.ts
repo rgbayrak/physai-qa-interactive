@@ -11,6 +11,7 @@ import type { PhysioRaw, ConfoundsRaw } from '../bids-physio-reader';
 function makeRaw(overrides?: Partial<PhysioRaw>): PhysioRaw {
   return {
     filename: 'test_physio.tsv.gz',
+    datatype: 'func',
     samplingFrequency: 100,
     startTime: 0,
     timing: { status: 'unverified', detail: '', offset: 0, triggerTimes: [] },

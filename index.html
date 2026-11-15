@@ -561,6 +561,8 @@
       <label>Session <select id="session-select"></select></label>
       <label>Task <select id="task-select"></select></label>
       <label id="run-label" style="display:none">Run <select id="run-select"></select></label>
+      <!-- Shown only when several scans share sub/ses/task/run (e.g. physio in func/ and eeg/) -->
+      <label id="variant-label" style="display:none"><span id="variant-heading">Scan</span> <select id="variant-select"></select></label>
       <label>Channel <select id="channel-select"></select></label>
       <!-- TRIAL: peaks from a physprep-style events file, shown only when the channel has some (src/viewer/peaks-trial.ts) -->
       <label id="peaks-label" class="peaks-toggle" style="display:none">

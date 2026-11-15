@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { lastViewedKey, readLastViewed, saveLastViewed } from '@/viewer/persistence';
+import { parseScanId } from '@/data/scan-key';
 import { shareScanWithViewer, viewerScan } from '../linked-scan';
 
 /** Minimal in-memory Storage for Node */
@@ -18,24 +19,27 @@ function memoryStorage(): Storage {
 }
 
 const NAME = 'DMT-HAR-MED';
+const scan = (id: string) => parseScanId(id)!;
 
 describe('scan shared with Explore and Annotate', () => {
   it('reads the scan the viewer last showed for this dataset', () => {
     const store = memoryStorage();
     saveLastViewed(
       lastViewedKey(NAME),
-      { sub: '03', ses: '02', task: 'rest', run: '', channel: 'cardiac', confound: 'framewise_displacement' },
+      { ...scan('eeg/sub-03_ses-02_task-rest'), channel: 'cardiac', confound: 'framewise_displacement' },
       store,
     );
-    expect(viewerScan(NAME, store)).toEqual({ sub: '03', ses: '02', task: 'rest', run: '' });
+    expect(viewerScan(NAME, store)).toEqual(scan('eeg/sub-03_ses-02_task-rest'));
     // another dataset's entry is not used
     expect(viewerScan('Other dataset', store)).toBeNull();
   });
 
-  it('returns null when nothing was saved or the entry is malformed', () => {
+  it('returns null when nothing was saved, the entry is malformed, or it has no scan id (older entry)', () => {
     const store = memoryStorage();
     expect(viewerScan(NAME, store)).toBeNull();
     store.setItem(lastViewedKey(NAME), '{"channel":"cardiac"}');
+    expect(viewerScan(NAME, store)).toBeNull();
+    store.setItem(lastViewedKey(NAME), '{"sub":"01","ses":"","task":"rest","run":"","channel":"cardiac"}');
     expect(viewerScan(NAME, store)).toBeNull();
   });
 
@@ -44,10 +48,7 @@ describe('scan shared with Explore and Annotate', () => {
     saveLastViewed(
       lastViewedKey(NAME),
       {
-        sub: '01',
-        ses: '01',
-        task: 'rest',
-        run: '',
+        ...scan('func/sub-01_ses-01_task-rest'),
         channel: 'respiratory',
         confound: 'dvars',
         event: 'trial_type',
@@ -55,12 +56,9 @@ describe('scan shared with Explore and Annotate', () => {
       },
       store,
     );
-    shareScanWithViewer(NAME, { sub: '05', ses: '02', task: 'rest', run: '' }, store);
+    shareScanWithViewer(NAME, scan('func/sub-05_ses-02_task-rest_acq-mb'), store);
     expect(readLastViewed(lastViewedKey(NAME), store)).toEqual({
-      sub: '05',
-      ses: '02',
-      task: 'rest',
-      run: '',
+      ...scan('func/sub-05_ses-02_task-rest_acq-mb'),
       channel: 'respiratory',
       confound: 'dvars',
       event: 'trial_type',
@@ -70,17 +68,14 @@ describe('scan shared with Explore and Annotate', () => {
 
   it('writes a usable entry when the viewer has none yet', () => {
     const store = memoryStorage();
-    shareScanWithViewer(null, { sub: '02', ses: '', task: 'motor', run: '' }, store);
+    shareScanWithViewer(null, scan('func/sub-02_task-motor'), store);
     expect(readLastViewed(lastViewedKey(null), store)).toEqual({
-      sub: '02',
-      ses: '',
-      task: 'motor',
-      run: '',
+      ...scan('func/sub-02_task-motor'),
       channel: '',
       confound: '',
       event: '',
       stacked: [],
     });
-    expect(viewerScan(null, store)).toEqual({ sub: '02', ses: '', task: 'motor', run: '' });
+    expect(viewerScan(null, store)).toEqual(scan('func/sub-02_task-motor'));
   });
 });

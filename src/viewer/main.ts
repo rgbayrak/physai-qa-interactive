@@ -31,8 +31,9 @@ import type { PhysioFileCount } from '@/data/bids-physio-reader';
 import type { BidsStructure } from '@/data/bids-structure';
 import {
   populateSelect,
-  populateTasks,
-  populateRuns,
+  firstScanFor,
+  showScanInSelects,
+  scanInSelects,
   renderStackControls,
   validStacked,
   toggleStacked,
@@ -56,6 +57,7 @@ import { fetchServedDataset, fetchDatasetQuality } from '@/quality/data';
 import { createScatterPanel } from '@/quality/scatter-panel';
 import { parseScanHash, statsUrl } from '@/quality/route';
 import { scanId, sameScanKey } from '@/quality/metrics-tsv';
+import { timeReference } from '@/data/scan-key';
 
 // Entry point: owns the DOM, the state object and the live charts, and wires
 // user events to the modules that do the work.
@@ -78,14 +80,9 @@ function setLoading(msg: string) {
   els.loading.textContent = msg;
 }
 
-/** Scan currently chosen in the dropdowns (run is '' for run-less scans) */
+/** Scan currently shown in the dropdowns; the loaded one, or the first, if they name none */
 function selectedScan(): ScanEntry {
-  return {
-    sub: els.subjectSelect.value,
-    ses: els.sessionSelect.value,
-    task: els.taskSelect.value,
-    run: els.runSelect.value ?? '',
-  };
+  return scanInSelects(els, state.scans) ?? state.current ?? state.scans[0];
 }
 
 function rememberLastViewed() {
@@ -168,7 +165,7 @@ els.firstUnannotatedBtn.addEventListener('click', () => {
 });
 
 async function loadSavedAnnotations(scan: ScanEntry, channel: string) {
-  const stored = await fetchAnnotations(scan.sub, scan.ses, scan.task, scan.run, channel).catch(() => null);
+  const stored = await fetchAnnotations(scan, channel).catch(() => null);
   if (!stored) return;
   // Discard if the scan or channel changed while the request was in flight
   if (!state.current || !sameScanKey(state.current, scan) || channel !== els.channelSelect.value) return;
@@ -326,6 +323,7 @@ function rebuildEvents(events: EventsRaw, raw: PhysioRaw) {
     events,
     column: els.eventsSelect.value,
     xDomain: focusContext ? focusContext.getXDomain() : getViewExtent(raw),
+    axisLabel: timeReference(raw.datatype ?? 'func').axisLabel,
   });
 }
 
@@ -360,11 +358,11 @@ async function loadPhysio(scan: ScanEntry) {
   setLoading('Loading...');
   try {
     const [raw, confounds, events, peaks] = await Promise.all([
-      fetchPhysioRaw(scan.sub, scan.ses, scan.task, scan.run),
-      fetchConfounds(scan.sub, scan.ses, scan.task, scan.run),
-      // Rest has no task events; a missing events file is not an error
-      isRestTask(scan.task) ? null : fetchEvents(scan.sub, scan.ses, scan.task, scan.run).catch(() => null),
-      fetchPeaks(scan.sub, scan.ses, scan.task, scan.run).catch(() => null), // TRIAL
+      fetchPhysioRaw(scan),
+      fetchConfounds(scan),
+      // Rest (or no task) has no task events; a missing events file is not an error
+      !scan.task || isRestTask(scan.task) ? null : fetchEvents(scan).catch(() => null),
+      fetchPeaks(scan).catch(() => null), // TRIAL
     ]);
     state.raw = raw;
     state.confounds = confounds;
@@ -433,13 +431,9 @@ async function loadPhysio(scan: ScanEntry) {
   }
 }
 
-async function goToScan(scan: ScanEntry) {
-  els.subjectSelect.value = scan.sub;
-  const info = state.subjects.find((s) => s.id === scan.sub)!;
-  populateSelect(els.sessionSelect, info.sessions, scan.ses);
-  await populateTasks(els.taskSelect, scan.sub, scan.ses, scan.task);
-  await populateRuns(els, scan.sub, scan.ses, scan.task, scan.run);
-  loadPhysio(scan);
+function goToScan(scan: ScanEntry) {
+  showScanInSelects(els, state.scans, scan);
+  return loadPhysio(scan);
 }
 
 function step(delta: number) {
@@ -448,28 +442,25 @@ function step(delta: number) {
 
 // ── Event wiring ────────────────────────────────────────
 
-els.subjectSelect.addEventListener('change', async () => {
-  const sub = els.subjectSelect.value;
-  const info = state.subjects.find((s) => s.id === sub);
-  if (!info) return;
-  populateSelect(els.sessionSelect, info.sessions);
-  await populateTasks(els.taskSelect, sub, els.sessionSelect.value);
-  await populateRuns(els, sub, els.sessionSelect.value, els.taskSelect.value);
-  loadPhysio(selectedScan());
+// Changing Subject, Session, Task or Run opens the first scan under the new
+// choice (hierarchy order); the Datatype / Scan dropdown opens the one picked
+const levelSelects = [
+  [els.subjectSelect, 'sub'],
+  [els.sessionSelect, 'ses'],
+  [els.taskSelect, 'task'],
+  [els.runSelect, 'run'],
+] as const;
+levelSelects.forEach(([select, level], i) => {
+  select.addEventListener('change', () => {
+    // Levels above keep the loaded scan's values; this one takes the new choice
+    const wanted = { ...selectedScan() };
+    for (const [s, l] of levelSelects.slice(0, i + 1)) wanted[l] = s.value;
+    const scan = firstScanFor(state.scans, wanted, level);
+    if (scan) void goToScan(scan);
+  });
 });
 
-els.sessionSelect.addEventListener('change', async () => {
-  await populateTasks(els.taskSelect, els.subjectSelect.value, els.sessionSelect.value);
-  await populateRuns(els, els.subjectSelect.value, els.sessionSelect.value, els.taskSelect.value);
-  loadPhysio(selectedScan());
-});
-
-els.taskSelect.addEventListener('change', async () => {
-  await populateRuns(els, els.subjectSelect.value, els.sessionSelect.value, els.taskSelect.value);
-  loadPhysio(selectedScan());
-});
-
-els.runSelect.addEventListener('change', () => loadPhysio(selectedScan()));
+els.variantSelect.addEventListener('change', () => void goToScan(selectedScan()));
 
 els.channelSelect.addEventListener('change', () => {
   if (state.raw) {
@@ -616,12 +607,7 @@ async function init() {
     setLoading('No scans with readable physio files in this dataset.');
     return;
   }
-  populateSelect(els.subjectSelect, subjects.map((s) => s.id), first.sub);
-  const firstInfo = subjects.find((s) => s.id === first.sub)!;
-  populateSelect(els.sessionSelect, firstInfo.sessions, first.ses);
-  await populateTasks(els.taskSelect, first.sub, first.ses, first.task);
-  await populateRuns(els, first.sub, first.ses, first.task, first.run);
-  await loadPhysio(first);
+  await goToScan(first);
 }
 
 init().catch((err) => setLoading(`Error: ${err}`));

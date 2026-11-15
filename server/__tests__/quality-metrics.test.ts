@@ -38,7 +38,7 @@ describe('runQualityMetrics (bids-sessions fixture)', () => {
 
   const allRaw = () => {
     const index = buildBidsIndex({ bidsRoot: root });
-    return buildScans(index).map((s) => ({ scan: s, raw: readPhysio(index, s.sub, s.ses, s.task, s.run)! }));
+    return buildScans(index).map((s) => ({ scan: s, raw: readPhysio(index, s.id)! }));
   };
 
   it('writes one row per scan and physiological channel, in scan order', () => {
@@ -66,6 +66,7 @@ describe('runQualityMetrics (bids-sessions fixture)', () => {
     const text = readFileSync(join(outDir, METRICS_TSV_NAME), 'utf-8');
     expect(text.split('\n')[0].split('\t')).toEqual(TSV_HEADER);
     expect(parseQualityTsv(text)).toEqual(rows);
+    expect(rows[0]).toMatchObject({ id: 'func/sub-01_ses-01_task-rest_run-01', datatype: 'func' });
     expect(rows.find((r) => r.channel === 'cardiac')!.signalType).toBe('cardiac');
     expect(rows.find((r) => r.channel === 'respiratory')!.signalType).toBe('respiratory');
   });
@@ -113,7 +114,7 @@ describe('runQualityMetrics (bids-sessions fixture)', () => {
   it('writes a waveform envelope per scan', () => {
     const { outDir } = runQualityMetrics({ dataDir: FIXTURES, dataset: 'bids-sessions', outRoot: out, buckets: 100 });
     const wf = JSON.parse(
-      readFileSync(join(outDir, WAVEFORMS_DIR, 'sub-01_ses-01_task-rest_run-01_waveforms.json'), 'utf-8'),
+      readFileSync(join(outDir, WAVEFORMS_DIR, 'func', 'sub-01_ses-01_task-rest_run-01_waveforms.json'), 'utf-8'),
     );
     expect(wf.samplingFrequency).toBe(50);
     expect(wf.times).toHaveLength(100);
@@ -134,7 +135,7 @@ describe('runQualityMetrics (bids-nosessions fixture)', () => {
     const { rows, summary } = runQualityMetrics({ dataDir: FIXTURES, dataset: 'bids-nosessions', outRoot: out });
     expect(summary.nScans).toBe(2);
     expect(rows.every((r) => r.ses === '' && r.run === '')).toBe(true);
-    expect(rows.map((r) => scanId(r))).toContain('sub-01_task-motor');
+    expect(rows.map((r) => scanId(r))).toContain('func/sub-01_task-motor');
   });
 });
 
@@ -239,7 +240,7 @@ describe('participants', () => {
 
 describe('waveformFile', () => {
   it('maps bucket centres onto the scan-onset axis', () => {
-    const raw = readPhysio(buildBidsIndex({ bidsRoot: join(FIXTURES, 'bids-nosessions') }), '01', '', 'motor', '')!;
+    const raw = readPhysio(buildBidsIndex({ bidsRoot: join(FIXTURES, 'bids-nosessions') }), 'func/sub-01_task-motor')!;
     const wf = waveformFile(raw, 10);
     expect(wf.times).toHaveLength(10);
     const firstCentre = (Math.floor(raw.numSamples / 10) - 1) / 2;

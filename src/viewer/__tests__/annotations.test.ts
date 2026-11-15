@@ -3,8 +3,9 @@ import { createAnnotation, toAnnotationsFile, fromAnnotationsFile, waveformAsses
 import type { AnnotationsFile } from '@/data/bids-physio-reader';
 import { annotationListHtml, EMPTY_ANNOTATIONS_HTML, progressColor } from '../annotation-panel';
 import { escapeHtml } from '@/utils/html';
+import { parseScanId } from '@/data/scan-key';
 
-const scan = { sub: '01', ses: '02', task: 'rest', run: '01' };
+const scan = parseScanId('func/sub-01_ses-02_task-rest_run-01')!;
 
 describe('createAnnotation', () => {
   it('uses the brushed window and trims the label', () => {
@@ -30,7 +31,16 @@ describe('stored annotation format', () => {
 
   it('stores onset, duration and sample indices at the sampling rate', () => {
     const file = toAnnotationsFile(annotations, scan, 'cardiac', 100);
-    expect(file).toMatchObject({ ...scan, channel: 'cardiac', sampling_rate: 100 });
+    expect(file).toMatchObject({
+      scan: 'func/sub-01_ses-02_task-rest_run-01',
+      datatype: 'func',
+      sub: '01',
+      ses: '02',
+      task: 'rest',
+      run: '01',
+      channel: 'cardiac',
+      sampling_rate: 100,
+    });
     expect(file.annotations[0]).toEqual({
       id: 'a',
       onset_s: 1.5,
@@ -73,7 +83,9 @@ describe('whole-waveform rating and comment', () => {
   });
 
   it('read files saved before they existed, and ignore unknown ratings', () => {
-    const old = { ...scan, channel: 'cardiac', sampling_rate: 100, annotations: [] } as AnnotationsFile;
+    const old = { ...toAnnotationsFile([], scan, 'cardiac', 100) } as AnnotationsFile;
+    delete old.waveform_quality;
+    delete old.waveform_comment;
     expect(waveformAssessmentFromFile(old)).toEqual({ quality: null, comment: '' });
     const odd = { ...old, waveform_quality: 'great' } as unknown as AnnotationsFile;
     expect(waveformAssessmentFromFile(odd).quality).toBeNull();

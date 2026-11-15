@@ -1,5 +1,12 @@
 import type { DescriptionNotice } from './dataset-notice';
 import type { BidsStructure } from './bids-structure';
+import type { ScanKeyLike } from './scan-key';
+
+/** A scan: datatype folder plus entities, with its id (src/data/scan-key.ts) */
+export type ScanEntry = ScanKeyLike;
+
+/** ?scan=<id> for the per-scan API routes */
+const scanQuery = (scan: ScanEntry) => `scan=${encodeURIComponent(scan.id)}`;
 
 export interface SubjectInfo {
   id: string;
@@ -13,13 +20,15 @@ interface ChannelQuality {
 
 export interface PhysioRaw {
   filename: string;
+  /** Datatype folder of the physio file ('' outside one): what t = 0 is (timeReference, src/data/scan-key.ts) */
+  datatype: string;
   samplingFrequency: number;
   /**
    * Rate in the file. Above samplingFrequency when the server downsampled a
    * high-rate recording (server/downsample.ts); absent in older responses.
    */
   originalSamplingFrequency?: number;
-  /** Time (s) of the first sample relative to scan onset (t = 0 = first volume) */
+  /** Time (s) of the first sample relative to t = 0: the first BOLD volume for func/, else the first sample of the datatype's data */
   startTime: number;
   /** How startTime was established and whether trigger pulses confirm it */
   timing: PhysioTiming;
@@ -43,13 +52,6 @@ export interface PhysioTiming {
 export interface DataPoint {
   time: number;
   value: number;
-}
-
-export interface ScanEntry {
-  sub: string;
-  ses: string;
-  task: string;
-  run: string;
 }
 
 export async function fetchSubjects(): Promise<SubjectInfo[]> {
@@ -95,21 +97,9 @@ export async function fetchScans(): Promise<ScanEntry[]> {
   return json.scans;
 }
 
-export async function fetchTasks(sub: string, ses: string): Promise<string[]> {
-  const res = await fetch(`/api/bids/tasks?sub=${sub}&ses=${ses}`);
-  const json = await res.json();
-  return json.tasks;
-}
-
-export async function fetchRuns(sub: string, ses: string, task: string): Promise<string[]> {
-  const res = await fetch(`/api/bids/runs?sub=${sub}&ses=${ses}&task=${task}`);
-  const json = await res.json();
-  return json.runs;
-}
-
-export async function fetchPhysioRaw(sub: string, ses: string, task: string, run: string): Promise<PhysioRaw> {
-  const res = await fetch(`/api/bids/physio?sub=${sub}&ses=${ses}&task=${task}&run=${run}`);
-  if (!res.ok) throw new Error(`Failed to fetch physio for sub-${sub} ses-${ses} task-${task} run-${run}`);
+export async function fetchPhysioRaw(scan: ScanEntry): Promise<PhysioRaw> {
+  const res = await fetch(`/api/bids/physio?${scanQuery(scan)}`);
+  if (!res.ok) throw new Error(`Failed to fetch physio for ${scan.id}`);
   return res.json();
 }
 
@@ -152,20 +142,16 @@ export interface ConfoundsRaw {
   columns: Record<string, number[]>;
 }
 
-export async function fetchConfounds(
-  sub: string,
-  ses: string,
-  task: string,
-  run: string,
-): Promise<ConfoundsRaw | null> {
-  const res = await fetch(`/api/bids/confounds?sub=${sub}&ses=${ses}&task=${task}&run=${run}`);
+/** Motion confounds; null when there are none (always for physio outside func/) */
+export async function fetchConfounds(scan: ScanEntry): Promise<ConfoundsRaw | null> {
+  const res = await fetch(`/api/bids/confounds?${scanQuery(scan)}`);
   if (!res.ok) return null;
   return res.json();
 }
 
 export interface EventsRaw {
   filename: string;
-  /** Event onsets (s) from the first volume, on the same axis as the physio signal */
+  /** Event onsets (s) from t = 0, on the same axis as the physio signal */
   onset: number[];
   /** Event durations (s); 0 when n/a */
   duration: number[];
@@ -173,8 +159,8 @@ export interface EventsRaw {
   columns: Record<string, string[]>;
 }
 
-export async function fetchEvents(sub: string, ses: string, task: string, run: string): Promise<EventsRaw | null> {
-  const res = await fetch(`/api/bids/events?sub=${sub}&ses=${ses}&task=${task}&run=${run}`);
+export async function fetchEvents(scan: ScanEntry): Promise<EventsRaw | null> {
+  const res = await fetch(`/api/bids/events?${scanQuery(scan)}`);
   if (!res.ok) return null;
   return res.json();
 }
@@ -190,8 +176,8 @@ export interface PeaksRaw {
   corrected: boolean[];
 }
 
-export async function fetchPeaks(sub: string, ses: string, task: string, run: string): Promise<PeaksRaw | null> {
-  const res = await fetch(`/api/bids/peaks?sub=${sub}&ses=${ses}&task=${task}&run=${run}`);
+export async function fetchPeaks(scan: ScanEntry): Promise<PeaksRaw | null> {
+  const res = await fetch(`/api/bids/peaks?${scanQuery(scan)}`);
   if (!res.ok) return null;
   return res.json();
 }
@@ -235,6 +221,9 @@ export interface AnnotationsFile {
   waveform_quality?: WaveformQuality | null;
   /** Whole-waveform quality analysis comment; absent in older files */
   waveform_comment?: string;
+  /** Scan id: the server finds the file by it and writes the fields below from it */
+  scan: string;
+  datatype: string;
   sub: string;
   ses: string;
   task: string;
@@ -244,16 +233,8 @@ export interface AnnotationsFile {
   annotations: StoredAnnotation[];
 }
 
-export async function fetchAnnotations(
-  sub: string,
-  ses: string,
-  task: string,
-  run: string,
-  channel: string,
-): Promise<AnnotationsFile | null> {
-  const res = await fetch(
-    `/api/bids/annotations?sub=${sub}&ses=${ses}&task=${task}&run=${run}&channel=${encodeURIComponent(channel)}`,
-  );
+export async function fetchAnnotations(scan: ScanEntry, channel: string): Promise<AnnotationsFile | null> {
+  const res = await fetch(`/api/bids/annotations?${scanQuery(scan)}&channel=${encodeURIComponent(channel)}`);
   if (!res.ok) return null;
   return res.json();
 }

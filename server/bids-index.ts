@@ -1,6 +1,8 @@
 import { accessSync, constants, readdirSync, readFileSync } from 'fs';
 import type { Dirent } from 'fs';
 import { basename, dirname, join, relative, sep } from 'path';
+import { makeScanKey, scanEntities } from '../src/data/scan-key';
+import type { ScanKeyLike } from '../src/data/scan-key';
 
 // One walk over the BIDS folders, done once at start-up. Files are found by
 // their names wherever they sit (any datatype folder, extra levels, raw or
@@ -81,7 +83,7 @@ export interface IndexRoots {
 export interface DuplicatePhysio {
   /** The file loaded for the scan */
   chosen: IndexedFile;
-  /** Other readable physio files with the same sub/ses/task/run (e.g. recording-…), not loaded yet */
+  /** Other readable physio files of the same scan (recording-…, desc-…), not loaded yet */
   others: IndexedFile[];
 }
 
@@ -94,10 +96,10 @@ export interface BidsIndex extends IndexRoots {
   files: IndexedFile[];
   /** Files by kind, sub and ses ('' when the name has none) */
   byKey: Map<string, IndexedFile[]>;
-  /** The physio file loaded for each scan, by scanKey(sub, ses, task, run) */
+  /** The physio file loaded for each scan, by scan id (scanOf(file).id) */
   scans: Map<string, IndexedFile>;
   duplicates: DuplicatePhysio[];
-  /** Readable physio without a sub- or task- entity: not a scan yet */
+  /** Readable physio without a sub- entity: not a scan */
   unkeyed: IndexedFile[];
   stats: {
     dirs: number;
@@ -157,9 +159,15 @@ export function entitiesMatch(sub: Record<string, string>, sup: Record<string, s
   return Object.entries(sub).every(([k, v]) => k in sup && sameLabel(k, v, sup[k]));
 }
 
-/** Map key of a scan; '' for no session or no run */
-export function scanKey(sub: string, ses: string, task: string, run: string): string {
-  return [sub, ses, task, normRun(run)].join('\0');
+/** The scan a physio file belongs to: its datatype folder and entities without recording- and desc- */
+export function scanOf(file: IndexedFile): ScanKeyLike {
+  return makeScanKey(file.datatype ?? '', scanEntities(file.entities));
+}
+
+/** Grouping key of a scan: like its id, but run compared as a number (run-1 and run-01 are one scan) */
+function groupKey(scan: ScanKeyLike): string {
+  const parts = Object.entries(scan.entities).map(([k, v]) => `${k}-${k === 'run' ? normRun(v) : v}`);
+  return [scan.datatype, ...parts].join('\0');
 }
 
 const fileKey = (kind: FileKind, sub: string, ses: string) => `${kind}\0${sub}\0${ses}`;
@@ -299,40 +307,38 @@ export function buildBidsIndex(roots: IndexRoots): BidsIndex {
   };
 }
 
-/** Preference among physio files of one scan: func folder first, then desc-preproc, then name, then path */
+/** Preference among physio files of one scan (same datatype folder): desc-preproc first, then name, then path */
 function physioPreference(a: IndexedFile, b: IndexedFile): number {
-  const func = Number(b.datatype === 'func') - Number(a.datatype === 'func');
-  if (func) return func;
   const preproc = Number(b.entities.desc === 'preproc') - Number(a.entities.desc === 'preproc');
   if (preproc) return preproc;
   return byNumeric(a.name, b.name) || byNumeric(a.path, b.path);
 }
 
 /**
- * One physio file per sub/ses/task/run: readable files with sub- and task-.
- * The others of a scan (several recording- files, the same run in two
- * datatype folders) are kept in duplicates for the log.
+ * One physio file per scan (see scanOf): readable files with a sub- entity.
+ * Physio in two datatype folders (func/ and eeg/ in EEG-fMRI) is two scans;
+ * the other files of one scan (several recording- files, a desc-preproc copy)
+ * are kept in duplicates for the log.
  */
 function selectScanFiles(files: IndexedFile[]) {
   const groups = new Map<string, IndexedFile[]>();
   const unkeyed: IndexedFile[] = [];
   for (const f of files) {
     if (f.kind !== 'physio' || !f.readable) continue;
-    const { sub, ses = '', task, run = '' } = f.entities;
-    if (!sub || !task) {
+    if (!f.entities.sub) {
       unkeyed.push(f);
       continue;
     }
-    const key = scanKey(sub, ses, task, run);
+    const key = groupKey(scanOf(f));
     const list = groups.get(key);
     if (list) list.push(f);
     else groups.set(key, [f]);
   }
   const scans = new Map<string, IndexedFile>();
   const duplicates: DuplicatePhysio[] = [];
-  for (const [key, list] of groups) {
+  for (const list of groups.values()) {
     const [chosen, ...others] = [...list].sort(physioPreference);
-    scans.set(key, chosen);
+    scans.set(scanOf(chosen).id, chosen);
     if (others.length) duplicates.push({ chosen, others });
   }
   return { scans, duplicates, unkeyed };
@@ -424,7 +430,7 @@ export function indexSummaryLines(index: BidsIndex): string[] {
   if (index.stats.physioEvents) lines.push(`${index.stats.physioEvents} physioevents files recognised and skipped`);
   if (index.unkeyed.length) {
     lines.push(
-      `${index.unkeyed.length} physio files without sub- or task- not loaded (e.g. ${relative(index.unkeyed[0].root, index.unkeyed[0].path)})`,
+      `${index.unkeyed.length} physio files without sub- not loaded (e.g. ${relative(index.unkeyed[0].root, index.unkeyed[0].path)})`,
     );
   }
   for (const d of index.duplicates) {

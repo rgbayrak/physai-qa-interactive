@@ -1,4 +1,5 @@
 import { lastViewedKey, readLastViewed, saveLastViewed } from '@/viewer/persistence';
+import { parseScanId, toScanKey } from '@/data/scan-key';
 import type { ScanKeyLike } from './metrics-tsv';
 
 // Shares the scan between Stats and Explore and Annotate through the viewer's
@@ -13,8 +14,8 @@ import type { ScanKeyLike } from './metrics-tsv';
 /** Scan last shown in Explore and Annotate for this dataset, if any */
 export function viewerScan(datasetName: string | null, store?: Storage | null): ScanKeyLike | null {
   const saved = readLastViewed(lastViewedKey(datasetName), store);
-  if (!saved || typeof saved.sub !== 'string' || typeof saved.task !== 'string') return null;
-  return { sub: saved.sub, ses: saved.ses ?? '', task: saved.task, run: saved.run ?? '' };
+  // Entries saved before scans had ids (sub/ses/task/run only) are ignored
+  return saved && typeof saved.id === 'string' ? parseScanId(saved.id) : null;
 }
 
 /**
@@ -28,10 +29,7 @@ export function shareScanWithViewer(datasetName: string | null, scan: ScanKeyLik
   saveLastViewed(
     key,
     {
-      sub: scan.sub,
-      ses: scan.ses,
-      task: scan.task,
-      run: scan.run,
+      ...toScanKey(scan),
       channel: prev?.channel ?? '',
       confound: prev?.confound ?? '',
       event: prev?.event ?? '',

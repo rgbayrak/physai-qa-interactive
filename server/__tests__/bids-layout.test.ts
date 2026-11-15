@@ -1,15 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'path';
 import { existsSync } from 'fs';
-import {
-  getSubjects,
-  getTasks,
-  getRuns,
-  findPhysioFiles,
-  readPhysio,
-  buildScans,
-} from '../bids-layout';
+import { getSubjects, findPhysioFiles, readPhysio, buildScans } from '../bids-layout';
 import { buildBidsIndex } from '../bids-index';
+import { parseScanId } from '../../src/data/scan-key';
 
 /**
  * Dataset-agnostic BIDS layout test suite.
@@ -34,10 +28,18 @@ const datasets = [
   { name: 'ds000210', root: join(BASE, 'ds000210') },
 ].filter((d) => existsSync(d.root));
 
+const byNumeric = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true });
+
 describe.each(datasets)('BIDS layout: $name', ({ root: bidsRoot }) => {
-  // Index and discover subjects once per dataset; all subsequent tests derive from this.
+  // Index and discover once per dataset; all subsequent tests derive from this.
   const root = buildBidsIndex({ bidsRoot });
   const subjects = getSubjects(root);
+  const scans = buildScans(root);
+  const tasksOf = (sub: string, ses: string) => [
+    ...new Set(scans.filter((s) => s.sub === sub && s.ses === ses).map((s) => s.task)),
+  ];
+  const runsOf = (sub: string, ses: string, task: string) =>
+    scans.filter((s) => s.sub === sub && s.ses === ses && s.task === task && s.run !== '').map((s) => s.run);
 
   it('discovers at least one subject with readable physio', () => {
     expect(subjects.length).toBeGreaterThan(0);
@@ -51,55 +53,34 @@ describe.each(datasets)('BIDS layout: $name', ({ root: bidsRoot }) => {
       const hasSessions = subj.sessions[0].length > 0;
       if (hasSessions) {
         expect(subj.sessions.every((s) => s.length > 0)).toBe(true);
-        // Sorted
-        const sorted = [...subj.sessions].sort((a, b) =>
-          a.localeCompare(b, undefined, { numeric: true }),
-        );
-        expect(subj.sessions).toEqual(sorted);
+        expect(subj.sessions).toEqual([...subj.sessions].sort(byNumeric));
       } else {
         expect(subj.sessions).toEqual(['']);
       }
     }
   });
 
-  it('every subject/session pair yields at least one task', () => {
+  it('every subject/session pair yields at least one scan, tasks in sorted order', () => {
     for (const subj of subjects) {
       for (const ses of subj.sessions) {
-        const tasks = getTasks(root, subj.id, ses);
+        const tasks = tasksOf(subj.id, ses);
         expect(tasks.length).toBeGreaterThan(0);
-        // Tasks should be sorted strings
-        const sorted = [...tasks].sort((a, b) =>
-          a.localeCompare(b, undefined, { numeric: true }),
-        );
-        expect(tasks).toEqual(sorted);
+        expect(tasks).toEqual([...tasks].sort(byNumeric));
       }
     }
   });
 
-  it('getRuns returns a sorted array (possibly empty) for every task', () => {
+  it('runs of a task come in sorted order', () => {
     const first = subjects[0];
     const ses = first.sessions[0];
-    const tasks = getTasks(root, first.id, ses);
-    for (const task of tasks) {
-      const runs = getRuns(root, first.id, ses, task);
-      expect(Array.isArray(runs)).toBe(true);
-      if (runs.length > 0) {
-        const sorted = [...runs].sort((a, b) =>
-          a.localeCompare(b, undefined, { numeric: true }),
-        );
-        expect(runs).toEqual(sorted);
-      }
+    for (const task of tasksOf(first.id, ses)) {
+      const runs = runsOf(first.id, ses, task);
+      expect(runs).toEqual([...runs].sort(byNumeric));
     }
   });
 
   it('findPhysioFiles locates a .tsv.gz and a .json sidecar for the first scan', () => {
-    const first = subjects[0];
-    const ses = first.sessions[0];
-    const task = getTasks(root, first.id, ses)[0];
-    const runs = getRuns(root, first.id, ses, task);
-    const run = runs.length > 0 ? runs[0] : '';
-
-    const found = findPhysioFiles(root, first.id, ses, task, run);
+    const found = findPhysioFiles(root, scans[0].id);
     expect(found).not.toBeNull();
     expect(found!.tsvGzPath).toMatch(/\.tsv\.gz$/);
     expect(found!.sidecarPath).not.toBeNull();
@@ -107,13 +88,7 @@ describe.each(datasets)('BIDS layout: $name', ({ root: bidsRoot }) => {
   });
 
   it('readPhysio returns consistent column data for the first scan', () => {
-    const first = subjects[0];
-    const ses = first.sessions[0];
-    const task = getTasks(root, first.id, ses)[0];
-    const runs = getRuns(root, first.id, ses, task);
-    const run = runs.length > 0 ? runs[0] : '';
-
-    const result = readPhysio(root, first.id, ses, task, run);
+    const result = readPhysio(root, scans[0].id);
     expect(result).not.toBeNull();
     expect(result!.samplingFrequency).toBeGreaterThan(0);
     expect(result!.columns.length).toBeGreaterThan(0);
@@ -124,22 +99,14 @@ describe.each(datasets)('BIDS layout: $name', ({ root: bidsRoot }) => {
     }
   });
 
-  it('buildScans produces a scan for every subject/session/task/run combination', () => {
-    const scans = buildScans(root);
+  it('every scan has a sub, an id that parses back to it, and a findable physio file', () => {
     expect(scans.length).toBeGreaterThan(0);
-
     for (const scan of scans) {
       expect(scan.sub).toBeTruthy();
-      expect(scan.task).toBeTruthy();
-      // ses can be '' (session-less); run can be '' (no runs)
-      expect(typeof scan.ses).toBe('string');
-      expect(typeof scan.run).toBe('string');
+      // ses, task and run can be '' (session-less, no task, no runs)
+      expect(parseScanId(scan.id)).toEqual(scan);
+      expect(findPhysioFiles(root, scan.id)).not.toBeNull();
     }
-
-    // Verify round-trip: every scan's physio files should be findable
-    const sample = scans[0];
-    const found = findPhysioFiles(root, sample.sub, sample.ses, sample.task, sample.run);
-    expect(found).not.toBeNull();
   });
 
   it('within a dataset, sessions are uniformly present or absent', () => {
@@ -156,15 +123,13 @@ describe.each(datasets)('BIDS layout: $name', ({ root: bidsRoot }) => {
     // with the same task also have runs (or also don't).
     const first = subjects[0];
     const ses = first.sessions[0];
-    const task = getTasks(root, first.id, ses)[0];
-    const firstRuns = getRuns(root, first.id, ses, task);
-    const expectRuns = firstRuns.length > 0;
+    const task = tasksOf(first.id, ses)[0];
+    const expectRuns = runsOf(first.id, ses, task).length > 0;
 
     for (const subj of subjects) {
       for (const s of subj.sessions) {
-        const tasks = getTasks(root, subj.id, s);
-        if (!tasks.includes(task)) continue;
-        const runs = getRuns(root, subj.id, s, task);
+        if (!tasksOf(subj.id, s).includes(task)) continue;
+        const runs = runsOf(subj.id, s, task);
         if (expectRuns) {
           expect(runs.length).toBeGreaterThan(0);
         } else {

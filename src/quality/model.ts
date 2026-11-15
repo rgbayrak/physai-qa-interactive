@@ -1,6 +1,7 @@
 import { SQI_COLUMNS, formatMetricValue } from './metric-columns';
 import { escapeHtml } from '@/utils/html';
 import { METRIC_COLUMNS, sameScanKey, scanId } from './metrics-tsv';
+import { toScanKey } from '../data/scan-key';
 import type { MetricKey, QualityRow, ScanKeyLike, ParticipantsTable } from './metrics-tsv';
 import { finiteValues } from './stats';
 import { runSentence } from './run-log';
@@ -91,7 +92,7 @@ export function formatMetric(value: number, key: MetricKey): string {
 export function uniqueScans(rows: QualityRow[]): ScanKeyLike[] {
   const out: ScanKeyLike[] = [];
   for (const r of rows) {
-    if (!out.some((s) => sameScanKey(s, r))) out.push({ sub: r.sub, ses: r.ses, task: r.task, run: r.run });
+    if (!out.some((s) => sameScanKey(s, r))) out.push(toScanKey(r));
   }
   return out;
 }

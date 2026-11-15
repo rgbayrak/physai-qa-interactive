@@ -3,6 +3,7 @@ import type { ChartInstance, BrushHandle } from '@/core';
 import { pointer } from 'd3-selection';
 import { toDataPoints, getViewExtent, getValueExtent } from '@/data/bids-physio-reader';
 import type { PhysioRaw, DataPoint } from '@/data/bids-physio-reader';
+import { timeReference } from '@/data/scan-key';
 import type { Annotation } from '../annotations';
 import {
   CHART_WIDTH,
@@ -64,6 +65,8 @@ export function buildFocusContext(opts: FocusContextOptions): FocusContextHandle
   const data = toDataPoints(raw, channel);
   const timeExtent = getViewExtent(raw);
   const valueExtent = getValueExtent(raw, channel);
+  // What t = 0 is depends on the physio file's datatype folder (first BOLD volume for func/)
+  const t0 = timeReference(raw.datatype ?? 'func');
 
   const focus = createChart({
     container: '#focus-chart',
@@ -72,7 +75,7 @@ export function buildFocusContext(opts: FocusContextOptions): FocusContextHandle
     margin: { top: 20, bottom: 40, ...CHART_MARGIN_X },
     xScale: { type: 'linear', domain: timeExtent },
     yScale: { type: 'linear', domain: valueExtent, nice: true },
-    xAxis: { position: 'bottom', label: 'Time from scan onset (s)' },
+    xAxis: { position: 'bottom', label: t0.axisLabel },
     yAxis: { position: 'left', label: channel },
     grid: {
       x: { strokeColor: '#e0e0e0', opacity: 0.5 },
@@ -121,7 +124,7 @@ export function buildFocusContext(opts: FocusContextOptions): FocusContextHandle
     fitYToVisible(focus, visible);
     drawLine(focusLinePath, focus, visible);
     drawOverlay(); // after fitYToVisible, so the marks use the new y scale
-    drawOnsetMarker(focus, focusOnsetGroup, true);
+    drawOnsetMarker(focus, focusOnsetGroup, true, t0.marker);
   }
 
   function drawOverlay() {

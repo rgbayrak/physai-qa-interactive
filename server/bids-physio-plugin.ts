@@ -4,8 +4,6 @@ import type { Plugin } from 'vite';
 import { METRICS_TSV_NAME, REPORT_PDF_NAME } from '../src/quality/metrics-tsv';
 import {
   getSubjects,
-  getTasks,
-  getRuns,
   readPhysio,
   readConfounds,
   readEvents,
@@ -14,11 +12,10 @@ import {
   writeAnnotations,
   buildScans,
   readDatasetInfo,
-  validateScanKey,
   validateChannel,
   annotationProgress,
 } from './bids-layout';
-import type { AnnotationsFile, ScanKey } from './bids-layout';
+import type { AnnotationsFile } from './bids-layout';
 import { buildBidsIndex, indexSummaryLines } from './bids-index';
 import type { BidsIndex } from './bids-index';
 import { countPhysioFiles } from './availability';
@@ -29,13 +26,26 @@ import { descriptionNoticeLines, noticeText } from '../src/data/dataset-notice';
 import { structureLine, structureText } from '../src/data/bids-structure';
 import type { ServerResponse } from 'http';
 
-/** Reply 400 and return true if any identifier is unsafe to put in a file path */
-function rejectInvalid(res: ServerResponse, key: ScanKey): boolean {
-  const error = validateScanKey(key);
-  if (!error) return false;
-  res.statusCode = 400;
+function replyError(res: ServerResponse, status: number, error: string): void {
+  res.statusCode = status;
   res.end(JSON.stringify({ error }));
-  return true;
+}
+
+/**
+ * The scan id given in the request (`scan`, e.g. func/sub-01_task-rest_run-01)
+ * when it names a scan in the index; otherwise reply 400 (missing) or 404
+ * (unknown) and return null. Only ids from the index are used from here on.
+ */
+function knownScan(res: ServerResponse, scan: string | null | undefined): string | null {
+  if (!scan) {
+    replyError(res, 400, 'Missing scan parameter');
+    return null;
+  }
+  if (!INDEX.scans.has(scan)) {
+    replyError(res, 404, `Unknown scan: ${JSON.stringify(scan)}`);
+    return null;
+  }
+  return scan;
 }
 
 // BIDS_ROOT is always the main BIDS folder (dataset_description.json,
@@ -107,7 +117,8 @@ const QUALITY_ROOT = join(DATA_DIR, 'quality');
 /** Largest PDF report the server accepts (one page per scan; JPEG pages) */
 const MAX_REPORT_BYTES = 500 * 1024 * 1024;
 
-// Annotations are grouped per dataset: <annotations>/<dataset>/sub-XX/[ses-YY/]func/
+// Annotations are grouped per dataset, in each physio file's folder relative to
+// its dataset: <annotations>/<dataset>/sub-XX/[ses-YY/]<datatype>/
 // (set in resolveRoots, once the dataset is known)
 let ANNOTATIONS_ROOT = '';
 
@@ -182,125 +193,48 @@ export function bidsPhysioPlugin(): Plugin {
           return;
         }
 
-        if (req.url?.startsWith('/api/bids/tasks')) {
-          const url = new URL(req.url, 'http://localhost');
-          const sub = url.searchParams.get('sub');
-          const ses = url.searchParams.get('ses') ?? '';
-          if (!sub) {
-            res.statusCode = 400;
-            res.end(JSON.stringify({ error: 'Missing sub parameter' }));
-            return;
-          }
-          if (rejectInvalid(res, { sub, ses })) return;
-          res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify({ tasks: getTasks(INDEX, sub, ses) }));
-          return;
-        }
-
-        if (req.url?.startsWith('/api/bids/runs')) {
-          const url = new URL(req.url, 'http://localhost');
-          const sub = url.searchParams.get('sub');
-          const ses = url.searchParams.get('ses') ?? '';
-          const task = url.searchParams.get('task');
-          if (!sub || !task) {
-            res.statusCode = 400;
-            res.end(JSON.stringify({ error: 'Missing sub or task parameter' }));
-            return;
-          }
-          if (rejectInvalid(res, { sub, ses, task })) return;
-          res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify({ runs: getRuns(INDEX, sub, ses, task) }));
-          return;
-        }
-
+        // Per-scan data, each named by ?scan=<id> (see knownScan)
         if (req.url?.startsWith('/api/bids/physio')) {
-          const url = new URL(req.url, 'http://localhost');
-          const sub = url.searchParams.get('sub');
-          const ses = url.searchParams.get('ses') ?? '';
-          const task = url.searchParams.get('task');
-          const run = url.searchParams.get('run') ?? '';
-
-          if (!sub || !task) {
-            res.statusCode = 400;
-            res.end(JSON.stringify({ error: 'Missing sub or task parameter' }));
-            return;
-          }
-          if (rejectInvalid(res, { sub, ses, task, run })) return;
-
-          const result = readPhysio(INDEX, sub, ses, task, run);
+          const scan = knownScan(res, new URL(req.url, 'http://localhost').searchParams.get('scan'));
+          if (!scan) return;
+          const result = readPhysio(INDEX, scan);
           if (!result) {
-            res.statusCode = 404;
-            res.end(JSON.stringify({ error: 'Physio file not found' }));
+            replyError(res, 404, 'Physio sidecar not found or without Columns and SamplingFrequency');
             return;
           }
-
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify(result));
           return;
         }
 
         if (req.url?.startsWith('/api/bids/confounds')) {
-          const url = new URL(req.url, 'http://localhost');
-          const sub = url.searchParams.get('sub');
-          const ses = url.searchParams.get('ses') ?? '';
-          const task = url.searchParams.get('task');
-          const run = url.searchParams.get('run') ?? '';
-
-          if (!sub || !task) {
-            res.statusCode = 400;
-            res.end(JSON.stringify({ error: 'Missing sub or task parameter' }));
-            return;
-          }
-          if (rejectInvalid(res, { sub, ses, task, run })) return;
-
-          // Many scans have no fMRIPrep confounds: that is not an error, so
-          // reply null (200) rather than 404, which the browser logs as a failure
-          const result = readConfounds(INDEX, sub, ses, task, run);
+          const scan = knownScan(res, new URL(req.url, 'http://localhost').searchParams.get('scan'));
+          if (!scan) return;
+          // Many scans have no fMRIPrep confounds (and physio outside func/ has
+          // none): not an error, so reply null (200) rather than 404, which the
+          // browser logs as a failure
           res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify(result ?? null));
+          res.end(JSON.stringify(readConfounds(INDEX, scan) ?? null));
           return;
         }
 
         if (req.url?.startsWith('/api/bids/events')) {
-          const url = new URL(req.url, 'http://localhost');
-          const sub = url.searchParams.get('sub');
-          const ses = url.searchParams.get('ses') ?? '';
-          const task = url.searchParams.get('task');
-          const run = url.searchParams.get('run') ?? '';
-
-          if (!sub || !task) {
-            res.statusCode = 400;
-            res.end(JSON.stringify({ error: 'Missing sub or task parameter' }));
-            return;
-          }
-          if (rejectInvalid(res, { sub, ses, task, run })) return;
-
+          const scan = knownScan(res, new URL(req.url, 'http://localhost').searchParams.get('scan'));
+          if (!scan) return;
           // Events come from the raw datasets (BIDS_ROOT first), never the derivatives.
           // No events file (e.g. rest) is not an error: reply null (200), not 404
-          const result = readEvents(INDEX, sub, ses, task, run);
           res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify(result ?? null));
+          res.end(JSON.stringify(readEvents(INDEX, scan) ?? null));
           return;
         }
 
         // TRIAL: detected/corrected peaks from the events file in the physio
         // file's own dataset (e.g. physprep/). null if none.
         if (req.url?.startsWith('/api/bids/peaks')) {
-          const url = new URL(req.url, 'http://localhost');
-          const sub = url.searchParams.get('sub');
-          const ses = url.searchParams.get('ses') ?? '';
-          const task = url.searchParams.get('task');
-          const run = url.searchParams.get('run') ?? '';
-
-          if (!sub || !task) {
-            res.statusCode = 400;
-            res.end(JSON.stringify({ error: 'Missing sub or task parameter' }));
-            return;
-          }
-          if (rejectInvalid(res, { sub, ses, task, run })) return;
-
+          const scan = knownScan(res, new URL(req.url, 'http://localhost').searchParams.get('scan'));
+          if (!scan) return;
           res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify(readPeaks(INDEX, sub, ses, task, run) ?? null));
+          res.end(JSON.stringify(readPeaks(INDEX, scan) ?? null));
           return;
         }
 
@@ -315,29 +249,40 @@ export function bidsPhysioPlugin(): Plugin {
             return;
           }
           res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify(annotationProgress(ANNOTATIONS_ROOT, scans, channel)));
+          res.end(JSON.stringify(annotationProgress(ANNOTATIONS_ROOT, INDEX, scans, channel)));
           return;
         }
 
         if (req.url?.startsWith('/api/bids/annotations')) {
           if (req.method === 'GET') {
             const url = new URL(req.url, 'http://localhost');
-            const sub = url.searchParams.get('sub');
-            const ses = url.searchParams.get('ses') ?? '';
-            const task = url.searchParams.get('task');
-            const run = url.searchParams.get('run') ?? '';
+            const scan = knownScan(res, url.searchParams.get('scan'));
+            if (!scan) return;
             const channel = url.searchParams.get('channel');
-
-            if (!sub || !task || !channel) {
-              res.statusCode = 400;
-              res.end(JSON.stringify({ error: 'Missing sub, task, or channel parameter' }));
+            const error = channel ? validateChannel(channel) : 'Missing channel parameter';
+            if (error || !channel) {
+              replyError(res, 400, error ?? 'Missing channel parameter');
               return;
             }
-            if (rejectInvalid(res, { sub, ses, task, run, channel })) return;
 
-            const result = readAnnotations(ANNOTATIONS_ROOT, sub, ses, task, run, channel);
+            const result = readAnnotations(ANNOTATIONS_ROOT, INDEX, scan, channel);
+            const key = scans.find((s) => s.id === scan)!;
             res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify(result ?? { sub, ses, task, run, channel, sampling_rate: 0, annotations: [] }));
+            res.end(
+              JSON.stringify(
+                result ?? {
+                  scan,
+                  datatype: key.datatype,
+                  sub: key.sub,
+                  ses: key.ses,
+                  task: key.task,
+                  run: key.run,
+                  channel,
+                  sampling_rate: 0,
+                  annotations: [],
+                },
+              ),
+            );
             return;
           }
 
@@ -347,14 +292,13 @@ export function bidsPhysioPlugin(): Plugin {
             req.on('end', () => {
               try {
                 const payload = JSON.parse(body) as AnnotationsFile;
-                if (!payload.sub || !payload.task || !payload.channel) {
-                  res.statusCode = 400;
-                  res.end(JSON.stringify({ error: 'Missing sub, task, or channel in payload' }));
+                if (!knownScan(res, typeof payload.scan === 'string' ? payload.scan : null)) return;
+                const error = typeof payload.channel === 'string' ? validateChannel(payload.channel) : 'Missing channel in payload';
+                if (error) {
+                  replyError(res, 400, error);
                   return;
                 }
-                const { sub, ses, task, run, channel } = payload;
-                if (rejectInvalid(res, { sub, ses: ses ?? '', task, run: run ?? '', channel })) return;
-                writeAnnotations(ANNOTATIONS_ROOT, payload);
+                writeAnnotations(ANNOTATIONS_ROOT, INDEX, payload);
                 res.setHeader('Content-Type', 'application/json');
                 res.end(JSON.stringify({ ok: true }));
               } catch {
