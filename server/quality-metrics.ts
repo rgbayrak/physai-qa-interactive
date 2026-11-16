@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
-import { getSubjects, buildScans, readPhysio, readDatasetInfo, isReadable, findPhysioFiles } from './bids-layout';
-import type { ScanEntry } from './bids-layout';
+import { getSubjects, buildScans, readPhysio, readDatasetInfo, isReadable, findRecordings } from './bids-layout';
+import type { Recording, ScanEntry } from './bids-layout';
 import { buildBidsIndex, indexSummaryLines } from './bids-index';
 import type { BidsIndex, IndexRoots } from './bids-index';
 import { descriptionNoticeLines, noticeText } from '../src/data/dataset-notice';
@@ -35,7 +35,8 @@ import type {
 // input files: scans are in sorted order and nothing time- or machine-specific
 // is written.
 
-type PhysioResult = NonNullable<ReturnType<typeof readPhysio>>;
+/** One recording of a scan, as readPhysio gives it */
+type PhysioResult = Recording;
 
 /** Buckets per channel in the waveform envelopes */
 const WAVEFORM_BUCKETS = 2000;
@@ -68,7 +69,7 @@ export function resolveDatasetPaths(
 }
 
 interface PhysioChannels {
-  /** The scan with only its physiological columns */
+  /** The recording with only its physiological columns */
   raw: PhysioResult;
   /** Signal type of each kept column, same order as raw.columns; null when the name is not known */
   signals: (SignalType | null)[];
@@ -95,7 +96,7 @@ export function physioChannels(raw: PhysioResult): PhysioChannels {
   return { raw: { ...raw, columns, data }, signals, excluded };
 }
 
-/** One row per physiological channel of a scan; non-physio columns (e.g. trigger) get no row */
+/** One row per physiological channel of one recording of a scan; non-physio columns (e.g. trigger) get no row */
 export function scanQualityRows(scan: ScanEntry, fullRaw: PhysioResult): QualityRow[] {
   const { raw, signals } = physioChannels(fullRaw);
   const { metrics } = computeSQI(raw);
@@ -106,6 +107,7 @@ export function scanQualityRows(scan: ScanEntry, fullRaw: PhysioResult): Quality
     for (const c of METRIC_COLUMNS) values[c.key] = m[c.key];
     return {
       ...toScanKey(scan),
+      recording: raw.recording,
       filename: raw.filename,
       channel,
       signalType: signals[i] ?? '',
@@ -120,7 +122,7 @@ export function scanQualityRows(scan: ScanEntry, fullRaw: PhysioResult): Quality
   });
 }
 
-/** Min/max envelope of every physiological channel, on the scan-onset time axis */
+/** Min/max envelope of every physiological channel of one recording, on the scan's t = 0 axis */
 export function waveformFile(fullRaw: PhysioResult, buckets = WAVEFORM_BUCKETS): WaveformFile {
   const { raw } = physioChannels(fullRaw);
   const fs = raw.samplingFrequency;
@@ -194,12 +196,12 @@ function readParticipants(bidsRoot: string): ParticipantsTable | null {
 const byNumeric = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true });
 
 /**
- * Units of a scan's columns from its inherited physio sidecar, where it
+ * Units of a recording's columns from its inherited physio sidecar, where it
  * describes a column as an object with a string "Units" (e.g. "cardiac": {"Units": "mV"}).
  */
-function readChannelUnits(index: BidsIndex, scan: ScanEntry): Record<string, string> {
+function readChannelUnits(index: BidsIndex, scan: ScanEntry, recording: string): Record<string, string> {
   try {
-    const sidecar = findPhysioFiles(index, scan.id)?.sidecar;
+    const sidecar = findRecordings(index, scan.id).find((r) => r.recording === recording)?.sidecar;
     if (!sidecar) return {};
     const units: Record<string, string> = {};
     for (const [key, value] of Object.entries(sidecar)) {
@@ -211,6 +213,9 @@ function readChannelUnits(index: BidsIndex, scan: ScanEntry): Record<string, str
     return {};
   }
 }
+
+/** A scan or one of its recordings, for the log and failedScans: func/sub-01_task-rest (recording-cardiac) */
+const recordingLabel = (id: string, recording: string) => (recording ? `${id} (recording-${recording})` : id);
 
 interface QualityRunOptions {
   /** Folder holding the datasets, normally <project>/data */
@@ -274,48 +279,70 @@ export function runQualityMetrics(opts: QualityRunOptions): QualityRunResult {
   const tasks = new Set<string>();
   const rates = new Set<number>();
   const subjectsWithRows = new Set<string>();
+  /** Scans with at least one row; failedScans also lists single recordings, so it is not the count of failed scans */
+  let scansWithRows = 0;
+  /** Recordings (physio files) with at least one row */
+  let physioWithRows = 0;
   const excludedCounts = new Map<string, { reason: string; scans: number }>();
   const channelUnits = new Map<string, string>();
 
   scans.forEach((scan, i) => {
     const id = scanId(scan);
     try {
-      const raw = readPhysio(index, scan.id);
-      if (!raw) {
+      const physio = readPhysio(index, scan.id);
+      if (!physio) {
         failedScans.push({ scan: id, reason: 'physio file or sidecar not found' });
         log(`  [${i + 1}/${scans.length}] ${id}: skipped (physio file or sidecar not found)`);
         return;
       }
-      const { excluded } = physioChannels(raw);
-      for (const e of excluded) {
-        const prev = excludedCounts.get(e.channel);
-        excludedCounts.set(e.channel, { reason: e.reason, scans: (prev?.scans ?? 0) + 1 });
+      for (const s of physio.skipped) {
+        failedScans.push({ scan: `${id} (${s.filename})`, reason: s.reason });
+        log(`  [${i + 1}/${scans.length}] ${id}: ${s.filename} skipped (${s.reason})`);
       }
-      const scanRows = scanQualityRows(scan, raw);
-      if (scanRows.length === 0) {
-        failedScans.push({ scan: id, reason: 'no physiological channels' });
-        log(`  [${i + 1}/${scans.length}] ${id}: skipped (no physiological channels in ${raw.columns.join(', ')})`);
+      // Excluded channels are counted once per scan, whichever recordings have them
+      const excludedHere = new Map<string, string>();
+      let scanHasRows = false;
+      for (const raw of physio.recordings) {
+        const label = recordingLabel(id, raw.recording);
+        const { excluded } = physioChannels(raw);
+        for (const e of excluded) excludedHere.set(e.channel, e.reason);
+        const recordingRows = scanQualityRows(scan, raw);
+        if (recordingRows.length === 0) {
+          failedScans.push({ scan: label, reason: 'no physiological channels' });
+          log(`  [${i + 1}/${scans.length}] ${label}: skipped (no physiological channels in ${raw.columns.join(', ')})`);
+          continue;
+        }
+        scanHasRows = true;
+        physioWithRows++;
+        rows.push(...recordingRows);
+        recordingRows.forEach((r) => channels.add(r.channel));
+        // First unit seen for a channel wins (scans are in sorted order, so this is deterministic)
+        const units = readChannelUnits(index, scan, raw.recording);
+        for (const r of recordingRows) {
+          if (units[r.channel] && !channelUnits.has(r.channel)) channelUnits.set(r.channel, units[r.channel]);
+        }
+        rates.add(raw.samplingFrequency);
+        const wavePath = join(waveDir, waveformFileName(scan, raw.recording));
+        mkdirSync(dirname(wavePath), { recursive: true });
+        writeFileSync(wavePath, JSON.stringify(waveformFile(raw, opts.buckets)));
+        const skipped = excluded.length ? ` (excluded: ${excluded.map((e) => e.channel).join(', ')})` : '';
+        const downsampled =
+          raw.originalSamplingFrequency !== raw.samplingFrequency
+            ? ` (downsampled ${raw.originalSamplingFrequency} → ${raw.samplingFrequency} Hz)`
+            : '';
+        log(`  [${i + 1}/${scans.length}] ${label}: ${recordingRows.map((r) => r.channel).join(', ')}${skipped}${downsampled}`);
+      }
+      for (const [channel, reason] of excludedHere) {
+        const prev = excludedCounts.get(channel);
+        excludedCounts.set(channel, { reason, scans: (prev?.scans ?? 0) + 1 });
+      }
+      if (!scanHasRows) {
+        if (!failedScans.some((f) => f.scan === id)) failedScans.push({ scan: id, reason: 'no physiological channels' });
         return;
       }
-      rows.push(...scanRows);
-      scanRows.forEach((r) => channels.add(r.channel));
-      // First unit seen for a channel wins (scans are in sorted order, so this is deterministic)
-      const units = readChannelUnits(index, scan);
-      for (const r of scanRows) {
-        if (units[r.channel] && !channelUnits.has(r.channel)) channelUnits.set(r.channel, units[r.channel]);
-      }
       if (scan.task) tasks.add(scan.task);
-      rates.add(raw.samplingFrequency);
       subjectsWithRows.add(scan.sub);
-      const wavePath = join(waveDir, waveformFileName(scan));
-      mkdirSync(dirname(wavePath), { recursive: true });
-      writeFileSync(wavePath, JSON.stringify(waveformFile(raw, opts.buckets)));
-      const skipped = excluded.length ? ` (excluded: ${excluded.map((e) => e.channel).join(', ')})` : '';
-      const downsampled =
-        raw.originalSamplingFrequency !== raw.samplingFrequency
-          ? ` (downsampled ${raw.originalSamplingFrequency} → ${raw.samplingFrequency} Hz)`
-          : '';
-      log(`  [${i + 1}/${scans.length}] ${id}: ${scanRows.map((r) => r.channel).join(', ')}${skipped}${downsampled}`);
+      scansWithRows++;
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
       failedScans.push({ scan: id, reason });
@@ -327,7 +354,8 @@ export function runQualityMetrics(opts: QualityRunOptions): QualityRunResult {
     dataset: paths.dataset,
     info,
     nSubjects: subjectsWithRows.size,
-    nScans: scans.length - failedScans.length,
+    nScans: scansWithRows,
+    nPhysio: physioWithRows,
     channels: [...channels].sort(byNumeric),
     tasks: [...tasks].sort(byNumeric),
     samplingFrequencies: [...rates].sort((a, b) => a - b),

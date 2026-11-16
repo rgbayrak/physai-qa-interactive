@@ -16,7 +16,7 @@ import {
   annotationProgress,
 } from './bids-layout';
 import type { AnnotationsFile } from './bids-layout';
-import { buildBidsIndex, indexSummaryLines } from './bids-index';
+import { buildBidsIndex, indexSummaryLines, recordingOf, scanRecordings } from './bids-index';
 import type { BidsIndex } from './bids-index';
 import { countPhysioFiles } from './availability';
 import { checkStructure } from './bids-structure';
@@ -46,6 +46,13 @@ function knownScan(res: ServerResponse, scan: string | null | undefined): string
     return null;
   }
   return scan;
+}
+
+/** True when `recording` ('' for a file without a recording- label) is a recording of the scan; else reply 404 */
+function knownRecording(res: ServerResponse, scan: string, recording: string): boolean {
+  if (scanRecordings(INDEX, scan).some((f) => recordingOf(f) === recording)) return true;
+  replyError(res, 404, `Unknown recording of ${scan}: ${JSON.stringify(recording)}`);
+  return false;
 }
 
 // BIDS_ROOT is always the main BIDS folder (dataset_description.json,
@@ -248,8 +255,10 @@ export function bidsPhysioPlugin(): Plugin {
             res.end(JSON.stringify({ error }));
             return;
           }
+          // recording: only for a channel name two recordings share (e.g. respiratory of belt1)
+          const recording = url.searchParams.get('recording') ?? undefined;
           res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify(annotationProgress(ANNOTATIONS_ROOT, INDEX, scans, channel)));
+          res.end(JSON.stringify(annotationProgress(ANNOTATIONS_ROOT, INDEX, scans, channel, recording)));
           return;
         }
 
@@ -265,7 +274,9 @@ export function bidsPhysioPlugin(): Plugin {
               return;
             }
 
-            const result = readAnnotations(ANNOTATIONS_ROOT, INDEX, scan, channel);
+            const recording = url.searchParams.get('recording') ?? '';
+            if (!knownRecording(res, scan, recording)) return;
+            const result = readAnnotations(ANNOTATIONS_ROOT, INDEX, scan, recording, channel);
             const key = scans.find((s) => s.id === scan)!;
             res.setHeader('Content-Type', 'application/json');
             res.end(
@@ -277,6 +288,7 @@ export function bidsPhysioPlugin(): Plugin {
                   ses: key.ses,
                   task: key.task,
                   run: key.run,
+                  recording,
                   channel,
                   sampling_rate: 0,
                   annotations: [],
@@ -292,7 +304,9 @@ export function bidsPhysioPlugin(): Plugin {
             req.on('end', () => {
               try {
                 const payload = JSON.parse(body) as AnnotationsFile;
-                if (!knownScan(res, typeof payload.scan === 'string' ? payload.scan : null)) return;
+                const scan = knownScan(res, typeof payload.scan === 'string' ? payload.scan : null);
+                if (!scan) return;
+                if (!knownRecording(res, scan, typeof payload.recording === 'string' ? payload.recording : '')) return;
                 const error = typeof payload.channel === 'string' ? validateChannel(payload.channel) : 'Missing channel in payload';
                 if (error) {
                   replyError(res, 400, error);

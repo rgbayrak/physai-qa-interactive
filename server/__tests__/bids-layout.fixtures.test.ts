@@ -5,6 +5,7 @@ import { dirname, join } from 'path';
 import {
   getSubjects,
   findPhysioFiles,
+  findRecordings,
   readPhysio,
   readConfounds,
   readEvents,
@@ -94,7 +95,7 @@ describe('fixture: bids-sessions layout', () => {
 });
 
 describe('fixture: bids-sessions physio and timing', () => {
-  const read = (sub: string, ses: string) => readPhysio(SES, `func/sub-${sub}_ses-${ses}_task-rest_run-01`)!;
+  const read = (sub: string, ses: string) => readPhysio(SES, `func/sub-${sub}_ses-${ses}_task-rest_run-01`)!.recordings[0];
 
   it('says which datatype folder the physio file is in', () => {
     expect(read('01', '01').datatype).toBe('func');
@@ -266,7 +267,7 @@ describe('physio stored outside the main BIDS folder', () => {
 
   it('reads BOLD timing and events from the main folder', () => {
     const idx = index(main, { physioRoot: phys });
-    expect(readPhysio(idx, 'func/sub-01_task-motor')!.timing.status).toBe('verified'); // TR from main/task-motor_bold.json
+    expect(readPhysio(idx, 'func/sub-01_task-motor')!.recordings[0].timing.status).toBe('verified'); // TR from main/task-motor_bold.json
     expect(readEvents(idx, 'func/sub-01_task-motor')?.filename).toBe('sub-01_task-motor_events.tsv');
     expect(readDatasetInfo(idx).name).toBe('Synthetic physio fixture (no sessions)');
     expect(readConfounds(idx, 'func/sub-01_task-motor')).toBeNull(); // no derivatives anywhere
@@ -275,11 +276,15 @@ describe('physio stored outside the main BIDS folder', () => {
   it("prefers the main folder's BOLD sidecars over the physio folder's", () => {
     writeFileSync(join(phys, 'task-motor_bold.json'), JSON.stringify({ RepetitionTime: 3 }));
     // main has TR 2, which the triggers match
-    expect(readPhysio(index(main, { physioRoot: phys }), 'func/sub-01_task-motor')!.timing.status).toBe('verified');
+    expect(readPhysio(index(main, { physioRoot: phys }), 'func/sub-01_task-motor')!.recordings[0].timing.status).toBe(
+      'verified',
+    );
     // without main's sidecar, the physio folder's TR 3 is used, and the triggers do not match it
     const empty = join(dir, 'empty');
     mkdirSync(empty, { recursive: true });
-    expect(readPhysio(index(empty, { physioRoot: phys }), 'func/sub-01_task-motor')!.timing.status).toBe('mismatch');
+    expect(readPhysio(index(empty, { physioRoot: phys }), 'func/sub-01_task-motor')!.recordings[0].timing.status).toBe(
+      'mismatch',
+    );
     rmSync(join(phys, 'task-motor_bold.json'));
   });
 });
@@ -349,7 +354,7 @@ describe('index: found by content, not folder names', () => {
     expect(idx.duplicates.map((d) => d.others.map((o) => o.path))).toEqual([
       [join(main, 'two', 'sub-01', 'func', 'sub-01_task-x_physio.tsv.gz')],
     ]);
-    expect(indexSummaryLines(idx).join('\n')).toContain('same scan not loaded yet: two/sub-01/func/sub-01_task-x_physio.tsv.gz');
+    expect(indexSummaryLines(idx).join('\n')).toContain('same recording not loaded: two/sub-01/func/sub-01_task-x_physio.tsv.gz');
   });
 });
 
@@ -393,7 +398,7 @@ describe('fixture: bids-nosessions', () => {
   });
 
   it('sub-01: skips the TSV header row and verifies triggers against top-level task-motor_bold.json', () => {
-    const r = readPhysio(NOSES, 'func/sub-01_task-motor')!;
+    const r = readPhysio(NOSES, 'func/sub-01_task-motor')!.recordings[0];
     expect(r.numSamples).toBe(N_SAMPLES);
     expect(r.data[0].every((v) => Number.isFinite(v))).toBe(true);
     expect(r.timing.status).toBe('verified');
@@ -402,7 +407,7 @@ describe('fixture: bids-nosessions', () => {
   it('sub-02: inherits the top-level task-motor_physio.json', () => {
     const found = findPhysioFiles(NOSES, 'func/sub-02_task-motor');
     expect(found?.sidecarPath).toBe(join(NOSES_ROOT, 'task-motor_physio.json'));
-    const r = readPhysio(NOSES, 'func/sub-02_task-motor')!;
+    const r = readPhysio(NOSES, 'func/sub-02_task-motor')!.recordings[0];
     expect(r.columns).toEqual(['cardiac', 'respiratory']);
     expect(r.timing.status).toBe('unverified');
   });
@@ -423,6 +428,44 @@ describe('fixture: bids-nosessions', () => {
         mainMissing: null,
       },
     });
+  });
+});
+
+describe('fixture: bids-recordings (one scan split into recording- files)', () => {
+  const REC_ROOT = join(FIXTURES, 'bids-recordings');
+  const REC = index(REC_ROOT);
+  const ID = 'func/sub-01_task-rest';
+
+  it('is one scan with every recording loaded, in label order, none left over', () => {
+    expect(buildScans(REC).map((s) => s.id)).toEqual([ID]);
+    expect(findRecordings(REC, ID).map((r) => r.recording)).toEqual(['belt', 'cardiac', 'resp']);
+    expect(REC.duplicates).toEqual([]);
+    expect(indexSummaryLines(REC).join('\n')).toContain('1 scans split into recording- files');
+  });
+
+  it('gives each recording its own sidecar: rate, StartTime, columns', () => {
+    const { recordings, skipped } = readPhysio(REC, ID)!;
+    expect(skipped).toEqual([]);
+    const by = Object.fromEntries(recordings.map((r) => [r.recording, r]));
+    expect([by.cardiac.samplingFrequency, by.cardiac.startTime, by.cardiac.numSamples]).toEqual([50, -2, 1100]);
+    expect([by.resp.samplingFrequency, by.resp.startTime, by.resp.numSamples]).toEqual([25, -1, 525]);
+    expect(by.resp.columns).toEqual(['respiratory', 'trigger']);
+    expect([by.belt.samplingFrequency, by.belt.startTime, by.belt.numSamples]).toEqual([100, 0, 2000]);
+    expect(by.belt.columns).toEqual(['respiratory']);
+  });
+
+  it('checks each recording with a trigger against the BOLD TR on its own time base', () => {
+    const by = Object.fromEntries(readPhysio(REC, ID)!.recordings.map((r) => [r.recording, r]));
+    expect(by.cardiac.timing.status).toBe('verified');
+    expect(by.resp.timing.status).toBe('verified');
+    expect(by.resp.timing.triggerTimes[0]).toBeCloseTo(0, 9);
+    expect(by.belt.timing.status).toBe('unverified'); // no trigger column
+  });
+
+  it('finds one recording by label, and nothing for a label the scan does not have', () => {
+    expect(findPhysioFiles(REC, ID, 'resp')?.tsvGzName).toBe('sub-01_task-rest_recording-resp_physio.tsv.gz');
+    expect(findPhysioFiles(REC, ID, '')).toBeNull();
+    expect(findPhysioFiles(REC, ID)?.recording).toBe('belt'); // the first when not given
   });
 });
 

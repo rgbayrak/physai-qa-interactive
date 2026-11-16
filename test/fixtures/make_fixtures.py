@@ -26,6 +26,15 @@ bids-nosessions/    no sessions, no runs
           task events (two trial types, a numeric column, an n/a duration);
           MRIQC multi-echo derivatives (echo-1 is used)
   sub-02  top-level task-motor_physio.json (inherited), no trigger -> unverified
+
+bids-recordings/    one func scan split into recording-<label> files (BIDS: signals
+                    with different sampling rates or devices MUST be in separate files)
+  sub-01 task-rest  recording-cardiac  50 Hz, StartTime -2, cardiac + trigger -> verified
+                    recording-resp     25 Hz, StartTime -1, respiratory + trigger -> verified
+                    recording-belt     a second respiratory belt (another device), 100 Hz,
+                    StartTime 0, respiratory only; shares the column name with
+                    recording-resp -> unverified (no trigger)
+                    top-level task-rest_bold.json (TR 2 s); no confounds
 """
 
 from __future__ import annotations
@@ -244,8 +253,57 @@ def make_nosessions(root: Path) -> None:
     write_gz(root / "sub-02" / "func" / "sub-02_task-motor_physio.tsv.gz", physio_tsv(None))
 
 
+def recording_tsv(fs: float, start: float, signal, with_trigger: bool) -> str:
+    """One signal column (signal(t)) and optionally a 0/1 trigger at every volume onset, sampled at fs from start to the scan end"""
+    n = int((N_VOLUMES * TR - start) * fs)
+    width = max(1, round(PULSE_S * fs))
+    starts = {round((t - start) * fs) for t in trigger_onsets()}
+    high = {s + j for s in starts for j in range(width)}
+    lines = []
+    for i in range(n):
+        row = [f"{signal(start + i / fs):.4f}"]
+        if with_trigger:
+            row.append("1" if i in high else "0")
+        lines.append("\t".join(row))
+    return "\n".join(lines) + "\n"
+
+
+def make_recordings(root: Path) -> None:
+    write_json(root / "dataset_description.json", {
+        "Name": "Synthetic physio fixture (recordings)",
+        "BIDSVersion": "1.10.0",
+    })
+    write_json(root / "task-rest_bold.json", {"RepetitionTime": TR, "TaskName": "rest"})
+    func = root / "sub-01" / "func"
+    prefix = "sub-01_task-rest"
+
+    # Cardiac at 50 Hz from 2 s before the scan, respiratory at 25 Hz from 1 s before
+    write_gz(func / f"{prefix}_recording-cardiac_physio.tsv.gz",
+             recording_tsv(50.0, -2.0, lambda t: math.sin(2 * math.pi * 1.2 * t), True))
+    write_json(func / f"{prefix}_recording-cardiac_physio.json",
+               {"SamplingFrequency": 50.0, "StartTime": -2.0, "Columns": ["cardiac", "trigger"]})
+    write_gz(func / f"{prefix}_recording-resp_physio.tsv.gz",
+             recording_tsv(25.0, -1.0, lambda t: 0.5 * math.sin(2 * math.pi * 0.25 * t), True))
+    write_json(func / f"{prefix}_recording-resp_physio.json",
+               {"SamplingFrequency": 25.0, "StartTime": -1.0, "Columns": ["respiratory", "trigger"]})
+
+    # A second respiratory belt on another device: its own file, same column name as recording-resp
+    write_gz(func / f"{prefix}_recording-belt_physio.tsv.gz",
+             recording_tsv(100.0, 0.0, lambda t: 0.4 * math.sin(2 * math.pi * 0.25 * t + 0.3), False))
+    write_json(func / f"{prefix}_recording-belt_physio.json", {
+        "SamplingFrequency": 100.0,
+        "StartTime": 0.0,
+        "Columns": ["respiratory"],
+        "respiratory": {"Units": "V"},
+    })
+
+
 def main() -> None:
-    for name, build in [("bids-sessions", make_sessions), ("bids-nosessions", make_nosessions)]:
+    for name, build in [
+        ("bids-sessions", make_sessions),
+        ("bids-nosessions", make_nosessions),
+        ("bids-recordings", make_recordings),
+    ]:
         root = HERE / name
         if root.exists():
             shutil.rmtree(root)

@@ -5,7 +5,8 @@
 // recording- and desc- (BIDS physio files: sub-<label>/[ses-<label>/]<datatype>/
 // <data file entities>[_recording-<label>]_physio.tsv.gz,
 // https://bids-specification.readthedocs.io/en/stable/modality-specific-files/physiological-recordings.html).
-// So acq-mb / acq-sb, dir-, and scans without a task (anat, dwi, perf) are
+// So acq-mb / acq-sb, dir-, and scans without a task (BIDS allows physio
+// without task- in dwi/ and perf/ only: rules/files/raw/task.yaml) are
 // told apart, and physio in func/ and eeg/ for the same run are two scans.
 
 export interface ScanKeyLike {

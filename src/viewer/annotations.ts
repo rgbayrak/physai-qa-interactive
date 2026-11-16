@@ -1,4 +1,5 @@
 import type { AnnotationsFile, ScanEntry, WaveformQuality } from '@/data/bids-physio-reader';
+import type { ChannelRef } from '@/data/recordings';
 
 /** Ratings for the whole waveform, in button order */
 export const WAVEFORM_QUALITIES: readonly WaveformQuality[] = ['good', 'bad', 'fixable', 'unknown'];
@@ -41,10 +42,11 @@ export function createAnnotation(domain: [number, number], label: string): Annot
 export function toAnnotationsFile(
   annotations: Annotation[],
   scan: ScanEntry,
-  channel: string,
+  ref: ChannelRef,
   samplingRate: number,
   waveform: WaveformAssessment = NO_ASSESSMENT,
 ): AnnotationsFile {
+  const { recording, channel } = ref;
   return {
     waveform_quality: waveform.quality,
     waveform_comment: waveform.comment,
@@ -54,6 +56,7 @@ export function toAnnotationsFile(
     ses: scan.ses,
     task: scan.task,
     run: scan.run,
+    recording,
     channel,
     sampling_rate: samplingRate,
     annotations: annotations.map((a) => ({

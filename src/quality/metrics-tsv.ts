@@ -38,6 +38,8 @@ const SCAN_COLUMNS = [
   'datatype',
   /** The scan's id (src/data/scan-key.ts), e.g. func/sub-01_task-rest_acq-mb_run-01: the key of the row */
   'scan',
+  /** recording- label of the physio file; n/a when the file has none */
+  'recording',
   'filename',
   'channel',
   'signal_type',
@@ -61,14 +63,22 @@ export const WAVEFORMS_DIR = 'waveforms';
  */
 export const REPORT_PDF_NAME = 'quality_report.pdf';
 
-/** A scan's waveform file, under WAVEFORMS_DIR (in a folder per datatype, e.g. func/…_waveforms.json) */
-export function waveformFileName(s: ScanKeyLike): string {
-  return `${s.id}_waveforms.json`;
+/**
+ * A recording's waveform file, under WAVEFORMS_DIR (in a folder per datatype,
+ * e.g. func/…_recording-cardiac_waveforms.json; no recording- part for a file without one)
+ */
+export function waveformFileName(s: ScanKeyLike, recording = ''): string {
+  return `${s.id}${recording ? `_recording-${recording}` : ''}_waveforms.json`;
 }
 
 export interface QualityRow extends ScanKeyLike {
+  /** recording- label of the physio file; '' when it has none */
+  recording: string;
   filename: string;
+  /** Column name; "<column> (recording-<label>)" on the pages when another recording of the scan has the same column (labelRecordingChannels) */
   channel: string;
+  /** The column name, set only when `channel` carries the recording label (not in the TSV) */
+  column?: string;
   /** From PHYSIO_CHANNELS (src/quality/channels.ts), e.g. cardiac; '' (n/a in the TSV) for an unknown name */
   signalType: string;
   samplingFrequency: number;
@@ -115,6 +125,7 @@ function rowCells(r: QualityRow): string[] {
     formatText(r.run),
     formatText(r.datatype),
     formatText(r.id),
+    formatText(r.recording),
     formatText(r.filename),
     formatText(r.channel),
     formatText(r.signalType),
@@ -155,6 +166,7 @@ export function parseQualityTsv(text: string): QualityRow[] {
     if (!key) throw new Error(`Quality metrics TSV row ${i + 2}: invalid scan ${JSON.stringify(cell('scan'))}`);
     return {
       ...makeScanKey(key.datatype, key.entities),
+      recording: parseText(cell('recording')),
       filename: parseText(cell('filename')),
       channel: parseText(cell('channel')),
       signalType: parseText(cell('signal_type')),
@@ -202,11 +214,13 @@ export interface DatasetQualityFile {
   info: DatasetInfoLike;
   nSubjects: number;
   nScans: number;
+  /** Physio files (recordings, one per recording- file) with metrics; absent from metrics computed before it existed */
+  nPhysio?: number;
   channels: string[];
   tasks: string[];
   samplingFrequencies: number[];
   participants: ParticipantsTable | null;
-  /** Scans listed by the BIDS layout that could not be read or computed */
+  /** Scans listed by the BIDS layout, or single recordings of them ("<id> (recording-x)", "<id> (<file>)"), that could not be read or computed */
   failedScans: { scan: string; reason: string }[];
   /** physio.tsv columns left out because they are not physiological (e.g. trigger), with the scan count */
   excludedChannels: { channel: string; reason: string; scans: number }[];

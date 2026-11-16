@@ -6,6 +6,7 @@ import { escapeHtml } from '@/utils/html';
 import { parseScanId } from '@/data/scan-key';
 
 const scan = parseScanId('func/sub-01_ses-02_task-rest_run-01')!;
+const CARDIAC = { recording: '', channel: 'cardiac' };
 
 describe('createAnnotation', () => {
   it('uses the brushed window and trims the label', () => {
@@ -30,7 +31,7 @@ describe('stored annotation format', () => {
   ];
 
   it('stores onset, duration and sample indices at the sampling rate', () => {
-    const file = toAnnotationsFile(annotations, scan, 'cardiac', 100);
+    const file = toAnnotationsFile(annotations, scan, CARDIAC, 100);
     expect(file).toMatchObject({
       scan: 'func/sub-01_ses-02_task-rest_run-01',
       datatype: 'func',
@@ -38,8 +39,13 @@ describe('stored annotation format', () => {
       ses: '02',
       task: 'rest',
       run: '01',
+      recording: '',
       channel: 'cardiac',
       sampling_rate: 100,
+    });
+    expect(toAnnotationsFile([], scan, { recording: 'belt1', channel: 'respiratory' }, 100)).toMatchObject({
+      recording: 'belt1',
+      channel: 'respiratory',
     });
     expect(file.annotations[0]).toEqual({
       id: 'a',
@@ -55,7 +61,7 @@ describe('stored annotation format', () => {
   });
 
   it('round-trips through the stored format', () => {
-    const back = fromAnnotationsFile(toAnnotationsFile(annotations, scan, 'cardiac', 100));
+    const back = fromAnnotationsFile(toAnnotationsFile(annotations, scan, CARDIAC, 100));
     expect(back).toHaveLength(2);
     back.forEach((a, i) => {
       expect(a.id).toBe(annotations[i].id);
@@ -68,22 +74,22 @@ describe('stored annotation format', () => {
 
 describe('whole-waveform rating and comment', () => {
   it('are stored first in the file, above the scan and the time windows', () => {
-    const file = toAnnotationsFile([], scan, 'cardiac', 100, { quality: 'fixable', comment: 'drift after 300 s' });
+    const file = toAnnotationsFile([], scan, CARDIAC, 100, { quality: 'fixable', comment: 'drift after 300 s' });
     expect(Object.keys(file).slice(0, 2)).toEqual(['waveform_quality', 'waveform_comment']);
     expect(JSON.stringify(file).startsWith('{"waveform_quality":"fixable","waveform_comment":"drift after 300 s"')).toBe(true);
   });
 
   it('round-trip through the stored format', () => {
-    const file = toAnnotationsFile([], scan, 'cardiac', 100, { quality: 'bad', comment: 'no signal' });
+    const file = toAnnotationsFile([], scan, CARDIAC, 100, { quality: 'bad', comment: 'no signal' });
     expect(waveformAssessmentFromFile(file)).toEqual({ quality: 'bad', comment: 'no signal' });
   });
 
   it('default to no rating and no comment', () => {
-    expect(toAnnotationsFile([], scan, 'cardiac', 100)).toMatchObject({ waveform_quality: null, waveform_comment: '' });
+    expect(toAnnotationsFile([], scan, CARDIAC, 100)).toMatchObject({ waveform_quality: null, waveform_comment: '' });
   });
 
   it('read files saved before they existed, and ignore unknown ratings', () => {
-    const old = { ...toAnnotationsFile([], scan, 'cardiac', 100) } as AnnotationsFile;
+    const old = { ...toAnnotationsFile([], scan, CARDIAC, 100) } as AnnotationsFile;
     delete old.waveform_quality;
     delete old.waveform_comment;
     expect(waveformAssessmentFromFile(old)).toEqual({ quality: null, comment: '' });

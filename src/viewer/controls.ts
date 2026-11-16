@@ -1,5 +1,7 @@
-import type { ScanEntry } from '@/data/bids-physio-reader';
+import type { PhysioRaw, PhysioScan, ScanEntry } from '@/data/bids-physio-reader';
 import { isPhysioChannel } from '@/quality/channels';
+import { channelLabel, clashingNames, parseRefKey, refKey } from '@/data/recordings';
+import type { ChannelRef } from '@/data/recordings';
 
 /**
  * Columns of a physio file to offer as channels: every column except those
@@ -10,6 +12,24 @@ import { isPhysioChannel } from '@/quality/channels';
 export function physioColumns(columns: string[]): string[] {
   const physio = columns.filter(isPhysioChannel);
   return physio.length > 0 ? physio : columns;
+}
+
+/** The channels a scan offers, across its recordings (in recording order), with their keys and shown names */
+export function scanChannels(scan: PhysioScan): { key: string; ref: ChannelRef; label: string }[] {
+  const perRecording = scan.recordings.map((r) => ({ recording: r.recording ?? '', channels: physioColumns(r.columns) }));
+  const clashes = clashingNames(perRecording);
+  return perRecording.flatMap(({ recording, channels }) =>
+    channels.map((channel) => {
+      const ref = { recording, channel };
+      return { key: refKey(ref), ref, label: channelLabel(ref, clashes) };
+    }),
+  );
+}
+
+/** The recording a channel key is in, or undefined when the scan has none such */
+export function recordingFor(scan: PhysioScan, key: string): PhysioRaw | undefined {
+  const ref = parseRefKey(key);
+  return scan.recordings.find((r) => (r.recording ?? '') === ref.recording && r.columns.includes(ref.channel));
 }
 
 /** Options with their values; `labels` gives the shown text where it differs from the value */
@@ -77,6 +97,7 @@ export function variantOptions(variants: ScanEntry[]): { heading: string; label:
 export interface ScanSelectElements {
   subjectSelect: HTMLSelectElement;
   sessionSelect: HTMLSelectElement;
+  sessionLabel: HTMLElement;
   taskSelect: HTMLSelectElement;
   runSelect: HTMLSelectElement;
   runLabel: HTMLElement;
@@ -87,12 +108,15 @@ export interface ScanSelectElements {
 
 /**
  * Set every scan dropdown to `scan`: each lists the values found under the
- * levels above it. Run is hidden when those scans have no run, the last
- * dropdown when only one scan is left.
+ * levels above it. Session is hidden when the subject has no sessions, Run
+ * when those scans have no run, the last dropdown when only one scan is left.
  */
 export function showScanInSelects(els: ScanSelectElements, scans: ScanEntry[], scan: ScanEntry): void {
   populateSelect(els.subjectSelect, distinct(scans, 'sub'), scan.sub);
-  populateSelect(els.sessionSelect, distinct(matching(scans, scan, ['sub']), 'ses'), scan.ses, (v) => v || 'none');
+  const sessions = distinct(matching(scans, scan, ['sub']), 'ses');
+  populateSelect(els.sessionSelect, sessions, scan.ses, (v) => v || 'none');
+  // Like Run: no dropdown for a subject without sessions
+  els.sessionLabel.style.display = sessions.some((s) => s !== '') ? '' : 'none';
   populateSelect(els.taskSelect, distinct(matching(scans, scan, ['sub', 'ses']), 'task'), scan.task, (v) => v || 'none');
   const runs = distinct(matching(scans, scan, ['sub', 'ses', 'task']), 'run');
   populateSelect(els.runSelect, runs, scan.run, (v) => v || 'none');
@@ -134,6 +158,8 @@ export function renderStackControls(
   mainChannel: string,
   stacked: string[],
   onToggle: (channel: string, checked: boolean) => void,
+  /** Shown name of a channel key (see scanChannels); the key itself when not given */
+  labelOf: (channel: string) => string = (c) => c,
 ): void {
   els.stackChannels.innerHTML = '';
   const options = columns.filter((c) => c !== mainChannel);
@@ -147,7 +173,7 @@ export function renderStackControls(
     cb.addEventListener('change', () => onToggle(ch, cb.checked));
     const name = document.createElement('span');
     name.className = 'channel-name'; // channel names look like code, as file names do
-    name.textContent = ch;
+    name.textContent = labelOf(ch);
     label.append(cb, name);
     els.stackChannels.appendChild(label);
   }

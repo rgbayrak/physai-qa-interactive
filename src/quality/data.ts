@@ -1,6 +1,7 @@
 import { DATASET_JSON_NAME, METRICS_TSV_NAME, WAVEFORMS_DIR, parseQualityTsv, waveformFileName } from './metrics-tsv';
 import type { DatasetQualityFile, QualityRow, ScanKeyLike, WaveformFile } from './metrics-tsv';
 import { RUN_LOG_NAME, parseLastRun } from './run-log';
+import { labelRecordingChannels } from './model';
 import type { QualityRun } from './run-log';
 
 // Loads the static files written by scripts/compute-quality-metrics.ts. The
@@ -52,6 +53,14 @@ export interface LoadedDataset {
   lastRun: QualityRun | null;
 }
 
+/**
+ * The metrics files are there but cannot be read: written by an older version
+ * of the script (e.g. a TSV without the scan or recording column). Computing
+ * the metrics again fixes it.
+ */
+export class OutdatedMetricsError extends Error {}
+
+/** The served dataset's metrics; null when none were computed. Throws OutdatedMetricsError when they are too old to read */
 export async function fetchDatasetQuality(dataset: string): Promise<LoadedDataset | null> {
   const base = `${QUALITY_BASE}/${encodeURIComponent(dataset)}`;
   const [summary, tsv, runLog] = await Promise.all([
@@ -60,7 +69,17 @@ export async function fetchDatasetQuality(dataset: string): Promise<LoadedDatase
     fetchText(`${base}/${RUN_LOG_NAME}`).catch(() => null),
   ]);
   if (!summary || tsv == null) return null;
-  return { summary, rows: parseQualityTsv(tsv), lastRun: runLog ? parseLastRun(runLog) : null };
+  // Channels two recordings share get their recording label; their units follow them
+  let parsed: QualityRow[];
+  try {
+    parsed = parseQualityTsv(tsv);
+  } catch (err) {
+    throw new OutdatedMetricsError(err instanceof Error ? err.message : String(err));
+  }
+  const rows = labelRecordingChannels(parsed);
+  const units = { ...summary.channelUnits };
+  for (const r of rows) if (r.column && units[r.column] && !units[r.channel]) units[r.channel] = units[r.column];
+  return { summary: { ...summary, channelUnits: units }, rows, lastRun: runLog ? parseLastRun(runLog) : null };
 }
 
 /** Whether the served dataset's PDF report is saved, and where to open it */
@@ -86,7 +105,40 @@ export async function saveReport(pdf: Blob): Promise<ReportStatus> {
   return res.json();
 }
 
-export async function fetchWaveforms(dataset: string, scan: ScanKeyLike): Promise<WaveformFile | null> {
-  const file = waveformFileName(scan).split('/').map(encodeURIComponent).join('/');
-  return fetchJson<WaveformFile>(`${QUALITY_BASE}/${encodeURIComponent(dataset)}/${WAVEFORMS_DIR}/${file}`);
+/** One channel's whole-recording envelope, on its recording's own time bins */
+export interface ChannelWaveform {
+  /** Shown name, as in labelRecordingChannels */
+  channel: string;
+  /** Column name, for units */
+  column: string;
+  times: number[];
+  min: (number | null)[];
+  max: (number | null)[];
+}
+
+/**
+ * A scan's waveforms: one file per recording (the recordings of the scan's
+ * rows, '' for a file without a recording- label), each channel kept on its
+ * own recording's time bins. Null when none of the files is there.
+ */
+export async function fetchWaveforms(
+  dataset: string,
+  scan: ScanKeyLike,
+  scanRows: { recording: string; channel: string; column?: string }[],
+): Promise<ChannelWaveform[] | null> {
+  const recordings = [...new Set(scanRows.map((r) => r.recording))];
+  const files = await Promise.all(
+    recordings.map((recording) => {
+      const file = waveformFileName(scan, recording).split('/').map(encodeURIComponent).join('/');
+      return fetchJson<WaveformFile>(`${QUALITY_BASE}/${encodeURIComponent(dataset)}/${WAVEFORMS_DIR}/${file}`);
+    }),
+  );
+  if (files.every((f) => !f)) return null;
+  return files.flatMap((wf, i) =>
+    (wf?.channels ?? []).map((ch) => {
+      // The row of this column in this recording gives its shown name
+      const row = scanRows.find((r) => r.recording === recordings[i] && (r.column ?? r.channel) === ch.channel);
+      return { channel: row?.channel ?? ch.channel, column: ch.channel, times: wf!.times, min: ch.min, max: ch.max };
+    }),
+  );
 }

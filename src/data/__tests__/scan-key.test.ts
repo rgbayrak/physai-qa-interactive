@@ -18,12 +18,12 @@ describe('scan key', () => {
   });
 
   it('has empty ses/task/run when the scan has none, and no folder in the id outside a datatype folder', () => {
-    expect(makeScanKey('anat', { sub: '01', acq: 'mprage' })).toMatchObject({ id: 'anat/sub-01_acq-mprage', task: '', run: '' });
+    expect(makeScanKey('dwi', { sub: '01', dir: 'AP' })).toMatchObject({ id: 'dwi/sub-01_dir-AP', task: '', run: '' });
     expect(makeScanKey('', { sub: '01', task: 'rest' }).id).toBe('sub-01_task-rest');
   });
 
   it('parses an id back to the same key', () => {
-    for (const id of ['func/sub-01_ses-2_task-rest_acq-mb_run-1', 'eeg/sub-01_task-rest', 'sub-01_task-rest', 'anat/sub-01']) {
+    for (const id of ['func/sub-01_ses-2_task-rest_acq-mb_run-1', 'eeg/sub-01_task-rest', 'sub-01_task-rest', 'dwi/sub-01']) {
       expect(parseScanId(id)?.id).toBe(id);
     }
     expect(parseScanId('func/sub-01_task-rest')).toEqual(makeScanKey('func', { sub: '01', task: 'rest' }));

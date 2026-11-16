@@ -24,6 +24,7 @@ const FIXTURES = join(process.cwd(), 'test', 'fixtures');
 const datasets = [
   { name: 'fixture: bids-sessions', root: join(FIXTURES, 'bids-sessions') },
   { name: 'fixture: bids-nosessions', root: join(FIXTURES, 'bids-nosessions') },
+  { name: 'fixture: bids-recordings', root: join(FIXTURES, 'bids-recordings') },
   { name: 'ds006644', root: join(BASE, 'ds006644') },
   { name: 'ds000210', root: join(BASE, 'ds000210') },
 ].filter((d) => existsSync(d.root));
@@ -88,7 +89,7 @@ describe.each(datasets)('BIDS layout: $name', ({ root: bidsRoot }) => {
   });
 
   it('readPhysio returns consistent column data for the first scan', () => {
-    const result = readPhysio(root, scans[0].id);
+    const result = readPhysio(root, scans[0].id)?.recordings[0];
     expect(result).not.toBeNull();
     expect(result!.samplingFrequency).toBeGreaterThan(0);
     expect(result!.columns.length).toBeGreaterThan(0);

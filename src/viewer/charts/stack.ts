@@ -12,12 +12,13 @@ import {
   drawOnsetMarker,
   appendOverlayRect,
   attachHover,
+  formatValue,
 } from './shared';
 
 interface StackChartsOptions {
   sectionEl: HTMLElement;
-  raw: PhysioRaw;
-  channels: string[];
+  /** Stacked channels, each with the recording it is in (recordings can differ in sampling rate) and its shown name */
+  items: { raw: PhysioRaw; channel: string; label: string }[];
   /** Initial time window, normally the focus chart's current one */
   xDomain: [number, number];
 }
@@ -34,16 +35,16 @@ export interface StackChartsHandle {
  * the section hidden) when no channels are stacked.
  */
 export function buildStackCharts(opts: StackChartsOptions): StackChartsHandle | null {
-  const { sectionEl, raw } = opts;
+  const { sectionEl } = opts;
   sectionEl.innerHTML = '';
   sectionEl.style.display = 'none';
-  if (opts.channels.length === 0) return null;
+  if (opts.items.length === 0) return null;
   sectionEl.style.display = '';
 
   const charts: ChartInstance[] = [];
   const redrawers: (() => void)[] = [];
 
-  for (const channel of opts.channels) {
+  for (const { raw, channel, label } of opts.items) {
     const data = toDataPoints(raw, channel);
     if (data.length === 0) continue;
 
@@ -59,7 +60,7 @@ export function buildStackCharts(opts: StackChartsOptions): StackChartsHandle | 
       xScale: { type: 'linear', domain: opts.xDomain },
       yScale: { type: 'linear', domain: getValueExtent(raw, channel), nice: true },
       xAxis: { position: 'bottom', tickCount: 5 },
-      yAxis: { position: 'left', label: channel },
+      yAxis: { position: 'left', label },
       grid: {
         x: { strokeColor: '#e0e0e0', opacity: 0.5 },
         y: { strokeColor: '#e0e0e0', opacity: 0.5 },
@@ -89,7 +90,7 @@ export function buildStackCharts(opts: StackChartsOptions): StackChartsHandle | 
     const overlayRect = appendOverlayRect(chart);
     attachHover(chart, overlayRect, data, {
       color: '#2d8a8e',
-      html: (p) => `<div><strong>${p.time.toFixed(3)} s</strong></div><div>${channel}: ${p.value.toFixed(2)}</div>`,
+      html: (p) => `<div><strong>${p.time.toFixed(3)} s</strong></div><div>${label}: ${formatValue(p.value)}</div>`,
     });
 
     chart.on('resize', () => {

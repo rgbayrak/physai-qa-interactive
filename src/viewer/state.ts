@@ -1,4 +1,4 @@
-import type { SubjectInfo, ScanEntry, PhysioRaw, ConfoundsRaw, EventsRaw } from '@/data/bids-physio-reader';
+import type { SubjectInfo, ScanEntry, PhysioScan, ConfoundsRaw, EventsRaw } from '@/data/bids-physio-reader';
 import type { Annotation, WaveformAssessment } from './annotations';
 import { NO_ASSESSMENT } from './annotations';
 
@@ -21,11 +21,12 @@ interface ViewerState {
   scans: ScanEntry[];
   /** Scan whose data is loaded in `raw`; null until the first load succeeds */
   current: ScanEntry | null;
-  raw: PhysioRaw | null;
+  /** The loaded scan's recordings (one per recording- file) */
+  physio: PhysioScan | null;
   confounds: ConfoundsRaw | null;
   /** Task events of the loaded scan; null for rest tasks or when there is no events file */
   events: EventsRaw | null;
-  /** Extra channels drawn as compact figures below the focus chart, in column order */
+  /** Extra channels drawn as compact figures below the focus chart, as channel keys (refKey), in channel order */
   stackedChannels: string[];
   annotateMode: boolean;
   /** Annotations for the current scan and main channel */
@@ -40,7 +41,7 @@ export function createState(): ViewerState {
     subjects: [],
     scans: [],
     current: null,
-    raw: null,
+    physio: null,
     confounds: null,
     events: null,
     stackedChannels: [],

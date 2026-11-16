@@ -8,11 +8,14 @@ export const RUN_LOG_HEADER = ['run_date', 'scans_computed', 'scans_available', 
 export interface QualityRun {
   /** Local date and time of the run, e.g. 2026-11-05T15:40:12 */
   runDate: string;
-  /** Scans whose metrics were computed */
+  // All three are counted in physio recordings (one per recording- file; a
+  // scan split into recording-cardiac and recording-respiratory counts twice).
+  // The names (and the TSV columns) keep "scans" from before recordings were split.
+  /** Physio recordings whose metrics were computed */
   scansComputed: number;
-  /** Physio files listed in the dataset, downloaded or not */
+  /** Physio recordings listed in the dataset, downloaded or not */
   scansAvailable: number;
-  /** Downloaded scans that could not be computed */
+  /** Downloaded physio recordings that could not be computed */
   scansFailed: number;
   /** How the available count was made: git-annex or files on disk */
   countSource: string;
@@ -46,12 +49,12 @@ export function parseLastRun(tsv: string): QualityRun | null {
   return null;
 }
 
-/** Listed scans that were not downloaded when the metrics ran */
+/** Listed physio recordings that were not downloaded when the metrics ran */
 export function notDownloaded(run: QualityRun): number {
   return Math.max(0, run.scansAvailable - run.scansComputed - run.scansFailed);
 }
 
-/** "Quality metrics were last computed on 2026-11-05 for 78 of 120 scans (40 not downloaded, 2 failed)." */
+/** "Quality metrics were last computed on 2026-11-05 for 78 of 120 physio recordings (40 not downloaded, 2 failed)." */
 export function runSentence(run: QualityRun): string {
   const missing = notDownloaded(run);
   const notes = [missing > 0 ? `${missing} not downloaded` : '', run.scansFailed > 0 ? `${run.scansFailed} failed` : '']
@@ -59,6 +62,6 @@ export function runSentence(run: QualityRun): string {
     .join(', ');
   return (
     `Quality metrics were last computed on ${run.runDate.slice(0, 10)} for ${run.scansComputed} of ` +
-    `${run.scansAvailable} ${run.scansAvailable === 1 ? 'scan' : 'scans'}${notes ? ` (${notes})` : ''}.`
+    `${run.scansAvailable} physio ${run.scansAvailable === 1 ? 'recording' : 'recordings'}${notes ? ` (${notes})` : ''}.`
   );
 }

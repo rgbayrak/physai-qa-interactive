@@ -2,6 +2,7 @@ import { SQI_COLUMNS, formatMetricValue } from './metric-columns';
 import { escapeHtml } from '@/utils/html';
 import { METRIC_COLUMNS, sameScanKey, scanId } from './metrics-tsv';
 import { toScanKey } from '../data/scan-key';
+import { channelLabel, clashingNames } from '../data/recordings';
 import type { MetricKey, QualityRow, ScanKeyLike, ParticipantsTable } from './metrics-tsv';
 import { finiteValues } from './stats';
 import { runSentence } from './run-log';
@@ -95,6 +96,39 @@ export function uniqueScans(rows: QualityRow[]): ScanKeyLike[] {
     if (!out.some((s) => sameScanKey(s, r))) out.push(toScanKey(r));
   }
   return out;
+}
+
+/**
+ * Name channels the way Explore and Annotate does: a column that two
+ * recordings of the same scan share (respiratory of belt1 and belt2) becomes
+ * "respiratory (recording-belt1)", with the column name kept in `column`; every other
+ * row keeps its column name. So both belts are separate channels in the
+ * scatter plot, the histograms and the PDF.
+ */
+export function labelRecordingChannels(rows: QualityRow[]): QualityRow[] {
+  const perScan = new Map<string, Map<string, string[]>>();
+  for (const r of rows) {
+    const recs = perScan.get(r.id) ?? new Map<string, string[]>();
+    recs.set(r.recording, [...(recs.get(r.recording) ?? []), r.channel]);
+    perScan.set(r.id, recs);
+  }
+  const clashes = new Map(
+    [...perScan].map(([id, recs]) => [id, clashingNames([...recs].map(([recording, channels]) => ({ recording, channels })))]),
+  );
+  return rows.map((r) => {
+    const label = channelLabel(r, clashes.get(r.id)!);
+    return label === r.channel ? r : { ...r, column: r.channel, channel: label };
+  });
+}
+
+/** The scan's physio file names, one per recording, comma-separated */
+export function recordingFiles(scanRows: QualityRow[]): string {
+  return [...new Set(scanRows.map((r) => r.filename))].join(', ');
+}
+
+/** The scan's sampling rates, e.g. "50 Hz", or "100 Hz, 1000 Hz" for recordings at different rates */
+export function recordingRates(scanRows: QualityRow[]): string {
+  return [...new Set(scanRows.map((r) => r.samplingFrequency))].map((f) => `${f} Hz`).join(', ');
 }
 
 export function rowsForScan(rows: QualityRow[], scan: ScanKeyLike): QualityRow[] {

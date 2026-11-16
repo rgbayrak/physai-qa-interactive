@@ -38,7 +38,10 @@ import {
   validStacked,
   toggleStacked,
   physioColumns,
+  scanChannels,
+  recordingFor,
 } from './controls';
+import { parseRefKey } from '@/data/recordings';
 import { stepScan, resolveSearch, isScanStepKey, pickStartScan, firstUnannotatedTarget } from './navigation';
 import { DEFAULT_LAST_VIEWED_KEY, lastViewedKey, saveLastViewed, readLastViewed, resumeFrom } from './persistence';
 import { buildFocusContext } from './charts/focus-context';
@@ -53,7 +56,7 @@ import type { Peak } from './peaks-trial';
 import { drawPeaks } from './charts/peaks-trial';
 import { buildStackCharts } from './charts/stack';
 import type { StackChartsHandle } from './charts/stack';
-import { fetchServedDataset, fetchDatasetQuality } from '@/quality/data';
+import { fetchServedDataset, fetchDatasetQuality, OutdatedMetricsError } from '@/quality/data';
 import { createScatterPanel } from '@/quality/scatter-panel';
 import { parseScanHash, statsUrl } from '@/quality/route';
 import { scanId, sameScanKey } from '@/quality/metrics-tsv';
@@ -112,13 +115,54 @@ function renderWaveformAssessment() {
   if (els.waveformComment.value !== state.waveform.comment) els.waveformComment.value = state.waveform.comment;
 }
 
+// ── Channels across recordings ─────────────────────────
+// The Channel dropdown's values are channel keys (refKey: recording + column);
+// a scan split into recording- files offers the channels of all of them.
+
+/** The loaded scan's channels (keys, recording + column, shown names); empty until a scan is loaded */
+let channels: ReturnType<typeof scanChannels> = [];
+
+const labelOf = (key: string) => channels.find((c) => c.key === key)?.label ?? parseRefKey(key).channel;
+
+/** The recording the main channel (Channel dropdown) is in */
+function mainRaw(): PhysioRaw | null {
+  if (!state.physio) return null;
+  return recordingFor(state.physio, els.channelSelect.value) ?? state.physio.recordings[0];
+}
+
+/**
+ * Datatype whose data t = 0 refers to: the physio file's own, except beh/
+ * physio whose events came from the same acquisition's neural folder (e.g.
+ * func/): its StartTime is relative to that data (BIDS: "the corresponding
+ * (neural) dataset")
+ */
+function timeDatatype(raw: PhysioRaw): string {
+  const own = raw.datatype ?? 'func';
+  return own === 'beh' && state.events?.datatype ? state.events.datatype : own;
+}
+
+/** Recording for the progress count: only when the shown name carries it (two recordings share the column) */
+function progressRecording(key: string): string | undefined {
+  const c = channels.find((x) => x.key === key);
+  return c && c.label !== c.ref.channel ? c.ref.recording : undefined;
+}
+
+/** File name and badges of the main channel's recording */
+function showRecordingInfo() {
+  const raw = mainRaw();
+  if (!raw) return;
+  const others = (state.physio?.recordings.length ?? 1) - 1;
+  els.filename.textContent = others > 0 ? `${raw.filename} (+${others} recording${others > 1 ? 's' : ''})` : raw.filename;
+  renderQualityBadges(els.qualityBadges, raw);
+}
+
 function persistAnnotations() {
   if (!state.current) return;
   const file = toAnnotationsFile(
     state.annotations,
     state.current,
-    els.channelSelect.value,
-    state.raw?.samplingFrequency ?? 0,
+    parseRefKey(els.channelSelect.value),
+    mainRaw()?.samplingFrequency ?? 0,
     state.waveform,
   );
   saveAnnotations(file)
@@ -131,12 +175,12 @@ function persistAnnotations() {
 
 /** "(24/80 cardiac signals are annotated)": scans with anything saved for the channel shown */
 async function refreshAnnotationProgress() {
-  const channel = els.channelSelect.value;
-  if (!channel) return;
-  const progress = await fetchAnnotationProgress(channel).catch(() => null);
-  if (channel !== els.channelSelect.value) return; // channel changed while waiting
+  const key = els.channelSelect.value;
+  if (!key) return;
+  const progress = await fetchAnnotationProgress(parseRefKey(key).channel, progressRecording(key)).catch(() => null);
+  if (key !== els.channelSelect.value) return; // channel changed while waiting
   els.annotationProgress.innerHTML = progress
-    ? `(${progress.annotated}/${progress.total} <span class="channel-name">${escapeHtml(channel)}</span> signals are annotated)`
+    ? `(${progress.annotated}/${progress.total} <span class="channel-name">${escapeHtml(labelOf(key))}</span> signals are annotated)`
     : '';
   // Mini bar: fills with the share annotated, yellow → green → blue as it grows
   const fraction = progress && progress.total > 0 ? progress.annotated / progress.total : 0;
@@ -164,11 +208,11 @@ els.firstUnannotatedBtn.addEventListener('click', () => {
   if (firstUnannotatedScan) void goToScan(firstUnannotatedScan);
 });
 
-async function loadSavedAnnotations(scan: ScanEntry, channel: string) {
-  const stored = await fetchAnnotations(scan, channel).catch(() => null);
+async function loadSavedAnnotations(scan: ScanEntry, key: string) {
+  const stored = await fetchAnnotations(scan, parseRefKey(key)).catch(() => null);
   if (!stored) return;
   // Discard if the scan or channel changed while the request was in flight
-  if (!state.current || !sameScanKey(state.current, scan) || channel !== els.channelSelect.value) return;
+  if (!state.current || !sameScanKey(state.current, scan) || key !== els.channelSelect.value) return;
   state.annotations = fromAnnotationsFile(stored);
   state.waveform = waveformAssessmentFromFile(stored);
   focusContext?.redrawAnnotations();
@@ -242,8 +286,12 @@ function destroyCharts() {
   stackCharts = null;
 }
 
-/** Rebuild the focus/overview charts for a channel; clears and reloads its annotations */
-function buildMainCharts(raw: PhysioRaw, channel: string) {
+/** Rebuild the focus/overview charts for the main channel; clears and reloads its annotations */
+function buildMainCharts() {
+  const raw = mainRaw();
+  if (!raw) return;
+  const key = els.channelSelect.value;
+  const channel = parseRefKey(key).channel;
   destroyCharts();
   // A typed comment was already saved when the box lost focus; never save it
   // here, as state.current may already be the new scan
@@ -259,15 +307,17 @@ function buildMainCharts(raw: PhysioRaw, channel: string) {
   focusContext = buildFocusContext({
     raw,
     channel,
+    label: labelOf(key),
+    timeDatatype: timeDatatype(raw),
     getAnnotations: () => state.annotations,
     isAnnotateMode: () => state.annotateMode,
     onAnnotate: addAnnotation,
     onXDomainChange: syncLinkedXDomain,
     drawOverlay: (chart, group, data) => drawPeaks(chart, group, data, els.peaksToggle.checked ? channelPeaks : []),
   });
-  if (state.current) loadSavedAnnotations(state.current, channel);
+  if (state.current) loadSavedAnnotations(state.current, key);
   void refreshAnnotationProgress(); // the count is per channel
-  setScatterChannel(channel); // one Channel dropdown for both the charts and the scatter plot
+  setScatterChannel(key); // one Channel dropdown for both the charts and the scatter plot
 }
 
 // "Auxiliary" label: shown while the stacked channels, the events or the confound chart is.
@@ -293,17 +343,26 @@ for (const el of auxRowItems) {
   auxRowObserver.observe(el, { attributes: true, attributeFilter: ['style'] });
 }
 
-function rebuildStack(raw: PhysioRaw) {
+function rebuildStack() {
+  const physio = state.physio;
+  const raw = mainRaw();
+  if (!physio || !raw) return;
   stackCharts?.destroy();
+  // Each stacked channel is drawn from its own recording (its own rate and StartTime)
+  const items = state.stackedChannels.flatMap((key) => {
+    const rec = recordingFor(physio, key);
+    return rec ? [{ raw: rec, channel: parseRefKey(key).channel, label: labelOf(key) }] : [];
+  });
   stackCharts = buildStackCharts({
     sectionEl: els.stackSection,
-    raw,
-    channels: state.stackedChannels,
+    items,
     xDomain: focusContext ? focusContext.getXDomain() : getViewExtent(raw),
   });
 }
 
-function rebuildConfounds(confounds: ConfoundsRaw, raw: PhysioRaw) {
+function rebuildConfounds(confounds: ConfoundsRaw) {
+  const raw = mainRaw();
+  if (!raw) return;
   confoundsChart?.destroy();
   confoundsChart = buildConfoundsChart({
     sectionEl: els.confoundsSection,
@@ -314,7 +373,9 @@ function rebuildConfounds(confounds: ConfoundsRaw, raw: PhysioRaw) {
   });
 }
 
-function rebuildEvents(events: EventsRaw, raw: PhysioRaw) {
+function rebuildEvents(events: EventsRaw) {
+  const raw = mainRaw();
+  if (!raw) return;
   eventsChart?.destroy();
   eventsChart = buildEventsChart({
     sectionEl: els.eventsSection,
@@ -323,17 +384,35 @@ function rebuildEvents(events: EventsRaw, raw: PhysioRaw) {
     events,
     column: els.eventsSelect.value,
     xDomain: focusContext ? focusContext.getXDomain() : getViewExtent(raw),
-    axisLabel: timeReference(raw.datatype ?? 'func').axisLabel,
+    axisLabel: timeReference(timeDatatype(raw)).axisLabel,
   });
 }
 
-function renderStack(columns: string[]) {
-  state.stackedChannels = validStacked(state.stackedChannels, columns, els.channelSelect.value);
-  renderStackControls(els, columns, els.channelSelect.value, state.stackedChannels, (channel, checked) => {
-    state.stackedChannels = toggleStacked(state.stackedChannels, columns, channel, checked);
-    if (state.raw) rebuildStack(state.raw);
-    rememberLastViewed();
-  });
+function renderStack() {
+  const keys = channels.map((c) => c.key);
+  state.stackedChannels = validStacked(state.stackedChannels, keys, els.channelSelect.value);
+  renderStackControls(
+    els,
+    keys,
+    els.channelSelect.value,
+    state.stackedChannels,
+    (key, checked) => {
+      state.stackedChannels = toggleStacked(state.stackedChannels, keys, key, checked);
+      rebuildStack();
+      rememberLastViewed();
+    },
+    labelOf,
+  );
+}
+
+/** Every chart again for the loaded scan, e.g. after the main channel changed */
+function rebuildAllCharts() {
+  buildMainCharts();
+  rebuildStack();
+  if (state.events) rebuildEvents(state.events);
+  else els.eventsSection.style.display = 'none';
+  if (state.confounds) rebuildConfounds(state.confounds);
+  else els.confoundsSection.style.display = 'none';
 }
 
 // ── Data loading ────────────────────────────────────────
@@ -345,26 +424,21 @@ function pickPreferred(options: string[], preferred: (string | undefined)[]): st
 
 async function loadPhysio(scan: ScanEntry) {
   // Same scan already loaded (e.g. dropdown re-selected): rebuild from cache
-  if (state.current && sameScanKey(state.current, scan) && state.raw) {
-    buildMainCharts(state.raw, els.channelSelect.value);
-    rebuildStack(state.raw);
-    if (state.events) rebuildEvents(state.events, state.raw);
-    else els.eventsSection.style.display = 'none';
-    if (state.confounds) rebuildConfounds(state.confounds, state.raw);
-    else els.confoundsSection.style.display = 'none';
+  if (state.current && sameScanKey(state.current, scan) && state.physio) {
+    rebuildAllCharts();
     return;
   }
 
   setLoading('Loading...');
   try {
-    const [raw, confounds, events, peaks] = await Promise.all([
+    const [physio, confounds, events, peaks] = await Promise.all([
       fetchPhysioRaw(scan),
       fetchConfounds(scan),
       // Rest (or no task) has no task events; a missing events file is not an error
       !scan.task || isRestTask(scan.task) ? null : fetchEvents(scan).catch(() => null),
       fetchPeaks(scan).catch(() => null), // TRIAL
     ]);
-    state.raw = raw;
+    state.physio = physio;
     state.confounds = confounds;
     state.events = events;
     scanPeaks = peaks;
@@ -372,19 +446,19 @@ async function loadPhysio(scan: ScanEntry) {
     scatterPanel.setCurrentScan(state.current); // its point turns pinkish red
     els.statsTab.setAttribute('href', statsUrl(scan)); // Stats opens this same scan
 
-    els.filename.textContent = raw.filename;
-    renderQualityBadges(els.qualityBadges, raw);
-
     // Keep the current channel/confound when the new scan has it; on the first
-    // load after a reload, prefer the one restored from localStorage
-    // Every column except trigger, time etc. is offered (same exclusions as the metrics)
+    // load after a reload, prefer the one restored from localStorage.
+    // Every column of every recording except trigger, time etc. is offered
+    // (same exclusions as the metrics)
     const restored = state.restoredSelection;
-    const channels = physioColumns(raw.columns);
-    populateSelect(els.channelSelect, channels, pickPreferred(channels, [restored?.channel, els.channelSelect.value]));
+    channels = scanChannels(physio);
+    const keys = channels.map((c) => c.key);
+    populateSelect(els.channelSelect, keys, pickPreferred(keys, [restored?.channel, els.channelSelect.value]), labelOf);
     if (restored) state.stackedChannels = restored.stacked;
-    renderStack(channels);
-    buildMainCharts(raw, els.channelSelect.value);
-    rebuildStack(raw);
+    showRecordingInfo();
+    renderStack();
+    buildMainCharts();
+    rebuildStack();
 
     // Counters such as trial_number and constants are left out of the dropdown
     const eventColumns = events ? usefulEventColumns(events) : [];
@@ -400,12 +474,12 @@ async function loadPhysio(scan: ScanEntry) {
         pickPreferred(eventColumns, [restored?.event, els.eventsSelect.value, defaultEventColumn(events)]),
       );
       els.eventsLabel.style.display = '';
-      rebuildEvents(events, raw);
+      rebuildEvents(events);
     } else if (events) {
       // Only onset/duration (or only counters): draw the events, nothing to pick
       els.eventsSelect.innerHTML = '';
       els.eventsLabel.style.display = 'none';
-      rebuildEvents(events, raw);
+      rebuildEvents(events);
     } else {
       // Rest task or no events file: hide the picker and the figure
       els.eventsLabel.style.display = 'none';
@@ -416,7 +490,7 @@ async function loadPhysio(scan: ScanEntry) {
       const columns = Object.keys(confounds.columns);
       populateSelect(els.confoundSelect, columns, pickPreferred(columns, [restored?.confound, els.confoundSelect.value]));
       els.confoundLabel.style.display = '';
-      rebuildConfounds(confounds, raw);
+      rebuildConfounds(confounds);
     } else {
       // No derivatives for this scan (or no BIDSDER_ROOT): hide the picker
       els.confoundLabel.style.display = 'none';
@@ -463,13 +537,12 @@ levelSelects.forEach(([select, level], i) => {
 els.variantSelect.addEventListener('change', () => void goToScan(selectedScan()));
 
 els.channelSelect.addEventListener('change', () => {
-  if (state.raw) {
-    // The new main channel leaves the stack options (and the stack, if checked)
-    renderStack(physioColumns(state.raw.columns));
-    buildMainCharts(state.raw, els.channelSelect.value);
-    rebuildStack(state.raw);
-    if (state.events) rebuildEvents(state.events, state.raw);
-    if (state.confounds) rebuildConfounds(state.confounds, state.raw);
+  if (state.physio) {
+    // The new main channel leaves the stack options (and the stack, if checked);
+    // it may be in another recording, with its own file, rate and timing badge
+    showRecordingInfo();
+    renderStack();
+    rebuildAllCharts();
   }
   rememberLastViewed();
 });
@@ -478,12 +551,12 @@ els.channelSelect.addEventListener('change', () => {
 els.peaksToggle.addEventListener('change', () => focusContext?.redrawOverlay());
 
 els.eventsSelect.addEventListener('change', () => {
-  if (state.raw && state.events) rebuildEvents(state.events, state.raw);
+  if (state.events) rebuildEvents(state.events);
   rememberLastViewed();
 });
 
 els.confoundSelect.addEventListener('change', () => {
-  if (state.raw && state.confounds) rebuildConfounds(state.confounds, state.raw);
+  if (state.confounds) rebuildConfounds(state.confounds);
   rememberLastViewed();
 });
 
@@ -544,8 +617,12 @@ const scatterPanel = createScatterPanel(
 async function loadQualityMetrics() {
   const served = await fetchServedDataset().catch(() => null);
   if (!served) return;
-  const data = await fetchDatasetQuality(served.id).catch(() => null);
-  summaryMetrics = data ? { found: true, lastRun: data.lastRun } : { found: false };
+  let outdated = false;
+  const data = await fetchDatasetQuality(served.id).catch((err) => {
+    outdated = err instanceof OutdatedMetricsError;
+    return null;
+  });
+  summaryMetrics = data ? { found: true, lastRun: data.lastRun } : { found: false, outdated };
   refreshSummary();
   if (!data) return;
   els.statsTab.style.display = '';
@@ -564,9 +641,15 @@ function refreshSummary() {
 }
 
 /** Plot the scatter for this channel and name it in the heading */
-function setScatterChannel(channel: string) {
-  els.scatterChannel.textContent = channel;
-  scatterPanel.setChannel(channel);
+/**
+ * Plot the scatter for a channel key (the Channel dropdown's value: recording
+ * + tab + column for a split scan) and name it in the heading. The plot and the
+ * metrics rows use the shown name (labelOf), never the key itself.
+ */
+function setScatterChannel(key: string) {
+  const label = labelOf(key);
+  els.scatterChannel.textContent = label;
+  scatterPanel.setChannel(label);
 }
 
 // ── Init ────────────────────────────────────────────────
@@ -596,8 +679,11 @@ async function init() {
   // comes back), else the last viewed, else the first
   const linked = parseScanHash(location.hash);
   if (linked) history.replaceState(null, '', location.pathname); // a reload then follows the rules below
+  // The remembered channel key; counted by column name here (which recordings
+  // share a column is only known once a scan is loaded)
   const channel = resumed?.selection.channel;
-  const progress = !linked && channel ? await fetchAnnotationProgress(channel).catch(() => null) : null;
+  const progress =
+    !linked && channel ? await fetchAnnotationProgress(parseRefKey(channel).channel).catch(() => null) : null;
   const first = pickStartScan(scans, {
     linked,
     firstUnannotated: progress?.firstUnannotated,
