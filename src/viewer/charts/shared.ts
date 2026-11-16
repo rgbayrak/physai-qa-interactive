@@ -26,26 +26,37 @@ export function xDomainOf(chart: ChartInstance): [number, number] {
   return xScaleOf(chart).domain() as [number, number];
 }
 
-/** Draw points as a line in the chart's current scales */
+/**
+ * Draw points as a line in the chart's current scales. A missing sample (n/a
+ * in the physio file: BIDS codes missing values as n/a) is a gap: the line
+ * breaks there and goes on after it.
+ */
 export function drawLine(path: PathSelection, chart: ChartInstance, points: DataPoint[]): void {
   const x = xScaleOf(chart);
   const y = yScaleOf(chart);
   const lineGen = line<DataPoint>()
+    .defined((d) => Number.isFinite(d.value))
     .x((d) => x(d.time))
     .y((d) => y(d.value));
   path.datum(points).attr('d', lineGen);
 }
 
-/** Value range of the points padded by 5% on each side (0.1 if flat); null if there are none */
+/** A sample value for the hover readout: n/a for a missing one */
+export function formatValue(v: number): string {
+  return Number.isFinite(v) ? v.toFixed(2) : 'n/a';
+}
+
+/** Range of the points' values (missing ones left out) padded by 5% on each side (0.1 if flat); null if there are none */
 export function paddedValueExtent(points: DataPoint[]): [number, number] | null {
-  if (points.length === 0) return null;
   let vMin = Infinity;
   let vMax = -Infinity;
   for (let i = 0; i < points.length; i++) {
     const v = points[i].value;
+    if (!Number.isFinite(v)) continue;
     if (v < vMin) vMin = v;
     if (v > vMax) vMax = v;
   }
+  if (vMin > vMax) return null;
   const pad = (vMax - vMin) * 0.05 || 0.1;
   return [vMin - pad, vMax + pad];
 }

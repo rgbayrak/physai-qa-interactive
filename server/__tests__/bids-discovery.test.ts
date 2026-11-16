@@ -3,7 +3,15 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'fs';
 import { gzipSync } from 'zlib';
 import { tmpdir } from 'os';
 import { dirname, join } from 'path';
-import { buildScans, findPhysioFiles, getSubjects, readConfounds, readEvents, readPhysio } from '../bids-layout';
+import {
+  buildScans,
+  findPhysioFiles,
+  findRecordings,
+  getSubjects,
+  readConfounds,
+  readEvents,
+  readPhysio,
+} from '../bids-layout';
 import { buildBidsIndex, entitiesMatch, indexSummaryLines, nameEntities } from '../bids-index';
 import { parseScanId } from '../../src/data/scan-key';
 
@@ -81,17 +89,17 @@ describe('where physio is found', () => {
     expect(findPhysioFiles(idx, 'eeg/sub-02_task-oddball')?.file.datatype).toBe('eeg');
   });
 
-  it('makes a scan of physio without a task (e.g. anat/); only physio without sub- is left out', () => {
+  it('makes a scan of physio without a task (BIDS: dwi/ and perf/); only physio without sub- is left out', () => {
     const root = dataset();
     write(join(root, 'sub-01', 'func', 'sub-01_task-rest_physio.tsv.gz'));
-    write(join(root, 'sub-01', 'anat', 'sub-01_acq-mprage_physio.tsv.gz'));
+    write(join(root, 'sub-01', 'dwi', 'sub-01_dir-AP_physio.tsv.gz'));
     write(join(root, 'task-rest_physio.tsv.gz'));
     const idx = index(root);
     expect(buildScans(idx).map((s) => [s.id, s.task])).toEqual([
-      ['anat/sub-01_acq-mprage', ''],
+      ['dwi/sub-01_dir-AP', ''],
       ['func/sub-01_task-rest', 'rest'],
     ]);
-    expect(idx.stats.physioByDatatype).toEqual({ anat: 1, func: 1, none: 1 });
+    expect(idx.stats.physioByDatatype).toEqual({ dwi: 1, func: 1, none: 1 });
     expect(idx.unkeyed.map((f) => f.name)).toEqual(['task-rest_physio.tsv.gz']);
     expect(indexSummaryLines(idx).join('\n')).toContain('1 physio files without sub- not loaded');
   });
@@ -156,6 +164,82 @@ describe('where physio is found', () => {
   });
 });
 
+describe('events, by the BIDS inheritance principle and the corresponding (neural) dataset', () => {
+  const events = (onset: number) => `onset\tduration\n${onset}\t1\n`;
+
+  it('never takes an events file with an entity the physio file lacks (inheritance rule 2.c)', () => {
+    const root = dataset();
+    const func = join(root, 'sub-01', 'func');
+    write(join(func, 'sub-01_task-rest_physio.tsv.gz'));
+    write(join(func, 'sub-01_task-rest_acq-mb_events.tsv'), events(5));
+    expect(readEvents(index(root), 'func/sub-01_task-rest')).toBeNull();
+    write(join(func, 'sub-01_task-rest_events.tsv'), events(2));
+    expect(readEvents(index(root), 'func/sub-01_task-rest')?.onset).toEqual([2]);
+  });
+
+  it('gives beh/ physio without events of its own the events of the same acquisition in func/', () => {
+    const root = dataset();
+    const ses = join(root, 'sub-01', 'ses-1');
+    for (const rec of ['belt1', 'belt2']) write(join(ses, 'beh', `sub-01_ses-1_task-search_run-1_recording-${rec}_physio.tsv.gz`));
+    write(join(ses, 'func', 'sub-01_ses-1_task-search_run-1_bold.json'), '{}');
+    write(join(ses, 'func', 'sub-01_ses-1_task-search_run-1_events.tsv'), events(3));
+    write(join(ses, 'func', 'sub-01_ses-1_task-search_run-2_events.tsv'), events(9)); // another run: not used
+    const e = readEvents(index(root), 'beh/sub-01_ses-1_task-search_run-1');
+    expect([e?.filename, e?.datatype, e?.onset]).toEqual(['sub-01_ses-1_task-search_run-1_events.tsv', 'func', [3]]);
+  });
+
+  it('uses beh/ events of its own first', () => {
+    const root = dataset();
+    const sub = join(root, 'sub-01');
+    write(join(sub, 'beh', 'sub-01_task-search_recording-belt1_physio.tsv.gz'));
+    write(join(sub, 'beh', 'sub-01_task-search_events.tsv'), events(1));
+    write(join(sub, 'func', 'sub-01_task-search_events.tsv'), events(3));
+    expect(readEvents(index(root), 'beh/sub-01_task-search')?.datatype).toBe('beh');
+  });
+
+  it('takes none when two neural folders match (func/ and eeg/): which one is ambiguous', () => {
+    const root = dataset();
+    const sub = join(root, 'sub-01');
+    write(join(sub, 'beh', 'sub-01_task-search_recording-belt1_physio.tsv.gz'));
+    write(join(sub, 'func', 'sub-01_task-search_events.tsv'), events(3));
+    write(join(sub, 'eeg', 'sub-01_task-search_events.tsv'), events(7));
+    expect(readEvents(index(root), 'beh/sub-01_task-search')).toBeNull();
+  });
+
+  it('never gives func/ physio events from beh/ or another folder', () => {
+    const root = dataset();
+    const sub = join(root, 'sub-01');
+    write(join(sub, 'func', 'sub-01_task-search_physio.tsv.gz'));
+    write(join(sub, 'beh', 'sub-01_task-search_events.tsv'), events(1));
+    write(join(sub, 'eeg', 'sub-01_task-search_events.tsv'), events(7));
+    expect(readEvents(index(root), 'func/sub-01_task-search')).toBeNull();
+  });
+});
+
+describe('physio recordings listed (for the quality metrics coverage)', () => {
+  it('counts one per recording- file: a scan split into cardiac and respiratory counts twice', () => {
+    const root = dataset();
+    const func = join(root, 'sub-01', 'ses-1', 'func');
+    for (const task of ['a', 'b']) {
+      for (const rec of ['cardiac', 'respiratory']) write(join(func, `sub-01_ses-1_task-${task}_recording-${rec}_physio.tsv.gz`));
+    }
+    const idx = index(root);
+    expect(idx.scans.size).toBe(2);
+    expect(idx.stats.physioRecordings).toBe(4);
+  });
+
+  it('counts files not downloaded, but one recording found twice (raw and desc-preproc) once, and none without sub-', () => {
+    const root = dataset();
+    const func = join(root, 'sub-01', 'func');
+    write(join(func, 'sub-01_task-rest_physio.tsv.gz'));
+    write(join(root, 'derivatives', 'prep', 'sub-01', 'func', 'sub-01_task-rest_desc-preproc_physio.tsv.gz'));
+    mkdirSync(join(root, 'sub-02', 'func'), { recursive: true });
+    symlinkSync('../../.git/annex/objects/missing', join(root, 'sub-02', 'func', 'sub-02_task-rest_physio.tsv.gz'));
+    write(join(root, 'task-rest_physio.tsv.gz'));
+    expect(index(root).stats.physioRecordings).toBe(2);
+  });
+});
+
 describe('what is skipped', () => {
   it('physioevents files, recognised but never taken for physio', () => {
     const root = dataset();
@@ -216,9 +300,14 @@ describe('one physio file per scan', () => {
     const idx = index(root);
     expect(findPhysioFiles(idx, 'func/sub-01_task-rest')?.tsvGzName).toBe('sub-01_task-rest_desc-preproc_physio.tsv.gz');
     expect(findPhysioFiles(idx, 'func/sub-01_task-b')?.tsvGzName).toBe('sub-01_task-b_recording-cardiac_physio.tsv.gz');
+    // Every recording- file is loaded; only the raw copy of the desc-preproc recording is left out
+    expect(findRecordings(idx, 'func/sub-01_task-b').map((r) => r.recording)).toEqual(['cardiac', 'resp']);
     const log = indexSummaryLines(idx).join('\n');
-    expect(log).toContain('sub-01/func/sub-01_task-b_recording-cardiac_physio.tsv.gz loaded; same scan not loaded yet: sub-01/func/sub-01_task-b_recording-resp_physio.tsv.gz');
-    expect(log).toContain('not loaded yet: sub-01/func/sub-01_task-rest_physio.tsv.gz');
+    expect(log).toContain('1 scans split into recording- files');
+    expect(log).toContain(
+      'sub-01/func/sub-01_task-rest_desc-preproc_physio.tsv.gz loaded; same recording not loaded: sub-01/func/sub-01_task-rest_physio.tsv.gz',
+    );
+    expect(idx.duplicates).toHaveLength(1);
   });
 });
 
@@ -370,8 +459,8 @@ describe('physio outside func/ (EEG-fMRI)', () => {
   it('checks triggers against BOLD timing for func/ only', () => {
     const idx = setup();
     // func/: 5 pulses at the TR, checked against the 3 confounds volumes
-    expect(readPhysio(idx, 'func/sub-01_task-rest')?.timing.detail).toMatch(/5 trigger pulses vs 3 volumes/);
-    const eeg = readPhysio(idx, 'eeg/sub-01_task-rest')!;
+    expect(readPhysio(idx, 'func/sub-01_task-rest')?.recordings[0].timing.detail).toMatch(/5 trigger pulses vs 3 volumes/);
+    const eeg = readPhysio(idx, 'eeg/sub-01_task-rest')!.recordings[0];
     expect(eeg.datatype).toBe('eeg');
     expect(eeg.timing.status).toBe('unverified');
     expect(eeg.timing.detail).toMatch(/Physio in eeg\/: .*no trigger check/);

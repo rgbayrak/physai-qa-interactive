@@ -48,6 +48,9 @@ import {
   ordinal,
   timingCounts,
   uniqueScans,
+  labelRecordingChannels,
+  recordingFiles,
+  recordingRates,
 } from '../model';
 
 function row(over: Partial<QualityRow> = {}, metrics: Partial<Record<MetricKey, number>> = {}): QualityRow {
@@ -62,6 +65,7 @@ function row(over: Partial<QualityRow> = {}, metrics: Partial<Record<MetricKey, 
     ...(run ? { run } : {}),
   });
   return {
+    recording: '',
     filename: 'sub-01_ses-01_task-rest_run-01_physio.tsv.gz',
     channel: 'cardiac',
     signalType: 'cardiac',
@@ -202,6 +206,39 @@ describe('scan links to the Stats tab', () => {
   });
 });
 
+describe('recordings in the Stats tab', () => {
+  const belts = [
+    row({ recording: 'belt1', channel: 'respiratory', filename: 'a_recording-belt1_physio.tsv.gz', samplingFrequency: 100 }),
+    row({ recording: 'belt2', channel: 'respiratory', filename: 'a_recording-belt2_physio.tsv.gz', samplingFrequency: 100 }),
+    row({ recording: 'cardiac', channel: 'cardiac', filename: 'a_recording-cardiac_physio.tsv.gz', samplingFrequency: 25 }),
+    row({ sub: '02', recording: 'belt1', channel: 'respiratory' }), // another scan: only one belt
+  ];
+
+  it('names a column two recordings of one scan share by its recording, like Explore and Annotate', () => {
+    const labelled = labelRecordingChannels(belts);
+    expect(labelled.map((r) => r.channel)).toEqual([
+      'respiratory (recording-belt1)',
+      'respiratory (recording-belt2)',
+      'cardiac',
+      'respiratory',
+    ]);
+    expect(labelled[0].column).toBe('respiratory');
+    expect(labelled[2].column).toBeUndefined();
+  });
+
+  it('lists every file and rate of a split scan', () => {
+    const scanRows = belts.slice(0, 3);
+    expect(recordingFiles(scanRows)).toBe(
+      'a_recording-belt1_physio.tsv.gz, a_recording-belt2_physio.tsv.gz, a_recording-cardiac_physio.tsv.gz',
+    );
+    expect(recordingRates(scanRows)).toBe('100 Hz, 25 Hz');
+  });
+
+  it('round-trips the recording column', () => {
+    expect(parseQualityTsv(rowsToTsv(belts)).map((r) => r.recording)).toEqual(['belt1', 'belt2', 'cardiac', 'belt1']);
+  });
+});
+
 describe('model', () => {
   const rows = [
     row({ sub: '01', channel: 'cardiac', task: 'rest' }, { snr: 1, beatCorrelation: 0.9 }),
@@ -274,9 +311,9 @@ describe('model', () => {
       [row({ sub: '01', channel: 'cardiac' }), row({ sub: '02', channel: 'cardiac' })],
       { runDate: '2026-11-05T15:40:12', scansComputed: 2, scansAvailable: 5, scansFailed: 0, countSource: 'git-annex' },
     );
-    expect(text.endsWith(' Quality metrics were last computed on 2026-11-05 for 2 of 5 scans (3 not downloaded).')).toBe(
-      true,
-    );
+    expect(
+      text.endsWith(' Quality metrics were last computed on 2026-11-05 for 2 of 5 physio recordings (3 not downloaded).'),
+    ).toBe(true);
   });
 
   it('spells out mixed tasks, rates, channel coverage and timing', () => {

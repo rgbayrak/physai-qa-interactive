@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { nearestPoint, paddedValueExtent } from '../charts/shared';
+import { formatValue, nearestPoint, paddedValueExtent } from '../charts/shared';
 import { confoundColor, splitByColor, confoundYDomain, FD_GOOD_MM, FD_ACCEPTABLE_MM } from '../charts/confounds';
 import { windowLengthLabel } from '../charts/focus-context';
 
@@ -47,6 +47,20 @@ describe('paddedValueExtent', () => {
   it('uses a fixed 0.1 pad for a flat signal, and null for no samples', () => {
     expect(paddedValueExtent(pts([3, 3]))).toEqual([2.9, 3.1]);
     expect(paddedValueExtent([])).toBeNull();
+  });
+
+  it('leaves missing samples (n/a) out, and is null when every visible sample is missing', () => {
+    const [lo, hi] = paddedValueExtent(pts([0, NaN, 10, NaN]))!;
+    expect(lo).toBeCloseTo(-0.5, 12);
+    expect(hi).toBeCloseTo(10.5, 12);
+    expect(paddedValueExtent(pts([NaN, NaN]))).toBeNull();
+  });
+});
+
+describe('hover readout of a sample', () => {
+  it('shows n/a for a missing sample', () => {
+    expect(formatValue(1.234)).toBe('1.23');
+    expect(formatValue(NaN)).toBe('n/a');
   });
 });
 

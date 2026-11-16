@@ -1,4 +1,4 @@
-import { fetchServedDataset, fetchDatasetQuality, fetchReportStatus, saveReport } from './data';
+import { fetchServedDataset, fetchDatasetQuality, fetchReportStatus, saveReport, OutdatedMetricsError } from './data';
 import type { LoadedDataset, ServedDataset } from './data';
 import { shareScanWithViewer, viewerScan } from './linked-scan';
 import { parseScanHash, scanHash, viewerUrl } from './route';
@@ -162,11 +162,18 @@ async function init() {
     return;
   }
   setStatus(`Loading ${esc(served.id)}…`);
-  data = await fetchDatasetQuality(served.id).catch(() => null);
+  let outdated = false;
+  data = await fetchDatasetQuality(served.id).catch((err) => {
+    outdated = err instanceof OutdatedMetricsError;
+    return null;
+  });
   if (!data) {
+    const command = `<code>npx vite-node scripts/compute-quality-metrics.ts ${esc(served.id)}</code>`;
     setStatus(
-      `No quality metrics for <strong>${esc(served.id)}</strong> yet. Compute them with ` +
-        `<code>npx vite-node scripts/compute-quality-metrics.ts ${esc(served.id)}</code> and reload.`,
+      outdated
+        ? `The quality metrics for <strong>${esc(served.id)}</strong> were computed by an older version and cannot be read. ` +
+            `Compute them again with ${command} and reload.`
+        : `No quality metrics for <strong>${esc(served.id)}</strong> yet. Compute them with ${command} and reload.`,
     );
     return;
   }

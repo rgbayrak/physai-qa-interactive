@@ -87,7 +87,8 @@ export function renderDatasetInfo(el: HTMLElement, info: DatasetInfo | null): vo
 type SummaryPart = string | { code: string };
 
 /** What the page knows about the quality metrics: still loading (undefined), none, or found with their last logged run */
-export type MetricsStatus = { found: false } | { found: true; lastRun: QualityRun | null };
+/** `outdated`: the metrics files are there but were written by an older version and cannot be read */
+export type MetricsStatus = { found: false; outdated?: boolean } | { found: true; lastRun: QualityRun | null };
 
 const QUALITY_SCRIPT = 'scripts/compute-quality-metrics.ts';
 const recordings = (n: number) => (n === 1 ? 'recording' : 'recordings');
@@ -118,6 +119,13 @@ export function downloadedLine(count: PhysioFileCount | undefined): SummaryPart[
 export function metricsLine(status: MetricsStatus | undefined): SummaryPart[] | null {
   if (!status) return null;
   if (!status.found) {
+    if (status.outdated) {
+      return [
+        'The quality metrics were computed by an older version and cannot be read. Run ',
+        { code: QUALITY_SCRIPT },
+        ' again to update them and open the Stats tab.',
+      ];
+    }
     return ['No quality metrics yet. Run ', { code: QUALITY_SCRIPT }, ' to compute them and open the Stats tab.'];
   }
   const run = status.lastRun;

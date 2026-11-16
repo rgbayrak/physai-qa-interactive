@@ -22,6 +22,7 @@ function row(metrics: Partial<Record<MetricKey, number>>): QualityRow {
   for (const c of METRIC_COLUMNS) m[c.key] = NaN;
   return {
     ...makeScanKey('func', { sub: '01', task: 'rest' }),
+    recording: '',
     filename: 'f',
     channel: 'cardiac',
     signalType: 'cardiac',

@@ -14,11 +14,17 @@ import {
   fitYToVisible,
   drawOnsetMarker,
   attachHover,
+  formatValue,
 } from './shared';
 import type { GroupSelection } from './shared';
 
 interface FocusContextOptions {
+  /** The recording the channel is in */
   raw: PhysioRaw;
+  /** Shown name when it differs from the column name (e.g. "respiratory (recording-belt1)") */
+  label?: string;
+  /** Datatype whose data t = 0 refers to (timeReference); the physio file's own when not given */
+  timeDatatype?: string;
   channel: string;
   getAnnotations: () => Annotation[];
   isAnnotateMode: () => boolean;
@@ -66,7 +72,7 @@ export function buildFocusContext(opts: FocusContextOptions): FocusContextHandle
   const timeExtent = getViewExtent(raw);
   const valueExtent = getValueExtent(raw, channel);
   // What t = 0 is depends on the physio file's datatype folder (first BOLD volume for func/)
-  const t0 = timeReference(raw.datatype ?? 'func');
+  const t0 = timeReference(opts.timeDatatype ?? raw.datatype ?? 'func');
 
   const focus = createChart({
     container: '#focus-chart',
@@ -76,7 +82,7 @@ export function buildFocusContext(opts: FocusContextOptions): FocusContextHandle
     xScale: { type: 'linear', domain: timeExtent },
     yScale: { type: 'linear', domain: valueExtent, nice: true },
     xAxis: { position: 'bottom', label: t0.axisLabel },
-    yAxis: { position: 'left', label: channel },
+    yAxis: { position: 'left', label: opts.label ?? channel },
     grid: {
       x: { strokeColor: '#e0e0e0', opacity: 0.5 },
       y: { strokeColor: '#e0e0e0', opacity: 0.5 },
@@ -260,7 +266,7 @@ export function buildFocusContext(opts: FocusContextOptions): FocusContextHandle
 
   attachHover(focus, zoomRect, data, {
     color: '#2d8a8e',
-    html: (p) => `<div><strong>${p.time.toFixed(3)} s</strong></div><div>${channel}: ${p.value.toFixed(2)}</div>`,
+    html: (p) => `<div><strong>${p.time.toFixed(3)} s</strong></div><div>${channel}: ${formatValue(p.value)}</div>`,
     isSuppressed: () => brushStartX != null,
   });
 

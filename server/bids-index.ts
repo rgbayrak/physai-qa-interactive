@@ -81,9 +81,9 @@ export interface IndexRoots {
 }
 
 export interface DuplicatePhysio {
-  /** The file loaded for the scan */
+  /** The file loaded for one recording of the scan */
   chosen: IndexedFile;
-  /** Other readable physio files of the same scan (recording-…, desc-…), not loaded yet */
+  /** Other readable physio files of the same scan and recording (a desc-preproc copy, another folder), not loaded */
   others: IndexedFile[];
 }
 
@@ -96,8 +96,12 @@ export interface BidsIndex extends IndexRoots {
   files: IndexedFile[];
   /** Files by kind, sub and ses ('' when the name has none) */
   byKey: Map<string, IndexedFile[]>;
-  /** The physio file loaded for each scan, by scan id (scanOf(file).id) */
-  scans: Map<string, IndexedFile>;
+  /**
+   * The physio files loaded for each scan, by scan id (scanOf(file).id): one
+   * per recording- label ('' for a file without one first, then label order).
+   * Never empty. See scanFile for the file that stands for the whole scan.
+   */
+  scans: Map<string, IndexedFile[]>;
   duplicates: DuplicatePhysio[];
   /** Readable physio without a sub- entity: not a scan */
   unkeyed: IndexedFile[];
@@ -106,6 +110,12 @@ export interface BidsIndex extends IndexRoots {
     ms: number;
     /** Readable physio files per datatype folder ('none' outside one) */
     physioByDatatype: Record<string, number>;
+    /**
+     * Physio recordings the dataset lists, downloaded or not: distinct scan +
+     * recording- label among physio files with sub- (BIDS: one file per
+     * recording; copies of one recording, e.g. raw and desc-preproc, count once)
+     */
+    physioRecordings: number;
     unreadablePhysio: number;
     physioEvents: number;
   };
@@ -301,24 +311,34 @@ export function buildBidsIndex(roots: IndexRoots): BidsIndex {
       dirs,
       ms: Date.now() - started,
       physioByDatatype,
+      physioRecordings: new Set(
+        files
+          .filter((f) => f.kind === 'physio' && f.entities.sub)
+          .map((f) => `${groupKey(scanOf(f))}\0${recordingOf(f)}`),
+      ).size,
       unreadablePhysio: files.filter((f) => f.kind === 'physio' && !f.readable).length,
       physioEvents: files.filter((f) => f.kind === 'physioEvents').length,
     },
   };
 }
 
-/** Preference among physio files of one scan (same datatype folder): desc-preproc first, then name, then path */
+/** Preference among physio files of one scan and recording: desc-preproc first, then name, then path */
 function physioPreference(a: IndexedFile, b: IndexedFile): number {
   const preproc = Number(b.entities.desc === 'preproc') - Number(a.entities.desc === 'preproc');
   if (preproc) return preproc;
   return byNumeric(a.name, b.name) || byNumeric(a.path, b.path);
 }
 
+/** A physio file's recording- label; '' when it has none */
+export const recordingOf = (f: IndexedFile): string => f.entities.recording ?? '';
+
 /**
- * One physio file per scan (see scanOf): readable files with a sub- entity.
- * Physio in two datatype folders (func/ and eeg/ in EEG-fMRI) is two scans;
- * the other files of one scan (several recording- files, a desc-preproc copy)
- * are kept in duplicates for the log.
+ * The physio files of each scan (see scanOf): readable files with a sub-
+ * entity. Physio in two datatype folders (func/ and eeg/ in EEG-fMRI) is two
+ * scans. Within a scan, BIDS splits signals with different sampling rates or
+ * devices into recording-<label> files: every recording is loaded, one file
+ * each. Other files of the same recording (a desc-preproc copy, the same file
+ * in another folder) are kept in duplicates for the log.
  */
 function selectScanFiles(files: IndexedFile[]) {
   const groups = new Map<string, IndexedFile[]>();
@@ -334,14 +354,37 @@ function selectScanFiles(files: IndexedFile[]) {
     if (list) list.push(f);
     else groups.set(key, [f]);
   }
-  const scans = new Map<string, IndexedFile>();
+  const scans = new Map<string, IndexedFile[]>();
   const duplicates: DuplicatePhysio[] = [];
   for (const list of groups.values()) {
-    const [chosen, ...others] = [...list].sort(physioPreference);
-    scans.set(scanOf(chosen).id, chosen);
-    if (others.length) duplicates.push({ chosen, others });
+    const byRecording = new Map<string, IndexedFile[]>();
+    for (const f of list) {
+      const files = byRecording.get(recordingOf(f));
+      if (files) files.push(f);
+      else byRecording.set(recordingOf(f), [f]);
+    }
+    const recordings: IndexedFile[] = [];
+    for (const label of [...byRecording.keys()].sort(byNumeric)) {
+      const [chosen, ...others] = byRecording.get(label)!.sort(physioPreference);
+      recordings.push(chosen);
+      if (others.length) duplicates.push({ chosen, others });
+    }
+    scans.set(scanOf(recordings[0]).id, recordings);
   }
   return { scans, duplicates, unkeyed };
+}
+
+/** The scan's physio files, one per recording; empty for an unknown id */
+export function scanRecordings(index: BidsIndex, scanId: string): IndexedFile[] {
+  return index.scans.get(scanId) ?? [];
+}
+
+/**
+ * The file that stands for the whole scan where one is needed (its folder,
+ * datatype and dataset, shared by its recordings): the first recording
+ */
+export function scanFile(index: BidsIndex, scanId: string): IndexedFile | undefined {
+  return index.scans.get(scanId)?.[0];
 }
 
 /**
@@ -433,9 +476,11 @@ export function indexSummaryLines(index: BidsIndex): string[] {
       `${index.unkeyed.length} physio files without sub- not loaded (e.g. ${relative(index.unkeyed[0].root, index.unkeyed[0].path)})`,
     );
   }
+  const split = [...index.scans.values()].filter((r) => r.length > 1).length;
+  if (split) lines.push(`${split} scans split into recording- files (each recording loaded)`);
   for (const d of index.duplicates) {
     lines.push(
-      `${relative(d.chosen.root, d.chosen.path)} loaded; same scan not loaded yet: ${d.others.map((o) => relative(o.root, o.path)).join(', ')}`,
+      `${relative(d.chosen.root, d.chosen.path)} loaded; same recording not loaded: ${d.others.map((o) => relative(o.root, o.path)).join(', ')}`,
     );
   }
   return lines;

@@ -18,6 +18,8 @@ import {
   rowsForChannel,
   rowsForScan,
   uniqueScans,
+  recordingFiles,
+  recordingRates,
 } from './model';
 import type { VisibleMetrics } from './model';
 import { percentileRank } from './stats';
@@ -75,7 +77,7 @@ function scanDetailsHtml(rows: QualityRow[]): string {
     ...named.map((k) => NAMED[k](r.entities[k])).map(([k, v]): [string, string] => [k, esc(v)]),
     ...(r.datatype ? ([['datatype', esc(r.datatype)]] as [string, string][]) : []),
     ...others.map(([k, v]): [string, string] => [k, esc(`${k}-${v}`)]),
-    ['sampling rate', esc(`${r.samplingFrequency} Hz`)],
+    ['sampling rate', esc(recordingRates(rows))],
     ['duration', esc(formatSeconds(r.durationS))],
     ['samples', esc(String(r.numSamples))],
     ['channels', rows.map((x) => channelName(x.channel)).join(' ')],
@@ -182,27 +184,33 @@ export function createIndividualTab(
     }
   }
 
-  async function waveformsFor(dataset: string, scan: ScanKeyLike, id: number, units?: Record<string, string>) {
+  async function waveformsFor(
+    dataset: string,
+    scan: ScanKeyLike,
+    scanRows: QualityRow[],
+    id: number,
+    units?: Record<string, string>,
+  ) {
     els.waveforms.innerHTML = '<div class="muted">Loading waveforms…</div>';
-    const wf = await fetchWaveforms(dataset, scan);
+    const wf = await fetchWaveforms(dataset, scan, scanRows);
     if (id !== requestId) return;
     els.waveforms.innerHTML = '';
     if (!wf) {
       els.waveforms.innerHTML = '<div class="muted">No waveform file for this scan. Re-run the quality metrics script.</div>';
       return;
     }
-    wf.channels.forEach((ch, i) => {
+    wf.forEach((ch, i) => {
       const el = document.createElement('div');
       el.className = 'waveform-chart';
       els.waveforms.appendChild(el);
       const chart = drawWaveform({
         container: el,
         channel: ch.channel,
-        times: wf.times,
+        times: ch.times,
         min: ch.min,
         max: ch.max,
         units: units?.[ch.channel],
-        timeLabel: i === wf.channels.length - 1,
+        timeLabel: i === wf.length - 1,
         // Fill the graphs column (3/4 of the page beside the sidebar)
         width: el.clientWidth || undefined,
       });
@@ -246,11 +254,11 @@ export function createIndividualTab(
           : '';
 
       const scanRows = rowsForScan(data.rows, current);
-      els.filename.textContent = scanRows[0].filename;
+      els.filename.textContent = recordingFiles(scanRows);
       els.participant.innerHTML = participantHtml(data.summary.participants, current.sub);
       els.scanDetails.innerHTML = notice + scanDetailsHtml(scanRows);
       metricsFor(scanRows, data.rows, data.summary.channelUnits);
-      void waveformsFor(dataset, current, id, data.summary.channelUnits);
+      void waveformsFor(dataset, current, scanRows, id, data.summary.channelUnits);
       return current;
     },
   };

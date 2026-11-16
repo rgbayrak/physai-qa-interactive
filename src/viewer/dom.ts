@@ -2,6 +2,8 @@
 interface ViewerElements {
   subjectSelect: HTMLSelectElement;
   sessionSelect: HTMLSelectElement;
+  /** Session label: hidden when the subject has no sessions */
+  sessionLabel: HTMLLabelElement;
   taskSelect: HTMLSelectElement;
   runSelect: HTMLSelectElement;
   runLabel: HTMLLabelElement;
@@ -77,6 +79,7 @@ export function getElements(): ViewerElements {
   return {
     subjectSelect: byId('subject-select'),
     sessionSelect: byId('session-select'),
+    sessionLabel: byId('session-label'),
     taskSelect: byId('task-select'),
     runSelect: byId('run-select'),
     runLabel: byId('run-label'),

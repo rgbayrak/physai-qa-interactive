@@ -7,6 +7,7 @@ import { findScan } from './navigation';
 // and failures are ignored.
 
 export interface LastViewed extends ScanEntry {
+  /** Channel key (refKey, src/data/recordings.ts): the column name, prefixed by its recording in a split scan */
   channel: string;
   confound: string;
   /** Events column; absent in entries saved before the events figure existed */

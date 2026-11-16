@@ -38,7 +38,7 @@ describe('runQualityMetrics (bids-sessions fixture)', () => {
 
   const allRaw = () => {
     const index = buildBidsIndex({ bidsRoot: root });
-    return buildScans(index).map((s) => ({ scan: s, raw: readPhysio(index, s.id)! }));
+    return buildScans(index).map((s) => ({ scan: s, raw: readPhysio(index, s.id)!.recordings[0] }));
   };
 
   it('writes one row per scan and physiological channel, in scan order', () => {
@@ -136,6 +136,40 @@ describe('runQualityMetrics (bids-nosessions fixture)', () => {
     expect(summary.nScans).toBe(2);
     expect(rows.every((r) => r.ses === '' && r.run === '')).toBe(true);
     expect(rows.map((r) => scanId(r))).toContain('func/sub-01_task-motor');
+  });
+});
+
+describe('runQualityMetrics (bids-recordings fixture: one scan split into recording- files)', () => {
+  it('writes rows per recording and channel, each at its own rate, and counts the scan once', () => {
+    const { rows, summary } = runQualityMetrics({ dataDir: FIXTURES, dataset: 'bids-recordings', outRoot: out });
+    expect(rows.map((r) => [r.recording, r.channel, r.samplingFrequency])).toEqual([
+      ['belt', 'respiratory', 100],
+      ['cardiac', 'cardiac', 50],
+      ['resp', 'respiratory', 25],
+    ]);
+    expect(summary.nScans).toBe(1);
+    expect(summary.nPhysio).toBe(3); // one per recording- file
+    expect(summary.failedScans).toEqual([]);
+    expect(summary.samplingFrequencies).toEqual([25, 50, 100]);
+    // trigger (in two recordings) is excluded, counted once for the scan
+    expect(summary.excludedChannels).toEqual([{ channel: 'trigger', reason: 'scanner trigger', scans: 1 }]);
+    expect(summary.channelUnits).toMatchObject({ respiratory: 'V' });
+  });
+
+  it('round-trips the recording column through the TSV', () => {
+    const { rows, outDir } = runQualityMetrics({ dataDir: FIXTURES, dataset: 'bids-recordings', outRoot: out });
+    expect(parseQualityTsv(readFileSync(join(outDir, METRICS_TSV_NAME), 'utf-8'))).toEqual(rows);
+  });
+
+  it('writes one waveform file per recording, on its own time bins', () => {
+    const { outDir } = runQualityMetrics({ dataDir: FIXTURES, dataset: 'bids-recordings', outRoot: out, buckets: 10 });
+    const read = (r: string) =>
+      JSON.parse(readFileSync(join(outDir, WAVEFORMS_DIR, 'func', `sub-01_task-rest_recording-${r}_waveforms.json`), 'utf-8'));
+    expect(read('cardiac').samplingFrequency).toBe(50);
+    expect(read('resp').samplingFrequency).toBe(25);
+    expect(read('resp').times[0]).toBeGreaterThan(read('cardiac').times[0]); // resp starts 1 s later
+    expect(read('belt').samplingFrequency).toBe(100);
+    expect(read('belt').channels.map((c: { channel: string }) => c.channel)).toEqual(['respiratory']);
   });
 });
 
@@ -240,7 +274,7 @@ describe('participants', () => {
 
 describe('waveformFile', () => {
   it('maps bucket centres onto the scan-onset axis', () => {
-    const raw = readPhysio(buildBidsIndex({ bidsRoot: join(FIXTURES, 'bids-nosessions') }), 'func/sub-01_task-motor')!;
+    const raw = readPhysio(buildBidsIndex({ bidsRoot: join(FIXTURES, 'bids-nosessions') }), 'func/sub-01_task-motor')!.recordings[0];
     const wf = waveformFile(raw, 10);
     expect(wf.times).toHaveLength(10);
     const firstCentre = (Math.floor(raw.numSamples / 10) - 1) / 2;

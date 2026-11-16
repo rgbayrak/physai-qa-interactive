@@ -26,6 +26,8 @@ import {
   participantValue,
   rowsForChannel,
   rowsForScan,
+  recordingFiles,
+  recordingRates,
   scatterData,
   summaryTable,
   uniqueScans,
@@ -426,7 +428,7 @@ export async function buildQualityReport(opts: ReportOptions): Promise<Blob> {
         const scanRows = rowsForScan(data.rows, scan);
         const r0 = scanRows[0];
         await L.heading(scanId(scan), 14, 0);
-        await L.text(r0.filename, 9, { mono: true, color: '#444' });
+        await L.text(recordingFiles(scanRows), 9, { mono: true, color: '#444' });
         const p = participantLine(participants, scan.sub);
         if (p) await L.text(`Participant: ${p}`, 9);
         const timing = TIMING_LABELS[r0.timingStatus as TimingStatus] ?? `Timing: ${r0.timingStatus || 'n/a'}`;
@@ -435,23 +437,23 @@ export async function buildQualityReport(opts: ReportOptions): Promise<Blob> {
           .map((r) => `${r.channel}: ${r.sidecarAssessment}`)
           .join(', ');
         await L.text(
-          `${r0.samplingFrequency} Hz · ${formatSeconds(r0.durationS)} · ${timing}${sidecar ? ` · Sidecar: ${sidecar}` : ''}`,
+          `${recordingRates(scanRows)} · ${formatSeconds(r0.durationS)} · ${timing}${sidecar ? ` · Sidecar: ${sidecar}` : ''}`,
           9,
         );
         L.gap(4);
 
-        const wf = await fetchWaveforms(dataset, scan);
+        const wf = await fetchWaveforms(dataset, scan, scanRows);
         if (wf) {
-          for (const [ci, ch] of wf.channels.entries()) {
+          for (const [ci, ch] of wf.entries()) {
             const img = await renderChart(host, (el) =>
               drawWaveform({
                 container: el,
                 channel: ch.channel,
-                times: wf.times,
+                times: ch.times,
                 min: ch.min,
                 max: ch.max,
                 units: s.channelUnits?.[ch.channel],
-                timeLabel: ci === wf.channels.length - 1,
+                timeLabel: ci === wf.length - 1,
                 height: 110,
               }),
             );

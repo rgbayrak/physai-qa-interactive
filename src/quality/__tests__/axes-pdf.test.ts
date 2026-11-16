@@ -24,6 +24,7 @@ function row(sub: string, metrics: Partial<Record<MetricKey, number>> = {}, over
   for (const c of METRIC_COLUMNS) m[c.key] = NaN;
   return {
     ...makeScanKey('func', { sub, ses: '01', task: 'rest' }),
+    recording: '',
     filename: `sub-${sub}_physio.tsv.gz`,
     channel: 'cardiac',
     signalType: 'cardiac',

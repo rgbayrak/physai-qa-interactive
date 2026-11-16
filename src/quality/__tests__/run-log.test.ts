@@ -22,13 +22,13 @@ describe('run sentence', () => {
   it('gives the date and coverage, with what was left out', () => {
     expect(notDownloaded(run)).toBe(40);
     expect(runSentence(run)).toBe(
-      'Quality metrics were last computed on 2026-11-05 for 78 of 120 scans (40 not downloaded, 2 failed).',
+      'Quality metrics were last computed on 2026-11-05 for 78 of 120 physio recordings (40 not downloaded, 2 failed).',
     );
   });
 
   it('leaves out the notes when every listed scan was computed', () => {
     expect(runSentence({ ...run, scansComputed: 120, scansFailed: 0 })).toBe(
-      'Quality metrics were last computed on 2026-11-05 for 120 of 120 scans.',
+      'Quality metrics were last computed on 2026-11-05 for 120 of 120 physio recordings.',
     );
   });
 
@@ -76,5 +76,11 @@ describe('dataset summary: quality metrics line', () => {
     expect(metricsLine({ found: false })).toContainEqual(SCRIPT);
     expect(metricsLine({ found: true, lastRun: null })).toContainEqual(SCRIPT);
     expect(metricsLine(undefined)).toBeNull();
+  });
+
+  it('says to compute again when the metrics are there but too old to read', () => {
+    const line = metricsLine({ found: false, outdated: true })!;
+    expect(line).toContainEqual(SCRIPT);
+    expect(line[0]).toMatch(/computed by an older version and cannot be read/);
   });
 });

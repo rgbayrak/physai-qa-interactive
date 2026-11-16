@@ -15,7 +15,6 @@
 
 import { join, resolve } from 'path';
 import { runQualityMetrics } from '../server/quality-metrics';
-import { countPhysioFiles } from '../server/availability';
 import { appendQualityRun } from '../server/quality-run-log';
 import { localTimestamp, notDownloaded } from '../src/quality/run-log';
 
@@ -61,24 +60,30 @@ try {
     log: (msg) => console.log(msg),
   });
   const { nScans, nSubjects, failedScans } = result.summary;
+  const nPhysio = result.summary.nPhysio ?? nScans;
   console.log(
-    `Done in ${((Date.now() - started) / 1000).toFixed(1)} s: ${nScans} scans, ${nSubjects} subjects` +
+    `Done in ${((Date.now() - started) / 1000).toFixed(1)} s: ${nScans} scans (${nPhysio} physio recordings), ` +
+      `${nSubjects} subjects` +
       (failedScans.length ? `, ${failedScans.length} failed (listed in dataset.json)` : ''),
   );
 
-  // Run log: one line per run in quality_runs.tsv, next to the metrics (read by the Stats tab)
-  const available = countPhysioFiles(result.index);
+  // Run log: one line per run in quality_runs.tsv, next to the metrics (read by the Stats tab).
+  // Counted in physio recordings (one per recording- file) on every side, so a
+  // scan split into recording-cardiac and recording-respiratory counts twice
+  // in each: listed (downloaded or not), computed, and downloaded but failed
+  const listed = result.index.stats.physioRecordings;
+  const readable = [...result.index.scans.values()].reduce((n, recordings) => n + recordings.length, 0);
   const run = {
     runDate,
-    scansComputed: nScans,
-    scansAvailable: available.onDisk,
-    scansFailed: failedScans.length,
-    countSource: available.source,
+    scansComputed: nPhysio,
+    scansAvailable: listed,
+    scansFailed: Math.max(0, readable - nPhysio),
+    countSource: 'files on disk',
   };
   const logPath = appendQualityRun(result.outDir, run);
   console.log(
-    `Coverage: ${nScans} of ${available.onDisk} scans (${notDownloaded(run)} not downloaded, ` +
-      `${failedScans.length} failed; counted with ${available.source}). Logged in ${logPath}`,
+    `Coverage: ${nPhysio} of ${listed} physio recordings (${notDownloaded(run)} not downloaded, ` +
+      `${run.scansFailed} failed). Logged in ${logPath}`,
   );
   console.log(
     'The PDF report (quality_report.pdf) is built and saved next to these files the next time the Stats tab opens (npm run dev).',

@@ -1,6 +1,7 @@
 import type { DescriptionNotice } from './dataset-notice';
 import type { BidsStructure } from './bids-structure';
 import type { ScanKeyLike } from './scan-key';
+import type { ChannelRef } from './recordings';
 
 /** A scan: datatype folder plus entities, with its id (src/data/scan-key.ts) */
 export type ScanEntry = ScanKeyLike;
@@ -18,8 +19,18 @@ interface ChannelQuality {
   percentValid: number | null;
 }
 
+/** A scan's physio: one entry per recording- file (one for a scan that is not split), all on the same t = 0 */
+export interface PhysioScan {
+  recordings: PhysioRaw[];
+  /** Files of the scan whose sidecar could not be used */
+  skipped: { filename: string; reason: string }[];
+}
+
+/** One recording of a scan */
 export interface PhysioRaw {
   filename: string;
+  /** recording- label; '' when the file has none. Absent in data made before recordings were split */
+  recording?: string;
   /** Datatype folder of the physio file ('' outside one): what t = 0 is (timeReference, src/data/scan-key.ts) */
   datatype: string;
   samplingFrequency: number;
@@ -97,7 +108,7 @@ export async function fetchScans(): Promise<ScanEntry[]> {
   return json.scans;
 }
 
-export async function fetchPhysioRaw(scan: ScanEntry): Promise<PhysioRaw> {
+export async function fetchPhysioRaw(scan: ScanEntry): Promise<PhysioScan> {
   const res = await fetch(`/api/bids/physio?${scanQuery(scan)}`);
   if (!res.ok) throw new Error(`Failed to fetch physio for ${scan.id}`);
   return res.json();
@@ -113,7 +124,9 @@ export function toDataPoints(raw: PhysioRaw, channel: string): DataPoint[] {
   const t0 = raw.startTime;
 
   for (let i = 0; i < raw.numSamples; i++) {
-    points[i] = { time: t0 + i * dt, value: col[i] };
+    // An n/a sample reaches the page as null (JSON has no NaN): keep it missing, never 0
+    const v = col[i] as number | null;
+    points[i] = { time: t0 + i * dt, value: v == null ? NaN : v };
   }
   return points;
 }
@@ -157,6 +170,12 @@ export interface EventsRaw {
   duration: number[];
   /** Every other events column (e.g. trial_type) → one text value per event */
   columns: Record<string, string[]>;
+  /**
+   * Datatype folder of the events file ('' at the top level). For beh/ physio
+   * whose events come from the same acquisition's neural folder (e.g. func/),
+   * t = 0 is that data's first sample. Absent in older responses
+   */
+  datatype?: string;
 }
 
 export async function fetchEvents(scan: ScanEntry): Promise<EventsRaw | null> {
@@ -228,13 +247,17 @@ export interface AnnotationsFile {
   ses: string;
   task: string;
   run: string;
+  /** recording- label of the file the channel is in; '' when it has none */
+  recording: string;
   channel: string;
   sampling_rate: number;
   annotations: StoredAnnotation[];
 }
 
-export async function fetchAnnotations(scan: ScanEntry, channel: string): Promise<AnnotationsFile | null> {
-  const res = await fetch(`/api/bids/annotations?${scanQuery(scan)}&channel=${encodeURIComponent(channel)}`);
+export async function fetchAnnotations(scan: ScanEntry, ref: ChannelRef): Promise<AnnotationsFile | null> {
+  const res = await fetch(
+    `/api/bids/annotations?${scanQuery(scan)}&recording=${encodeURIComponent(ref.recording)}&channel=${encodeURIComponent(ref.channel)}`,
+  );
   if (!res.ok) return null;
   return res.json();
 }
@@ -247,8 +270,13 @@ interface AnnotationProgress {
 }
 
 /** How many scans have anything saved (signal quality, notes or time windows) for one channel */
-export async function fetchAnnotationProgress(channel: string): Promise<AnnotationProgress | null> {
-  const res = await fetch(`/api/bids/annotation-progress?channel=${encodeURIComponent(channel)}`);
+/**
+ * Counted by column name, in whichever recording holds it; `recording` limits
+ * it to one recording, for a column two recordings share (e.g. respiratory of belt1)
+ */
+export async function fetchAnnotationProgress(channel: string, recording?: string): Promise<AnnotationProgress | null> {
+  const only = recording === undefined ? '' : `&recording=${encodeURIComponent(recording)}`;
+  const res = await fetch(`/api/bids/annotation-progress?channel=${encodeURIComponent(channel)}${only}`);
   if (!res.ok) return null;
   return res.json();
 }
@@ -270,9 +298,13 @@ export function getValueExtent(raw: PhysioRaw, channel: string): [number, number
   let min = Infinity;
   let max = -Infinity;
   for (let i = 0; i < col.length; i++) {
-    if (col[i] < min) min = col[i];
-    if (col[i] > max) max = col[i];
+    // Missing samples (n/a, sent as null) are left out; null would otherwise count as 0
+    const v = col[i] as number | null;
+    if (v == null || !Number.isFinite(v)) continue;
+    if (v < min) min = v;
+    if (v > max) max = v;
   }
+  if (min > max) return [-1, 1]; // every sample missing: an empty chart with a readable axis
   const pad = (max - min) * 0.02;
   return [min - pad, max + pad];
 }

@@ -54,6 +54,14 @@ describe('toDataPoints', () => {
     const raw = makeRaw();
     expect(() => toDataPoints(raw, 'Z')).toThrow('Channel "Z" not found');
   });
+
+  it('keeps a missing sample (n/a, sent as null) missing, at its own time', () => {
+    const raw = makeRaw({ data: [[1, null, 3, 4, 5] as unknown as number[], [0, 0, 0, 0, 0]] });
+    const points = toDataPoints(raw, 'A');
+    expect(points[1].time).toBeCloseTo(0.01);
+    expect(points[1].value).toBeNaN();
+    expect(points[2].value).toBe(3);
+  });
 });
 
 describe('getTimeExtent', () => {
@@ -104,6 +112,18 @@ describe('getValueExtent', () => {
     // range=20, pad=0.4
     expect(min).toBeCloseTo(-10.4);
     expect(max).toBeCloseTo(10.4);
+  });
+
+  it('leaves missing samples (n/a, sent as null) out, never counting them as 0', () => {
+    const raw = makeRaw({ data: [[5, null, 7, NaN, 9] as unknown as number[], [0, 0, 0, 0, 0]] });
+    const [min, max] = getValueExtent(raw, 'A');
+    expect(min).toBeCloseTo(5 - 0.08);
+    expect(max).toBeCloseTo(9 + 0.08);
+  });
+
+  it('gives a readable range when every sample is missing', () => {
+    const raw = makeRaw({ data: [[null, null, null, null, null] as unknown as number[], [0, 0, 0, 0, 0]] });
+    expect(getValueExtent(raw, 'A')).toEqual([-1, 1]);
   });
 
   it('throws for unknown channel', () => {
