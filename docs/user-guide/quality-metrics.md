@@ -17,11 +17,11 @@ npx vite-node scripts/compute-quality-metrics.ts <name> --bids-root /path/to/dat
 npx vite-node scripts/compute-quality-metrics.ts <name> --bids-root /path/to/dataset --physio-root /path/to/physio --deriv-root /path/to/derivatives
 ```
 
-`<name>` names the output folder, `data/quality/<name>/`. Use the name the tool gives the dataset, so the Stats tab finds the metrics: the folder name of `BIDS_ROOT`, or the first folder under `data/` (see {doc}`datasets`).
+`<name>` names the output folder, `data/quality/<name>/`. Use the name the tool gives the dataset, so the Stats tab finds the metrics: the folder name of `BIDS_ROOT`, or the first folder under `data/` (see {doc}`inputs-and-outputs`).
 
-The script finds its folders the same way as the tool (see {doc}`datasets`): `--bids-root`, `--physio-root` and `--deriv-root` match `BIDS_ROOT`, `BIDSPHYS_ROOT` and `BIDSDER_ROOT`. It prints the three folders it uses before computing. Then reload the page.
+The script finds its folders the same way as the tool (see {doc}`inputs-and-outputs`): `--bids-root`, `--physio-root` and `--deriv-root` match `BIDS_ROOT`, `BIDSPHYS_ROOT` and `BIDSDER_ROOT`. It prints the three folders it uses before computing. Then reload the page.
 
-Every column of the physio file is computed unless it is specifically excluded: `trigger`, `time` and other scanner, marker and time stamp columns. Known names (e.g. `cardiac`, `PPG`, `ECG`, `respiratory`, `RSP`, `EDA`) get a signal type; other names get `n/a` in `signal_type`. The `mean` column is given only for channels whose physio sidecar gives a unit other than `"arbitrary"` (e.g. `"cardiac": {"Units": "mV"}`); it is `n/a` when the unit is missing or arbitrary. The output is deterministic: the same input gives identical files, except the run log.
+Every column of the physio file is computed unless it is specifically excluded: `trigger`, `time` and other scanner, marker and time stamp columns. Known names (e.g. `cardiac`, `PPG`, `ECG`, `respiratory`, `RSP`, `EDA`) get a signal type; other names get `n/a` in `signal_type`. Which columns get the PPG metrics follows the rule in [Channel types](metric-definitions.md#channel-types): the run notes that `cardiac` was taken as PPG, warns about ambiguous or unknown names, and `--channel <column>=<ppg|ecg|resp|none>` sets a column's type for that run (e.g. `--channel cardiac=ecg`). The script prints this as a channel types table before computing and saves it as `channel_types` in `dataset.json`. The `mean` column is given only for channels whose physio sidecar gives a unit other than `"arbitrary"` (e.g. `"cardiac": {"Units": "mV"}`); it is `n/a` when the unit is missing or arbitrary. The output is deterministic: the same input gives identical files, except the run log.
 
 ## What it writes
 
@@ -40,7 +40,7 @@ At the bottom of **Explore and Annotate**. It shows the channel picked in the pa
 - **Y** is a metric; **X** is a metric or a participant variable such as age or sex. The menus list every metric with values for that channel.
 - **Colour by** offers only what the dataset has (task, session, timing check, quality sidecar pass/fail). The colour legend and the number of scans plotted are to the right of the plot.
 - The scan you are viewing is the larger pinkish-red point.
-- Hover a point for details; **double-click** it to open that scan in the Stats tab.
+- Hover a point for details; **double-click** it to open that scan in the Stats tab. A double-click is a new choice of scan: it clears the locks set in Explore and Annotate, so Stats and, when you go back, Explore and Annotate show that scan; the channel, confound, events column and stack carry over. The scatter plot's X, Y and Colour by are kept too, across scans, reloads and the Stats tab, for the visit.
 
 A channel without metrics (e.g. `trigger`) gets a short message instead of a plot.
 
@@ -65,7 +65,7 @@ The top of the **Stats** tab: what is known about the scan, and its waveforms ov
 **Metrics shown** lists every metric by name, with the paper it comes from (e.g. "Perfusion (Elgendi 2016)"); hover a metric for a short description and its paper. Tick which ones the tables and histograms show, or use Show all / Hide all. The choice is remembered in your browser.
 
 ```{figure} ../images/quality-metrics-histograms.png
-:alt: Metrics shown box with all 12 metrics ticked under Basic, Distribution, PaPaGei and PhysioQC; next to it, the cardiac metrics table with each value and its percentile, and a histogram per metric with a solid dark line for this scan and a dashed grey line for the mean of all 80 cardiac recordings
+:alt: Metrics shown box with every metric ticked, each named with its source paper; next to it, the cardiac metrics table with each value and its percentile, and a histogram per metric with a solid dark line for this scan and a dashed grey line for the mean of all 80 cardiac recordings
 :name: fig-metric-histograms
 
 Each metric's value and percentile for this scan, and where it falls in the dataset (solid dark line: this scan; dashed grey line: dataset mean).

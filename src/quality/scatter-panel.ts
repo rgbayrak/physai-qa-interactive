@@ -20,6 +20,7 @@ import {
   yAxisChoices,
 } from './model';
 import type { AxisChoice, ColorBy } from './model';
+import type { ScatterSelection } from '../viewer/persistence';
 
 // Scatter plot of two quality metrics across every recording of one channel,
 // shown at the bottom of Explore and Annotate. The channel is the one chosen in
@@ -42,6 +43,13 @@ interface ScatterPanel {
   setCurrentScan: (scan: ScanKeyLike | null) => void;
   /** The channel chosen in Explore and Annotate's Channel dropdown */
   setChannel: (channel: string) => void;
+  /** X, Y and Colour by as chosen now (saved for the visit by main.ts) */
+  selection: () => ScatterSelection;
+  /**
+   * Choices saved earlier in the visit, applied before show(); a value the
+   * dataset or channel does not offer falls back to the default as usual
+   */
+  restore: (selection: ScatterSelection) => void;
 }
 
 /** e.g. "sub-01 ses-02 task-rest run-01 (func)": every entity, then the datatype folder */
@@ -77,7 +85,12 @@ function fillSelect(select: HTMLSelectElement, options: { value: string; label: 
   select.innerHTML = options.map((o) => option(o.value, o.label, selected)).join('');
 }
 
-export function createScatterPanel(els: ScatterElements, onOpenScan: (scan: ScanKeyLike) => void): ScatterPanel {
+export function createScatterPanel(
+  els: ScatterElements,
+  onOpenScan: (scan: ScanKeyLike) => void,
+  /** Called when X, Y or Colour by is changed in its menu */
+  onSelectionChange: () => void = () => {},
+): ScatterPanel {
   let data: LoadedDataset | null = null;
   let channel = '';
   let xValue = 'snr';
@@ -185,8 +198,15 @@ export function createScatterPanel(els: ScatterElements, onOpenScan: (scan: Scan
     yChoices = yAxisChoices(rows, units);
 
     const [defX, defY] = defaultMetricPair(rows);
-    if (!xChoices.some((c) => c.value === xValue)) xValue = defX;
-    if (!yChoices.some((c) => c.value === yValue)) yValue = defY;
+    const offered = (choices: AxisChoice[], v: string) => choices.some((c) => c.value === v);
+    if (!offered(xChoices, xValue)) xValue = defX;
+    if (!offered(yChoices, yValue)) yValue = defY;
+    // A channel with one metric (e.g. respiratory: std dev only) has no second metric for Y:
+    // the default then has no values. Use a metric that has them, and put a participant
+    // variable on X rather than the same metric twice
+    if (!offered(yChoices, yValue) && yChoices.length) yValue = yChoices[0].value;
+    if (!offered(xChoices, xValue) && xChoices.length) xValue = xChoices[0].value;
+    if (xValue === yValue && participantChoices.length) xValue = participantChoices[0].value;
 
     const group = (label: string, choices: AxisChoice[], selected: string) =>
       choices.length ? `<optgroup label="${esc(label)}">${choices.map((c) => option(c.value, c.label, selected)).join('')}</optgroup>` : '';
@@ -198,17 +218,20 @@ export function createScatterPanel(els: ScatterElements, onOpenScan: (scan: Scan
   els.xSelect.addEventListener('change', () => {
     xValue = els.xSelect.value;
     render();
+    onSelectionChange();
   });
   els.ySelect.addEventListener('change', () => {
     yValue = els.ySelect.value;
     render();
+    onSelectionChange();
   });
   els.colorSelect.addEventListener('change', () => {
     colorBy = els.colorSelect.value as ColorBy;
     render();
+    onSelectionChange();
   });
 
-  return {
+  const panel: ScatterPanel = {
     show(next) {
       data = next;
       // Only choices this dataset has (no Session without sessions, no Task with one task);
@@ -234,5 +257,17 @@ export function createScatterPanel(els: ScatterElements, onOpenScan: (scan: Scan
       refreshAxisSelects();
       render();
     },
+
+    selection: () => ({ x: xValue, y: yValue, color: colorBy }),
+
+    restore(saved) {
+      // Checked against the dataset's choices in show() and refreshAxisSelects()
+      if (saved.x) xValue = saved.x;
+      if (saved.y) yValue = saved.y;
+      if (saved.color) colorBy = saved.color as ColorBy;
+      // The metrics may have loaded first: rebuild the menus and redraw with these choices
+      if (data) panel.show(data);
+    },
   };
+  return panel;
 }

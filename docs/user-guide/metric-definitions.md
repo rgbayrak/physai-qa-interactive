@@ -2,7 +2,49 @@
 
 What each column of `quality_metrics.tsv` holds, which channels it is computed for, and where it comes from. The metrics are being reviewed one at a time against their source papers; the **Status** column says which ones are done. A metric that does not apply to a channel is `n/a`.
 
-Channels are matched by name: **pulsatile** means a name containing `cardiac`, `ppg`, `pulse`, `ecg` or `pleth`; **respiratory** means `respiratory`, `resp`, `rsp`, `chest`, `belt` or `breath` (case ignored).
+## Channel types
+
+The PPG metrics below, and the peak detectors (see [Detected peaks](explore-and-annotate.md#detected-peaks)), use one rule for a column's type. BIDS gives no per-column signal type: it recommends the names `cardiac` and `respiratory` and allows any other name (see {doc}`inputs-and-outputs`), so the type comes from the name.
+
+- The name is split into words at `_`, `-`, `.` and spaces; case and a trailing number are ignored. Each word is looked up: `ecg`, `ekg` → ECG; `ppg`, `pleth`, `pulse`, `bvp` → PPG; `respiratory`, `resp`, `rsp`, `breath`, `belt` → respiration. Words of other known signals (EDA, gas such as `CO2`, blood pressure, EMG) give no metrics or detectors.
+- One signal type in the name gives that type: `PPG`, `ECG2`, `resp_belt`, `respiratory_chest`.
+- The BIDS `cardiac` with no second signal word (`cardiac`, `cardiac2`) is **taken as PPG**: BIDS defines it as a "continuous pulse measurement", which can also be ECG. The run prints a note; if the column is ECG, rerun with `--channel cardiac=ecg`.
+- A specific cardiac word settles the generic one: `ECG_cardiac` is ECG, `cardiac_PPG` is PPG.
+- A gas word settles a respiration one: `respiratory_CO2` and `respiratory_O2` are gas measured in the breath, not a breathing belt, so they are grouped with gas and get no respiration metrics or detectors.
+- Names of two signal types (`ppg_ecg`, `pulse_resp`) are **ambiguous**, and names with no known word (`ch3`) are **unknown**. Both are skipped by the PPG metrics and the peak detectors, and the run prints a warning with the fix.
+- `--channel <column>=<ppg|ecg|resp|none>` sets a column's type for that run only, in `scripts/compute-quality-metrics.ts` and `scripts/compute-peaks.ts`; it wins over the name. It is not remembered: pass it again on the next run.
+
+Before computing, both scripts print a **channel types table**: every column the physio sidecars list, the type it was taken as, why, and how many recordings have it. Rows marked `!` are assumptions or skipped columns to check, with their `--channel` fix. For example, for ds003192:
+
+```text
+  column             type         recordings  why
+! cardiac            PPG                  20  assumed: BIDS "cardiac" can be PPG or ECG; add --channel cardiac=ecg if ECG
+  respiratory_chest  respiration          20  word "respiratory"
+  respiratory_CO2    gas                  20  word "CO2" settles "respiratory"; not analysed
+  respiratory_O2     gas                  20  word "O2" settles "respiratory"; not analysed
+  trigger            —                    20  non-physio (scanner trigger)
+  time               —                    20  non-physio (time stamp)
+```
+
+The table is saved with the results: `channel_types` in the metrics' `dataset.json`, and `channel_types.json` in the dataset's peaks folder.
+
+### Recognised words
+
+Words are compared without case, separators or a trailing number. A test (`src/quality/__tests__/channels.test.ts`) checks this table against the code (`PHYSIO_CHANNELS` and `NON_PHYSIO_CHANNELS` in `src/quality/channels.ts`), so the two cannot drift apart.
+
+<!-- channel-vocabulary:start -->
+| Type | Words | Metrics and peak detectors |
+|---|---|---|
+| PPG | `ppg`, `pleth`, `plethysmograph`, `pulse`, `puls`, `pulseox`, `pulseoximeter`, `bvp` | PPG |
+| PPG (assumed) | `cardiac` | PPG, with a note |
+| ECG | `ecg`, `ekg` | ECG |
+| respiration | `respiratory`, `respiration`, `resp`, `rsp`, `breathing`, `breath`, `respbelt`, `belt` | respiration |
+| electrodermal | `eda`, `edatonic`, `edaphasic`, `gsr`, `scr`, `scl`, `skinconductance` | none |
+| gas | `co2`, `o2`, `etco2`, `capnography` | none |
+| blood pressure | `bp`, `abp`, `bloodpressure` | none |
+| muscle (EMG) | `emg` | none |
+| non-physio (excluded) | `trigger`, `trig`, `ttl`, `scanner`, `scannertrigger`, `volume`, `slice`, `mark`, `marker`, `event`, `stim`, `stimulus`, `digital`, `sync`, `time`, `timestamp` | none (left out of the metrics; whole names only) |
+<!-- channel-vocabulary:end -->
 
 ## Filtering
 
@@ -18,20 +60,20 @@ Filtering a flat signal leaves rounding noise (values near 1e-16) rather than ex
 
 ## Summary
 
-| TSV column | Channels | Computed on | Window | Status |
-|---|---|---|---|---|
-| `mean` | all, with a physical unit | raw signal | whole recording | reviewed |
-| `std_dev` | all | raw signal | whole recording | not reviewed yet |
-| `std_dev_filtered` | PPG | band-passed signal | whole recording | new |
-| `snr` | PPG | band-passed signal | 1 s, stepped by 1 s | reviewed |
-| `entropy` | PPG | raw signal | 1 s, stepped by 1 s | reviewed |
-| `kurtosis` | PPG | raw signal | 1 s, stepped by 1 s | reviewed |
-| `skewness` | PPG | raw signal | 5 s, stepped by 1 s | reviewed |
-| `zero_crossing` | PPG | band-passed signal | 1 s, stepped by 1 s | reviewed |
-| `perfusion` | PPG | raw and band-passed signal | 1 s | reviewed |
-| `relative_power` | PPG | raw signal | 60 s, stepped by 30 s | reviewed |
+| TSV column | Channels | Computed on | Window | 
+|---|---|---|---|
+| `mean` | all, with a physical unit | raw signal | whole recording | 
+| `std_dev` | all | raw signal | whole recording | 
+| `std_dev_filtered` | PPG | band-pass filtered signal | whole recording | 
+| `snr` | PPG | band-pass filtered signal | 1 s, stepped by 1 s | 
+| `entropy` | PPG | raw signal | 1 s, stepped by 1 s | 
+| `kurtosis` | PPG | raw signal | 1 s, stepped by 1 s | 
+| `skewness` | PPG | raw signal | 5 s, stepped by 1 s | 
+| `zero_crossing` | PPG | band-pass filtered signal | 1 s, stepped by 1 s | 
+| `perfusion` | PPG | raw and band-pass filtered signal | 1 s | 
+| `relative_power` | PPG | raw signal | 60 s, stepped by 30 s | 
 
-## Reviewed metrics
+## Implemented metrics
 
 ### Mean (`mean`)
 
@@ -41,7 +83,7 @@ The DC level only means something in a physical unit. The column is therefore gi
 
 ### Perfusion (`perfusion`)
 
-The perfusion index P_SQI of Elgendi (2016, Eq. 2), in percent: the peak-to-peak of the band-passed signal y divided by the absolute mean of the raw signal x, times 100. It is computed for channels named `ppg`, `pleth`, `pulse` or `cardiac` (case ignored); ECG and respiratory channels get `n/a`.
+The perfusion index P_SQI of Elgendi (2016, Eq. 2), in percent: the peak-to-peak of the band-pass filtered signal y divided by the absolute mean of the raw signal x, times 100. It is computed for channels named `ppg`, `pleth`, `pulse` or `cardiac` (case ignored); ECG and respiratory channels get `n/a`.
 
 - **Filter for y:** the PPG reference filter (see [Filtering](#filtering)). Elgendi (2016) gives no filter, so the one from Elgendi et al. (2013) is used.
 - **Window:** 1 s windows stepped by 1 s (Elgendi 2016, Section 3).

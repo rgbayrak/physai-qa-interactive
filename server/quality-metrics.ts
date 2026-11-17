@@ -7,8 +7,9 @@ import type { BidsIndex, IndexRoots } from './bids-index';
 import { descriptionNoticeLines, noticeText } from '../src/data/dataset-notice';
 import { computeSQI } from '../src/data/sqi-metrics';
 import { minMaxEnvelope, roundSig } from '../src/quality/envelope';
-import { classifyChannel } from '../src/quality/channels';
-import type { SignalType } from '../src/quality/channels';
+import { analysisSignalOf, channelTypeTableLines, classifyChannel, signalOrNull } from '../src/quality/channels';
+import { channelTypesOfScans } from './channel-types';
+import type { ChannelOverride, SignalType } from '../src/quality/channels';
 import {
   METRIC_COLUMNS,
   METRICS_TSV_NAME,
@@ -114,9 +115,12 @@ export function scanQualityRows(
   t0Datatype: string = fullRaw.datatype,
   /** Units per column from the physio sidecar (readChannelUnits) */
   channelUnits: Record<string, string> = {},
+  /** --channel types for this run (column -> type) */
+  overrides: ReadonlyMap<string, ChannelOverride> = new Map(),
 ): QualityRow[] {
   const { raw, signals } = physioChannels(fullRaw);
-  const { metrics } = computeSQI(raw);
+  // Which metrics each column gets: one rule with the peak detectors (analysisSignalOf)
+  const { metrics } = computeSQI(raw, raw.columns.map((c) => signalOrNull(analysisSignalOf(c, overrides))));
   return metrics.map((m, i) => {
     const channel = raw.columns[i];
     const q = raw.quality?.[channel];
@@ -250,6 +254,8 @@ interface QualityRunOptions {
   derivRoot?: string;
   /** Compute only the first N readable scans (hierarchy order, as Prev/Next); all when not given */
   maxScans?: number;
+  /** --channel types for this run (column -> type); they win over the names */
+  channelOverrides?: ReadonlyMap<string, ChannelOverride>;
   buckets?: number;
   log?: (msg: string) => void;
 }
@@ -316,6 +322,11 @@ export function runQualityMetrics(opts: QualityRunOptions): QualityRunResult {
   const excludedCounts = new Map<string, { reason: string; scans: number }>();
   const channelUnits = new Map<string, string>();
 
+  // What every column is taken as, and why ("!" = check), before computing; saved in dataset.json
+  const channelTypes = channelTypesOfScans(index, scans, opts.channelOverrides);
+  log('Channel types (from the physio.json Columns; "!" = check):');
+  for (const line of channelTypeTableLines(channelTypes)) log(`  ${line}`);
+
   scans.forEach((scan, i) => {
     const id = scanId(scan);
     try {
@@ -338,7 +349,7 @@ export function runQualityMetrics(opts: QualityRunOptions): QualityRunResult {
         const { excluded } = physioChannels(raw);
         for (const e of excluded) excludedHere.set(e.channel, e.reason);
         const units = readChannelUnits(index, scan, raw.recording);
-        const recordingRows = scanQualityRows(scan, raw, physio.timeDatatype, units);
+        const recordingRows = scanQualityRows(scan, raw, physio.timeDatatype, units, opts.channelOverrides);
         if (recordingRows.length === 0) {
           failedScans.push({ scan: label, reason: 'no physiological channels' });
           log(`  [${i + 1}/${scans.length}] ${label}: skipped (no physiological channels in ${raw.columns.join(', ')})`);
@@ -396,12 +407,14 @@ export function runQualityMetrics(opts: QualityRunOptions): QualityRunResult {
       .map(([channel, v]) => ({ channel, reason: v.reason, scans: v.scans }))
       .sort((a, b) => byNumeric(a.channel, b.channel)),
     channelUnits: Object.fromEntries([...channelUnits].sort((a, b) => byNumeric(a[0], b[0]))),
+    channelTypes,
     metricsFile: METRICS_TSV_NAME,
   };
 
   writeFileSync(join(outDir, METRICS_TSV_NAME), rowsToTsv(rows));
   writeFileSync(join(outDir, DATASET_JSON_NAME), JSON.stringify(summary, null, 2) + '\n');
   log(`Wrote ${rows.length} rows to ${join(outDir, METRICS_TSV_NAME)}`);
+  if (channelTypes.some((r) => r.check)) log('Rows marked "!" in the channel types table above are assumed or skipped; see their fix.');
 
   return { outDir, rows, summary, index, scans };
 }

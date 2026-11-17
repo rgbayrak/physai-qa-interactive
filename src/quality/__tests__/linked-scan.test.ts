@@ -78,6 +78,28 @@ describe('scan shared with Explore and Annotate', () => {
     });
     expect(viewerScan(null, store)).toEqual(scan('func/sub-02_task-motor'));
   });
+
+  it("keeps the viewer's other choices (scatter axes, Show peaks) when Stats writes its scan back", () => {
+    const store = memoryStorage();
+    saveLastViewed(
+      lastViewedKey(NAME),
+      {
+        ...scan('func/sub-01_task-rest'),
+        channel: 'cardiac',
+        confound: '',
+        event: '',
+        stacked: [],
+        scatter: { x: 'age', y: 'skewness', color: 'session' },
+        showPeaks: { events: false, detected: true },
+      },
+      store,
+    );
+    shareScanWithViewer(NAME, scan('func/sub-03_task-rest'), store);
+    const entry = readLastViewed(lastViewedKey(NAME), store);
+    expect(entry?.id).toBe('func/sub-03_task-rest');
+    expect(entry?.scatter).toEqual({ x: 'age', y: 'skewness', color: 'session' });
+    expect(entry?.showPeaks).toEqual({ events: false, detected: true });
+  });
 });
 
 describe('locks shared with Stats, for one dev server launch', () => {

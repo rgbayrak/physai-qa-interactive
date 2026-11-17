@@ -47,7 +47,7 @@ Sidecar
   A JSON file next to a data file that describes it, for example `SamplingFrequency`, `StartTime` and `Columns` for a physiological recording.
 
 Signal quality metric
-  A number computed from a channel that describes its quality, such as signal-to-noise ratio or beat-to-beat correlation. Computed for every scan by the quality metrics script.
+  A number computed from a channel that describes its quality, such as signal-to-noise ratio or perfusion. Computed for every scan by the quality metrics script.
 
 Time window
   A stretch of a recording that you mark and label with Annotate on, for example where an artifact occurs.

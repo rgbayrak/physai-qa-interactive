@@ -1,5 +1,6 @@
 import type { ChannelMetrics } from '../data/sqi-metrics';
 import type { DescriptionNotice } from '../data/dataset-notice';
+import type { ChannelTypeRow } from './channels';
 import { makeScanKey, parseScanId } from '../data/scan-key';
 import type { ScanKeyLike } from '../data/scan-key';
 
@@ -230,6 +231,8 @@ export interface DatasetQualityFile {
   excludedChannels: { channel: string; reason: string; scans: number }[];
   /** Units per channel from the physio sidecars ("<column>": {"Units": …}), where given */
   channelUnits?: Record<string, string>;
+  /** What each column was taken as for the metrics, and why (src/quality/channels.ts); absent in older files */
+  channelTypes?: ChannelTypeRow[];
   metricsFile: string;
 }
 

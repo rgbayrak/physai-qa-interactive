@@ -67,6 +67,9 @@ import { isRestTask, defaultEventColumn, usefulEventColumns, onlyConstantEvents 
 import { peaksForChannel } from './peaks-trial';
 import type { Peak } from './peaks-trial';
 import { drawPeaks } from './charts/peaks-trial';
+import { shownDetector } from './detected-peaks';
+import { detectorPeakTimes, fetchDetectedPeaks } from '@/data/detected-peaks';
+import type { DetectedPeaksFile } from '@/data/detected-peaks';
 import { buildStackCharts } from './charts/stack';
 import type { StackChartsHandle } from './charts/stack';
 import { fetchServedDataset, fetchDatasetQuality, OutdatedMetricsError } from '@/quality/data';
@@ -91,6 +94,35 @@ let storageKey = DEFAULT_LAST_VIEWED_KEY;
 // Kept here, not in state, so the trial stays in one place and is easy to remove.
 let scanPeaks: PeaksRaw | null = null;
 let channelPeaks: Peak[] = [];
+
+// BUILT-IN PEAK DETECTION: the main channel's peaks file (scripts/compute-peaks.ts)
+// and the default detector's peak times on the chart's axis. "Show peaks" starts unticked
+let detectorFile: DetectedPeaksFile | null = null;
+let detectorTimes: number[] = [];
+/** Increases with each request, so a slow reply for an earlier channel is dropped */
+let detectorRequest = 0;
+
+/** Draw (or clear) the default detector's peaks on the main chart */
+function showDetector() {
+  const raw = mainRaw();
+  const id = shownDetector(detectorFile);
+  const on = els.detectedPeaksToggle.checked;
+  detectorTimes = on && detectorFile && raw && id ? detectorPeakTimes(detectorFile, id, raw.startTime) : [];
+  focusContext?.redrawOverlay();
+}
+
+/** Load the main channel's peaks file and fill its row; the row hides when there is no file */
+async function loadDetectedPeaks(scanId: string, recording: string, channel: string) {
+  const request = ++detectorRequest;
+  detectorFile = null;
+  detectorTimes = [];
+  els.detectedPeaksRow.style.display = 'none';
+  const file = await fetchDetectedPeaks(scanId, recording, channel).catch(() => null);
+  if (request !== detectorRequest) return;
+  detectorFile = file;
+  els.detectedPeaksRow.style.display = shownDetector(file) ? '' : 'none';
+  showDetector();
+}
 
 function setLoading(msg: string) {
   els.loading.textContent = msg;
@@ -118,6 +150,8 @@ function rememberLastViewed() {
     event: els.eventsSelect.value,
     stacked: state.stackedChannels,
     locks: state.locks,
+    showPeaks: { events: els.peaksToggle.checked, detected: els.detectedPeaksToggle.checked },
+    scatter: scatterPanel.selection(),
   });
 }
 
@@ -325,7 +359,7 @@ function buildMainCharts() {
   renderWaveformAssessment();
   // TRIAL: peaks for this channel; the toggle shows only when there are some
   channelPeaks = peaksForChannel(scanPeaks, channel, physioColumns(raw.columns));
-  els.peaksLabel.style.display = channelPeaks.length > 0 ? '' : 'none';
+  els.eventsPeaksRow.style.display = channelPeaks.length > 0 ? '' : 'none';
   focusContext = buildFocusContext({
     raw,
     channel,
@@ -335,8 +369,10 @@ function buildMainCharts() {
     isAnnotateMode: () => state.annotateMode,
     onAnnotate: addAnnotation,
     onXDomainChange: syncLinkedXDomain,
-    drawOverlay: (chart, group, data) => drawPeaks(chart, group, data, els.peaksToggle.checked ? channelPeaks : []),
+    drawOverlay: (chart, group, data) =>
+      drawPeaks(chart, group, data, els.peaksToggle.checked ? channelPeaks : [], detectorTimes),
   });
+  if (state.current) void loadDetectedPeaks(state.current.id, raw.recording ?? '', channel);
   if (state.current) loadSavedAnnotations(state.current, key);
   void refreshAnnotationProgress(); // the count is per channel
   setScatterChannel(key); // one Channel dropdown for both the charts and the scatter plot
@@ -577,7 +613,16 @@ els.channelSelect.addEventListener('change', () => {
 });
 
 // TRIAL: show or hide the peak dots on the main chart
-els.peaksToggle.addEventListener('change', () => focusContext?.redrawOverlay());
+els.peaksToggle.addEventListener('change', () => {
+  focusContext?.redrawOverlay();
+  rememberLastViewed();
+});
+
+// BUILT-IN PEAK DETECTION: show or hide the peaks
+els.detectedPeaksToggle.addEventListener('change', () => {
+  showDetector();
+  rememberLastViewed();
+});
 
 els.eventsSelect.addEventListener('change', () => {
   if (state.events) rebuildEvents(state.events);
@@ -633,9 +678,16 @@ const scatterPanel = createScatterPanel(
     legend: els.scatterLegend,
     note: els.scatterNote,
   },
+  // A scatter point is a new choice of scan: it clears the locks (developer decision,
+  // 2026-11-17), so Stats shows it, Prev/Next step through every scan, and back here
+  // it opens unlocked. Channel, confound, events column and stack carry over
   (scan) => {
+    state.locks = {};
+    rememberLastViewed();
     location.href = statsUrl(scan);
   },
+  // X, Y or Colour by changed: keep it for the visit, like the channel
+  () => rememberLastViewed(),
 );
 
 /**
@@ -704,17 +756,23 @@ async function init() {
   // while switching tabs, gone on a new launch (src/viewer/persistence.ts)
   clearOldLocalStorage([DEFAULT_LAST_VIEWED_KEY]);
   storageKey = lastViewedKey(datasetInfo?.name, launch);
-  const resumed = resumeFrom(readLastViewed(storageKey), scans);
+  const saved = readLastViewed(storageKey);
+  const resumed = resumeFrom(saved, scans);
   if (resumed) {
     state.restoredSelection = resumed.selection;
     state.locks = resumed.locks; // only those some scan still has (resumeFrom)
   }
+  // "Show peaks" boxes: unticked unless ticked earlier in this visit
+  els.peaksToggle.checked = saved?.showPeaks?.events === true;
+  els.detectedPeaksToggle.checked = saved?.showPeaks?.detected === true;
+  // Scatter plot X, Y and Colour by (e.g. skewness against age), as left earlier in this visit
+  if (saved?.scatter) scatterPanel.restore(saved.scatter);
 
   // Which scan to open: the one linked from Stats (#scan?…), else this visit's
   // last scan (a reload); on a new launch, the first scan without annotations
-  // in any channel, else the first. The locks always stay: a linked scan
-  // without the locked values (e.g. from a scatter double-click) gives way to
-  // the visit's last scan, which has them
+  // in any channel, else the first. A linked scan without the locked values
+  // gives way to the visit's last scan, which has them; a scatter double-click
+  // clears the locks first, so the scan picked there always opens
   const hashScan = parseScanHash(location.hash);
   if (hashScan) history.replaceState(null, '', location.pathname); // a reload then follows the rules below
   const linked = hashScan && lockedScans([hashScan], state.locks).length ? hashScan : null;

@@ -34,7 +34,7 @@ When they are stored outside of it instead (e.g. CNeuroMod physprep), give all t
 BIDS_ROOT=/path/to/dataset BIDSPHYS_ROOT=/path/to/physio BIDSDER_ROOT=/path/to/derivatives npm run dev
 ```
 
-See {doc}`datasets` for how the tool finds the folders inside `BIDS_ROOT`, and what each one is read for.
+See {doc}`inputs-and-outputs` for how the tool finds the folders inside `BIDS_ROOT`, and what each one is read for.
 
 The terminal prints a welcome banner, the folders the tool reads from and what it found in them, then an address (usually `http://localhost:5173`).
 

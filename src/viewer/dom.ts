@@ -8,9 +8,12 @@ interface ViewerElements {
   /** Events column dropdown and its "EVENT" label in the Auxiliary row */
   eventsSelect: HTMLSelectElement;
   eventsLabel: HTMLLabelElement;
-  /** TRIAL: "Peaks (trial)" checkbox and its label (src/viewer/peaks-trial.ts) */
+  /** PHYSIO EVENTS row: "Show peaks" for the events file's peaks (src/viewer/peaks-trial.ts) */
   peaksToggle: HTMLInputElement;
-  peaksLabel: HTMLLabelElement;
+  eventsPeaksRow: HTMLElement;
+  /** BUILT-IN PEAK DETECTION row and its "Show peaks" box (src/viewer/detected-peaks.ts) */
+  detectedPeaksRow: HTMLElement;
+  detectedPeaksToggle: HTMLInputElement;
   /** "On disk data summary" under the dataset header, and its lines: downloaded recordings and quality metrics coverage */
   datasetSummary: HTMLElement;
   datasetSummaryLines: HTMLElement;
@@ -74,7 +77,9 @@ export function getElements(): ViewerElements {
     eventsSelect: byId('events-select'),
     eventsLabel: byId('events-label'),
     peaksToggle: byId('peaks-toggle'),
-    peaksLabel: byId('peaks-label'),
+    eventsPeaksRow: byId('events-peaks-row'),
+    detectedPeaksRow: byId('detected-peaks-row'),
+    detectedPeaksToggle: byId('detected-peaks-toggle'),
     datasetSummary: byId('dataset-summary'),
     datasetSummaryLines: byId('dataset-summary-lines'),
     prevBtn: byId('prev-btn'),

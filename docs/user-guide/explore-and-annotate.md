@@ -18,7 +18,7 @@ The signal charts on the left; the Annotations box and the On disk data summary 
 
 **Where it opens.** On the earliest scan with nothing annotated yet for the remembered channel, so a skipped scan always comes back. Once every scan is annotated, it opens on the last-viewed scan. A link from the Stats tab opens that scan instead. The **Go to the first unannotated scan** button, under the annotation progress bar, opens that earliest scan at any time.
 
-**What is remembered.** The channel and stacked channels stay the same when you step through scans. A reload keeps the channel, stacked channels, events column and confound; they are saved per dataset in your browser.
+**What is remembered.** The channel and stacked channels stay the same when you step through scans. A reload, or going to the Stats tab and back, keeps the channel, stacked channels, events column, confound, the **Show peaks** boxes and the scatter plot's X, Y and Colour by (e.g. skewness against age). They are kept per dataset for the visit (this browser tab), and a new launch of the tool starts clean.
 
 ## Signal charts
 
@@ -33,6 +33,50 @@ Hover readout, brush to zoom and drag the context window.
 ```
 
 All charts share one time axis: **t = 0 is scan onset**, the start of the first BOLD volume. A dashed purple **scan onset (t = 0)** line marks it. Physiological data recorded before the scan (negative times) is out of view.
+
+## Detected peaks
+
+Peaks can be detected in every PPG, ECG and respiratory channel and shown on the focus chart. Each signal type has a default detector, chosen after a visual comparison of published detectors (see the developer notes in {doc}`../release-notes`); the others kept can be added per run. Compute them first (this needs [uv](https://docs.astral.sh/uv/), which installs the Python libraries on the first run):
+
+```bash
+npx vite-node scripts/compute-peaks.ts <dataset> --max-scans 5        # the first 5 scans, the default detector of each signal type
+npx vite-node scripts/compute-peaks.ts <dataset> --detectors inhouse_ppg   # the in-house detector for PPG, the defaults for the rest
+npx vite-node scripts/compute-peaks.ts <dataset> --all-detectors      # every detector kept
+npx vite-node scripts/compute-peaks.ts --list-detectors               # detector ids, with the defaults marked
+```
+
+It takes the same `--bids-root`, `--physio-root` and `--deriv-root` options as `scripts/compute-quality-metrics.ts`. Each channel's peaks file holds exactly the detectors of the run: the default only, unless `--detectors` or `--all-detectors` says otherwise. Results a file already has are reused, not run again, unless `--force` is given. Recordings that are not downloaded are skipped and listed.
+
+Channels get the ECG, PPG or respiration detectors by the same rule as the quality metrics ([Channel types](metric-definitions.md#channel-types)): the BIDS `cardiac` is taken as PPG with a note, ambiguous and unknown names are skipped with a warning, and `--channel <column>=<ppg|ecg|resp|none>` sets a column's type for that run (e.g. `--channel cardiac=ecg`). Each peaks file records whether its type came from the name or from `--channel`. Before detecting, the script prints the channel types table (every column, its type and why; see [Channel types](metric-definitions.md#channel-types)) and saves it as `channel_types.json` in the dataset's peaks folder. Detection runs on the file at its own sampling rate, before any downsampling for display.
+
+In the viewer, peaks have their own rows under **CURRENT INQUIRY**, each shown only when the channel has peaks of that kind:
+
+- **PHYSIO EVENTS**: peaks from the scan's physio events file (physprep style, detected and corrected).
+- **BUILT-IN PEAK DETECTION**: peaks computed by `scripts/compute-peaks.ts` with the default detector of the channel's signal type, as red dots on the focus chart.
+
+Both rows have a **Show peaks** box, unticked when a visit starts and kept across scans and reloads during the visit.
+
+Each detector runs with its library's defaults. The cleaning step is paired with it the way the library's own pipeline does (NeuroKit2 passes the same method name to its cleaning and peak functions where the cleaner has one).
+
+| Signal | Detector | Default | Library | Cleaning | Reference |
+|---|---|---|---|---|---|
+| PPG | Elgendi 2013 (`neurokit2_elgendi2013`) | yes | NeuroKit2 0.3.0 | `ppg_clean` elgendi (Butterworth 0.5–8 Hz) | Elgendi et al. (2013) |
+| PPG | In-house (`inhouse_ppg`) | x | lab MATLAB code, ported | Butterworth order 2, 0.5–4 Hz, zero-phase; height ≥ 0.05 × IQR; distance 0.5 s | Bayrak et al. (2025) |
+| ECG | NeuroKit (`neurokit2_neurokit`) | yes | NeuroKit2 0.3.0 | `ecg_clean` neurokit | NeuroKit2 (Makowski et al. 2021) |
+| ECG | Engelse–Zeelenberg, modified (`neurokit2_engzeemod2012`) | x | NeuroKit2 0.3.0 | `ecg_clean` engzeemod2012 | Engelse and Zeelenberg (1979); Lourenço et al. (2012) |
+| Respiration | Khodadad 2018 (`neurokit2_khodadad2018`) | yes | NeuroKit2 0.3.0 | `rsp_clean` khodadad2018 (Butterworth 0.05–3 Hz) | Khodadad et al. (2018) |
+| Respiration | Bettermann 1996 (`neurokit2_bettermann1996`) | x | NeuroKit2 0.3.0 | `rsp_clean` khodadad2018 | Schäfer and Kratky (2008) |
+
+A channel with `n/a` samples gets no peaks from any detector.
+
+References:
+
+- Bayrak, R. G., Hansen, C. B., Salas, J. A., Ahmed, N., Lyu, I., Mather, M., Huo, Y., & Chang, C. (2025). DeepPhysioRecon: Tracing peripheral physiology in low frequency fMRI dynamics. *Imaging Neuroscience*, 3. (`bayrak2025deepphysiorecon` in `paper/paper.bib`; the in-house PPG detector)
+- Elgendi, M., Norton, I., Brearley, M., Abbott, D., & Schuurmans, D. (2013). Systolic peak detection in acceleration photoplethysmograms measured from emergency responders in tropical conditions. *PLoS ONE*, 8(10), e76585.
+- Engelse, W. A. H., & Zeelenberg, C. (1979), *IEEE Computers in Cardiology*, 6, 37–42; Lourenço, A., et al. (2012), BIOSIGNALS 2012, 49–54. (As cited in NeuroKit2's `ecg_findpeaks`.)
+- Khodadad, D., et al. (2018). Optimized breath detection algorithm in electrical impedance tomography. *Physiological Measurement*, 39(9), 094001.
+- Makowski, D., et al. (2021). NeuroKit2: A Python toolbox for neurophysiological signal processing. *Behavior Research Methods*, 53(4), 1689–1696.
+- Schäfer, A., & Kratky, K. W. (2008). Estimation of breathing rate from respiratory sinus arrhythmia: comparison of various methods. *Annals of Biomedical Engineering*, 36(3), 476–485.
 
 ## Auxiliary Signal Options
 
@@ -58,7 +102,7 @@ A stacked channel (RSP) and a confound under the signal of interest (EDA), all o
 
 Channel and Stack offer every column of the physio file except those specifically excluded, the same ones the quality metrics leave out: `trigger`, `time` and other scanner, marker and time stamp columns.
 
-**Peaks (trial).** A trial feature, not final. When the physiological recordings folder has an events file with detected peaks (e.g. physprep's `r_peak` and `systolic_peak`, and their `_corrected` versions), a **Peaks** toggle next to Channel draws them on the signal: blue for detected, green rings for corrected.
+**Physio events peaks (trial).** A trial feature, not final. When the physiological recordings folder has an events file with detected peaks (e.g. physprep's `r_peak` and `systolic_peak`, and their `_corrected` versions), the **PHYSIO EVENTS** row appears under CURRENT INQUIRY; its **Show peaks** box draws them on the signal: blue for detected, green rings for corrected.
 
 ## Timing badge
 
@@ -110,7 +154,7 @@ Rating a recording's signal quality and stepping to the next scan.
 A time window labelled "motion" over a head-motion peak. It is listed under **Time Windows**, where × deletes it.
 ```
 
-Everything is saved to disk automatically, one file per scan and channel, and reloads when you return to that scan. Each time window is stored with both its times and its sample indices, so the file can be used as an artifact mask. See {doc}`datasets` for where the files go.
+Everything is saved to disk automatically, one file per scan and channel, and reloads when you return to that scan. Each time window is stored with both its times and its sample indices, so the file can be used as an artifact mask. See {doc}`inputs-and-outputs` for where the files go.
 
 Under the box, the annotated count and progress bar show how many scans of this channel have annotations.
 

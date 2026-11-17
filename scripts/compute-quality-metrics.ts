@@ -16,14 +16,17 @@
 //                          session, task, run), e.g. 10 for sub-01's first scans: a quick subset for
 //                          a look or the user study. Replaces the last results like a full run;
 //                          the pages say it is a subset. N is the user's choice: no default
+//   --channel <col>=<type> the column's type for this run: ppg, ecg, resp or none (repeatable). Wins
+//                          over the name; the run warns about ambiguous or unknown names with this hint
 
 import { join, resolve } from 'path';
 import { runQualityMetrics } from '../server/quality-metrics';
+import { parseChannelOverrides } from '../src/quality/channels';
 import { appendQualityRun } from '../server/quality-run-log';
 import { localTimestamp, notDownloaded, subsetNote } from '../src/quality/run-log';
 
 const USAGE =
-  'Usage: compute-quality-metrics <dataset> [--bids-root <path>] [--physio-root <path>] [--deriv-root <path>] [--out <path>] [--max-scans <N>]';
+  'Usage: compute-quality-metrics <dataset> [--bids-root <path>] [--physio-root <path>] [--deriv-root <path>] [--out <path>] [--max-scans <N>] [--channel <column>=<ppg|ecg|resp|none> ...]';
 
 function parseArgs(argv: string[]) {
   const opts: {
@@ -33,7 +36,8 @@ function parseArgs(argv: string[]) {
     derivRoot?: string;
     out?: string;
     maxScans?: number;
-  } = {};
+    channels: string[];
+  } = { channels: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const value = () => {
@@ -48,7 +52,11 @@ function parseArgs(argv: string[]) {
     else if (a === '--physio-root') opts.physioRoot = value();
     else if (a === '--deriv-root') opts.derivRoot = value();
     else if (a === '--out') opts.out = value();
-    else if (a === '--max-scans') {
+    else if (a === '--channel') {
+      const v = argv[++i];
+      if (!v) throw new Error(`--channel needs <column>=<type>\n${USAGE}`);
+      opts.channels.push(v);
+    } else if (a === '--max-scans') {
       const v = argv[++i];
       const n = Number(v);
       if (!v || !Number.isInteger(n) || n < 1) throw new Error(`--max-scans needs a whole number of at least 1\n${USAGE}`);
@@ -74,6 +82,7 @@ try {
     physioRoot: args.physioRoot,
     derivRoot: args.derivRoot,
     maxScans: args.maxScans,
+    channelOverrides: parseChannelOverrides(args.channels),
     log: (msg) => console.log(msg),
   });
   const { nScans, nSubjects, failedScans } = result.summary;

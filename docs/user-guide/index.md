@@ -11,7 +11,7 @@ The tool has two tabs at the top of the page:
 
 start
 public-datasets
-datasets
+inputs-and-outputs
 explore-and-annotate
 quality-metrics
 metric-definitions

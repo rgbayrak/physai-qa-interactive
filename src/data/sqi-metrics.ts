@@ -2,6 +2,8 @@ import { mean, deviation } from 'd3-array';
 import type { PhysioRaw } from './bids-physio-reader';
 import { butterworthBandpass, sosfiltfilt } from './filters';
 import { bandPower, welchPsd } from './spectrum';
+import { analysisSignalOf, signalOrNull } from '../quality/channels';
+import type { AnalysisSignal } from '../quality/channels';
 
 export interface ChannelMetrics {
   channelName: string;
@@ -26,8 +28,6 @@ const PPG_BAND = { order: 2, lowHz: 0.5, highHz: 8 };
 // 1 s windows with a 1 s step (Elgendi 2016, §3, p. 11: windows stepped by 1 s; 1 s for P_SQI).
 const PERFUSION_WINDOW_S = 1;
 
-/** Channel names taken as PPG for P_SQI: ppg, pleth, pulse, and the BIDS "cardiac" column (user decision) */
-const isPpgName = (name: string) => /ppg|pleth|pulse|cardiac/i.test(name);
 
 /**
  * P_SQI = (max(y) − min(y)) / |mean(x)| × 100 (Elgendi 2016, Eq. 2): x raw, y band-passed,
@@ -236,7 +236,7 @@ function relativePowerSqi(data: number[], fs: number): number {
   return count > 0 ? sum / count : NaN;
 }
 
-/** The PPG band-passed signal, or null when the band cannot be filtered at this rate or the recording is too short */
+/** The PPG band-pass filtered signal, or null when the band cannot be filtered at this rate or the recording is too short */
 function ppgFiltered(data: number[], fs: number): Float64Array | null {
   if (!(PPG_BAND.highHz < fs / 2)) return null;
   return sosfiltfilt(butterworthBandpass(PPG_BAND.order, PPG_BAND.lowHz, PPG_BAND.highHz, fs), data);
@@ -279,18 +279,19 @@ function computeChannelMetrics(
   data: number[],
   channelName: string,
   samplingFrequency: number,
+  signal: AnalysisSignal | null,
 ): ChannelMetrics {
   const mu = mean(data) ?? 0;
   const sd = deviation(data) ?? 0;
 
-  // S_SQI and K_SQI (Elgendi 2016), PPG only
-  const isPpg = isPpgName(channelName);
+  // Elgendi 2016 metrics: PPG only (the column's analysis type, analysisSignalOf in src/quality/channels.ts)
+  const isPpg = signal === 'ppg';
   const skewness = isPpg ? windowedMoments(data, samplingFrequency, SKEWNESS_WINDOW_S, (m2, m3) => m3 / Math.pow(m2, 1.5)) : NaN;
   const entropy = isPpg ? entropySqi(data, samplingFrequency) : NaN;
   const kurtosis = isPpg ? windowedMoments(data, samplingFrequency, KURTOSIS_WINDOW_S, (m2, _m3, m4) => m4 / (m2 * m2)) : NaN;
 
   // PPG channels: band-passed once, for the filtered SD and perfusion
-  const ppgY = isPpgName(channelName) ? ppgFiltered(data, samplingFrequency) : null;
+  const ppgY = isPpg ? ppgFiltered(data, samplingFrequency) : null;
 
   return {
     channelName,
@@ -307,12 +308,16 @@ function computeChannelMetrics(
   };
 }
 
-export function computeSQI(raw: PhysioRaw): SQIResults {
+/**
+ * Metrics of every column. `signals` gives each column's analysis type (same
+ * order as raw.columns; null for none, ambiguous or unknown); when not given,
+ * it comes from the column name (analysisSignalOf, no --channel overrides).
+ */
+export function computeSQI(raw: PhysioRaw, signals?: (AnalysisSignal | null)[]): SQIResults {
   const metrics: ChannelMetrics[] = [];
   for (let i = 0; i < raw.columns.length; i++) {
-    metrics.push(
-      computeChannelMetrics(raw.data[i], raw.columns[i], raw.samplingFrequency),
-    );
+    const signal = signals ? signals[i] ?? null : signalOrNull(analysisSignalOf(raw.columns[i]));
+    metrics.push(computeChannelMetrics(raw.data[i], raw.columns[i], raw.samplingFrequency, signal));
   }
   return { metrics };
 }
