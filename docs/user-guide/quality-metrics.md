@@ -21,13 +21,13 @@ npx vite-node scripts/compute-quality-metrics.ts <name> --bids-root /path/to/dat
 
 The script finds its folders the same way as the tool (see {doc}`datasets`): `--bids-root`, `--physio-root` and `--deriv-root` match `BIDS_ROOT`, `BIDSPHYS_ROOT` and `BIDSDER_ROOT`. It prints the three folders it uses before computing. Then reload the page.
 
-Every column of the physio file is computed unless it is specifically excluded: `trigger`, `time` and other scanner, marker and time stamp columns. Known names (e.g. `cardiac`, `PPG`, `ECG`, `respiratory`, `RSP`, `EDA`) get a signal type; other names get `n/a` in `signal_type`. The output is deterministic: the same input gives identical files, except the run log.
+Every column of the physio file is computed unless it is specifically excluded: `trigger`, `time` and other scanner, marker and time stamp columns. Known names (e.g. `cardiac`, `PPG`, `ECG`, `respiratory`, `RSP`, `EDA`) get a signal type; other names get `n/a` in `signal_type`. The `mean` column is given only for channels whose physio sidecar gives a unit other than `"arbitrary"` (e.g. `"cardiac": {"Units": "mV"}`); it is `n/a` when the unit is missing or arbitrary. The output is deterministic: the same input gives identical files, except the run log.
 
 ## What it writes
 
 In `data/quality/<dataset>/`:
 
-- `quality_metrics.tsv`: one row per scan and physiological channel (`n/a` where a metric does not apply).
+- `quality_metrics.tsv`: one row per scan and physiological channel (`n/a` where a metric does not apply). Each metric column is explained in {doc}`metric-definitions`.
 - `dataset.json`: the dataset description, scan and subject counts, `participants.tsv` and its descriptions, scans that could not be computed, and excluded channels.
 - `waveforms/`: a downsampled waveform per scan, for the plots.
 - `quality_runs.tsv`: a log with one line per run (`run_date`, `scans_computed`, `scans_available`, `scans_failed`, `count_source`). `scans_available` counts every physiological recording the dataset lists, downloaded or not. The Stats tab, the PDF report and the On disk data summary show its last line, e.g. "Quality metrics were last computed on 2026-11-05 for 78 of 120 scans (40 not downloaded, 2 failed)".
@@ -62,7 +62,7 @@ One scan at a time, with **Prev / Next**: file name, participant information, re
 The top of the **Stats** tab: what is known about the scan, and its waveforms over the whole recording.
 ```
 
-**Metrics shown** lists the metrics under their groups (Basic, Distribution, PaPaGei, PhysioQC). Tick which ones the tables and histograms show, or use Show all / Hide all. The choice is remembered in your browser.
+**Metrics shown** lists every metric by name, with the paper it comes from (e.g. "Perfusion (Elgendi 2016)"); hover a metric for a short description and its paper. Tick which ones the tables and histograms show, or use Show all / Hide all. The choice is remembered in your browser.
 
 ```{figure} ../images/quality-metrics-histograms.png
 :alt: Metrics shown box with all 12 metrics ticked under Basic, Distribution, PaPaGei and PhysioQC; next to it, the cardiac metrics table with each value and its percentile, and a histogram per metric with a solid dark line for this scan and a dashed grey line for the mean of all 80 cardiac recordings

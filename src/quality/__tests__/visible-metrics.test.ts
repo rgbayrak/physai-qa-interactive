@@ -4,10 +4,12 @@ import { makeScanKey } from '../../data/scan-key';
 import type { MetricKey, QualityRow } from '../metrics-tsv';
 import {
   ALL_METRICS,
-  METRIC_GROUPS,
+  METRIC_DEFS,
   availableMetrics,
   defaultMetricPair,
-  groupKeys,
+  metricDef,
+  metricNameWithSource,
+  metricTooltip,
   metricAxisChoices,
   metricAxisLabel,
   metricUnit,
@@ -37,11 +39,19 @@ function row(metrics: Partial<Record<MetricKey, number>>): QualityRow {
   };
 }
 
-describe('metric groups', () => {
-  it('uses the metric column groups and covers every metric once', () => {
-    expect(METRIC_GROUPS).toEqual(['Basic', 'Distribution', 'PaPaGei', 'PhysioQC']);
-    expect(METRIC_GROUPS.flatMap(groupKeys).sort()).toEqual([...ALL_METRICS].sort());
-    expect(groupKeys('PaPaGei')).toEqual(['svri', 'ipa', 'sqi']);
+describe('metric names and sources (no groups)', () => {
+  it('lists every metric once, in TSV order', () => {
+    expect(METRIC_DEFS.map((d) => d.key)).toEqual(METRIC_COLUMNS.map((c) => c.key));
+    expect(new Set(ALL_METRICS).size).toBe(ALL_METRICS.length);
+  });
+
+  it('names a metric with its paper, and shows description then paper on hover', () => {
+    expect(metricNameWithSource(metricDef('perfusion'))).toBe('Perfusion (Elgendi 2016)');
+    expect(metricNameWithSource(metricDef('stdDev'))).toBe('Std Dev'); // plain statistic: no paper
+    const tip = metricTooltip(metricDef('perfusion'));
+    expect(tip.startsWith(metricDef('perfusion').description!)).toBe(true);
+    expect(tip.endsWith('Source: Elgendi 2016.')).toBe(true);
+    expect(metricTooltip(metricDef('stdDev'))).toBe(metricDef('stdDev').description);
   });
 });
 
@@ -53,9 +63,9 @@ describe('stored choice', () => {
   });
 
   it('round-trips, drops unknown keys and keeps an empty choice', () => {
-    const chosen = new Set<MetricKey>(['beatCorrelation', 'snr']);
+    const chosen = new Set<MetricKey>(['perfusion', 'snr']);
     const stored = serializeVisibleMetrics(chosen);
-    expect(stored).toBe('["snr","beatCorrelation"]');
+    expect(stored).toBe('["snr","perfusion"]');
     expect(parseVisibleMetrics(stored)).toEqual(chosen);
     expect([...parseVisibleMetrics('["snr","removedMetric"]')]).toEqual(['snr']);
     expect(parseVisibleMetrics('[]').size).toBe(0);
@@ -65,39 +75,41 @@ describe('stored choice', () => {
 describe('axis units', () => {
   const units = { cardiac: 'mV' };
 
-  it('uses the channel unit for mean and SD, a fixed unit for ZCR, none otherwise', () => {
+  it('uses the channel unit for mean and SD, a fixed unit for perfusion, none otherwise', () => {
     expect(metricUnit('mean', 'cardiac', units)).toBe('mV');
     expect(metricUnit('stdDev', 'cardiac', units)).toBe('mV');
+    expect(metricUnit('stdDevFiltered', 'cardiac', units)).toBe('mV');
     expect(metricUnit('mean', 'respiratory', units)).toBeNull();
     expect(metricUnit('mean', 'cardiac')).toBeNull();
-    expect(metricUnit('zeroCrossingRate', 'cardiac')).toBe('Hz');
+    expect(metricUnit('perfusion', 'cardiac')).toBe('%');
+    expect(metricUnit('zeroCrossing', 'cardiac')).toBeNull(); // a fraction
     expect(metricUnit('snr', 'cardiac', units)).toBeNull();
   });
 
-  it('adds the unit to axis labels without repeating one already there', () => {
+  it('adds the unit to axis labels', () => {
     expect(metricAxisLabel('mean', 'cardiac', units)).toBe('Mean (mV)');
     expect(metricAxisLabel('mean', 'respiratory', units)).toBe('Mean');
-    expect(metricAxisLabel('zeroCrossingRate', 'cardiac')).toBe('ZCR (Hz)');
+    expect(metricAxisLabel('perfusion', 'cardiac')).toBe('Perfusion (%)');
     const rows = [row({ mean: 1, snr: 2 })];
     expect(metricAxisChoices(rows, units).map((c) => c.label)).toEqual(['Mean (mV)', 'SNR']);
   });
 });
 
 describe('hidden metrics', () => {
-  const rows = [row({ snr: 1, kurtosis: 2, beatCorrelation: 0.9 })];
+  const rows = [row({ snr: 1, kurtosis: 2, perfusion: 0.9 })];
 
   it('leave the Stats tables and histograms (availableMetrics)', () => {
     const visible = new Set<MetricKey>(['snr', 'kurtosis']);
-    expect(availableMetrics(rows)).toEqual(['snr', 'kurtosis', 'beatCorrelation']);
+    expect(availableMetrics(rows)).toEqual(['snr', 'kurtosis', 'perfusion']);
     expect(availableMetrics(rows, visible)).toEqual(['snr', 'kurtosis']);
     expect(availableMetrics(rows, new Set())).toEqual([]);
   });
 
   it('never affect the scatter axis menus or their default pair', () => {
-    const all = ['snr', 'kurtosis', 'beatCorrelation'];
+    const all = ['snr', 'kurtosis', 'perfusion'];
     expect(metricAxisChoices(rows).map((c) => c.value)).toEqual(all);
     expect(yAxisChoices(rows).map((c) => c.value)).toEqual(all);
     expect(xAxisChoices(rows, null, rows).map((c) => c.value)).toEqual(all);
-    expect(defaultMetricPair(rows)).toEqual(['snr', 'beatCorrelation']);
+    expect(defaultMetricPair(rows)).toEqual(['snr', 'kurtosis']);
   });
 });

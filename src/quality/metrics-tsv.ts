@@ -17,16 +17,14 @@ export type MetricKey = Exclude<keyof ChannelMetrics, 'channelName'>;
 export const METRIC_COLUMNS: { key: MetricKey; column: string }[] = [
   { key: 'mean', column: 'mean' },
   { key: 'stdDev', column: 'std_dev' },
+  { key: 'stdDevFiltered', column: 'std_dev_filtered' },
   { key: 'snr', column: 'snr' },
   { key: 'kurtosis', column: 'kurtosis' },
   { key: 'skewness', column: 'skewness' },
-  { key: 'zeroCrossingRate', column: 'zero_crossing_rate' },
-  { key: 'svri', column: 'svri' },
-  { key: 'ipa', column: 'ipa' },
-  { key: 'sqi', column: 'sqi' },
-  { key: 'kurtosisWindowed', column: 'kurtosis_windowed' },
-  { key: 'approxEntropy', column: 'approx_entropy' },
-  { key: 'beatCorrelation', column: 'beat_correlation' },
+  { key: 'entropy', column: 'entropy' },
+  { key: 'zeroCrossing', column: 'zero_crossing' },
+  { key: 'perfusion', column: 'perfusion' },
+  { key: 'relativePower', column: 'relative_power' },
 ];
 
 /** Scan/channel columns that precede the metrics */

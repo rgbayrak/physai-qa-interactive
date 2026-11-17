@@ -1,6 +1,6 @@
 import type { ChannelMetrics } from '@/data/sqi-metrics';
 
-// Labels, decimals, descriptions and groups for each per-channel quality metric.
+// Labels, decimals, descriptions and sources for each per-channel quality metric.
 // The Stats tab, the scatter plot and the PDF (through src/quality/model.ts)
 // take metric names from here.
 
@@ -9,24 +9,22 @@ export interface ColDef {
   key: keyof ChannelMetrics;
   decimals: number;
   description?: string;
-  /** 'always' is the channel name; the others are the metric groups (Basic, Distribution, PaPaGei, PhysioQC) */
-  group: string;
+  /** Paper the metric is taken from, author and year (e.g. "Elgendi 2016"); none for plain statistics */
+  source?: string;
 }
 
 export const SQI_COLUMNS: ColDef[] = [
-  { label: 'Channel', key: 'channelName', decimals: 0, group: 'always' },
-  { label: 'Mean', key: 'mean', decimals: 4, group: 'Basic' },
-  { label: 'Std Dev', key: 'stdDev', decimals: 4, description: 'Standard deviation (spread of values around the mean). Range: [0, +∞)', group: 'Basic' },
-  { label: 'SNR', key: 'snr', decimals: 3, description: 'Signal-to-noise ratio (mean / std dev). Higher is cleaner.', group: 'Distribution' },
-  { label: 'Kurtosis', key: 'kurtosis', decimals: 3, description: 'Excess kurtosis — tailedness of the distribution. 0 = normal, >0 = heavy tails, <0 = light tails.', group: 'Distribution' },
-  { label: 'Skewness', key: 'skewness', decimals: 3, description: 'Asymmetry of the distribution. 0 = symmetric, >0 = right-skewed, <0 = left-skewed.', group: 'Distribution' },
-  { label: 'ZCR (Hz)', key: 'zeroCrossingRate', decimals: 2, description: 'Zero-crossing rate — number of sign changes per second. Higher values indicate higher-frequency content.', group: 'Distribution' },
-  { label: 'sVRI', key: 'svri', decimals: 3, description: 'Stress-induced Vascular Response Index — ratio of mean post- to pre-systolic amplitude, averaged across beats (PaPaGei).', group: 'PaPaGei' },
-  { label: 'IPA', key: 'ipa', decimals: 3, description: 'Inflection Point Area ratio — systolic area / diastolic area split at dicrotic notch, averaged across beats (PaPaGei).', group: 'PaPaGei' },
-  { label: 'SQI', key: 'sqi', decimals: 3, description: 'Signal Quality Index — mean skewness over 5-second windows (PaPaGei). Range: (-∞, +∞)', group: 'PaPaGei' },
-  { label: 'Kurt (win)', key: 'kurtosisWindowed', decimals: 3, description: 'Mean excess kurtosis over 60 s windows (Elgendi 2016).', group: 'PhysioQC' },
-  { label: 'ApEn', key: 'approxEntropy', decimals: 4, description: 'Approximate entropy — signal regularity (Elgendi 2016, m=2, r=0.2×SD). Lower = more regular.', group: 'PhysioQC' },
-  { label: 'Beat Corr', key: 'beatCorrelation', decimals: 3, description: 'Mean Pearson correlation of each beat/breath vs average waveform (Romano 2023).', group: 'PhysioQC' },
+  { label: 'Channel', key: 'channelName', decimals: 0 },
+  { label: 'Mean', key: 'mean', decimals: 4, description: 'Average of the raw signal over the whole recording. Given only when the physio sidecar gives the channel a unit other than "arbitrary" (BIDS); n/a otherwise.' },
+  { label: 'Std Dev', key: 'stdDev', decimals: 4, description: 'Standard deviation of the raw signal (spread of values around the mean; includes slow drift). Range: [0, +∞)' },
+  { label: 'Std Dev (filtered)', key: 'stdDevFiltered', decimals: 4, description: 'Standard deviation of the band-passed signal (2nd-order Butterworth, 0.5–8 Hz, zero-phase; Elgendi et al. 2013 filter): the pulse amplitude without drift. PPG channels only for now.' },
+  { label: 'SNR', key: 'snr', decimals: 3, description: 'N_SQI: variance of the absolute band-passed signal over the variance of the band-passed signal, in 1 s windows, averaged. A clean sine gives 1 − 8/π² ≈ 0.189. PPG channels only.', source: 'Elgendi 2016' },
+  { label: 'Entropy', key: 'entropy', decimals: 3, description: 'E_SQI: −Σ x² ln(x²) of the raw signal per 1 s window, averaged. A sum, so it depends on the amplitude (units) and the sampling rate; not approximate entropy. PPG channels only.', source: 'Elgendi 2016' },
+  { label: 'Kurtosis', key: 'kurtosis', decimals: 3, description: 'K_SQI: kurtosis of the raw signal (Pearson, normal = 3) in 1 s windows stepped by 1 s, averaged. PPG channels only.', source: 'Elgendi 2016' },
+  { label: 'Skewness', key: 'skewness', decimals: 3, description: 'S_SQI: skewness of the raw signal in 5 s windows stepped by 1 s, averaged. 0 = symmetric; in the paper > 0 indicated good quality with this windowing. PPG channels only.', source: 'Elgendi 2016' },
+  { label: 'Zero crossing', key: 'zeroCrossing', decimals: 3, description: 'Z_SQI: sign changes per sample of the band-passed signal, in 1 s windows, averaged (the paper\'s definition and Chen 1988; Eq. 6 as printed counts samples below 0 instead). A clean pulse at f Hz gives about 2f / sampling rate. PPG channels only.', source: 'Elgendi 2016' },
+  { label: 'Perfusion', key: 'perfusion', decimals: 3, description: 'Perfusion index P_SQI: peak-to-peak of the band-passed signal over the absolute raw mean, × 100, in 1 s windows, averaged. PPG channels only.', source: 'Elgendi 2016' },
+  { label: 'Relative power', key: 'relativePower', decimals: 3, description: 'R_SQI: Welch PSD power in 1–2.25 Hz over 0–8 Hz of the raw signal, in 60 s windows stepped by 30 s, averaged (NeuroKit2 settings). PPG channels only; needs at least 60 s.', source: 'Elgendi 2016' },
 ];
 
 export function formatMetricValue(val: number, decimals: number): string {

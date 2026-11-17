@@ -10,6 +10,7 @@ import {
   waveformFile,
   physioChannels,
   scanQualityRows,
+  hasPhysicalUnit,
 } from '../quality-metrics';
 import { isPhysioChannel } from '../../src/quality/channels';
 import {
@@ -107,6 +108,29 @@ describe('runQualityMetrics (bids-sessions fixture)', () => {
     const { scan, raw } = allRaw()[0];
     expect(scanQualityRows(scan, raw).map((r) => r.t0Datatype)).toEqual([raw.datatype, raw.datatype]);
     expect(scanQualityRows(scan, raw, 'func')[0].t0Datatype).toBe('func');
+  });
+
+  it('reports the mean only for channels with a physical unit; other metrics whatever the units', () => {
+    const { scan, raw } = allRaw()[0];
+    const byChannel = (units?: Record<string, string>) =>
+      Object.fromEntries(scanQualityRows(scan, raw, raw.datatype, units).map((r) => [r.channel, r.metrics]));
+    const withUnits = byChannel({ cardiac: 'mV', respiratory: 'arbitrary' });
+    expect(Number.isFinite(withUnits.cardiac.mean)).toBe(true);
+    expect(withUnits.respiratory.mean).toBeNaN();
+    const noUnits = byChannel();
+    expect(noUnits.cardiac.mean).toBeNaN();
+    expect(noUnits.respiratory.mean).toBeNaN();
+    // Metrics that use a mean inside are not affected
+    expect(noUnits.cardiac.stdDev).toBe(withUnits.cardiac.stdDev);
+    expect(noUnits.cardiac.snr).toBe(withUnits.cardiac.snr);
+  });
+
+  it('hasPhysicalUnit: any given unit except the BIDS "arbitrary"', () => {
+    expect(hasPhysicalUnit('mV')).toBe(true);
+    expect(hasPhysicalUnit('a.u.')).toBe(true); // not the BIDS spelling, so not treated as arbitrary
+    expect(hasPhysicalUnit('arbitrary')).toBe(false);
+    expect(hasPhysicalUnit('')).toBe(false);
+    expect(hasPhysicalUnit(undefined)).toBe(false);
   });
 
   it('carries the desc-quality sidecar and timing status', () => {

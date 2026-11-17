@@ -4,7 +4,6 @@ import { createChart, compactNumber } from '@/core';
 import type { ChartInstance } from '@/core';
 import { drawOnsetMarker } from '@/viewer/charts/shared';
 import { histogramBins, finiteMean, paddedExtent } from './stats';
-import { metricDef } from './model';
 import type { MetricKey } from './metrics-tsv';
 
 // Chart builders for the quality page, all on top of createChart().
@@ -41,31 +40,14 @@ const FAMILY = {
 };
 
 /**
- * One colour per metric group (Basic, Distribution, PaPaGei, PhysioQC), used
- * wherever a metric appears (histogram bars). These
- * are the page's lead colours: the scatter palette is built from them.
- */
-const METRIC_GROUP_COLORS: Record<string, string> = {
-  Basic: FAMILY.blue,
-  Distribution: FAMILY.sky,
-  PaPaGei: FAMILY.gold,
-  PhysioQC: FAMILY.orange,
-};
-
-/**
- * Categorical palette for scatter colouring, determined by the four
- * metric-group colours, then the FAMILY colours they don't use (teal, magenta) for
+ * Categorical palette for scatter colouring: the page's lead colours (blue,
+ * gold, sky, orange), then the FAMILY colours they don't use (teal, magenta) for
  * datasets with more categories. Assigned in this fixed order to sorted
  * category names; more than 6 categories wrap around. Dots get a white ring so
  * overlapping points stay separate.
  */
-const GROUP_PALETTE = [
-  METRIC_GROUP_COLORS.Basic,
-  METRIC_GROUP_COLORS.PaPaGei,
-  METRIC_GROUP_COLORS.Distribution,
-  METRIC_GROUP_COLORS.PhysioQC,
-];
-export const PALETTE = [...GROUP_PALETTE, ...Object.values(FAMILY).filter((c) => !GROUP_PALETTE.includes(c))];
+const LEAD_PALETTE = [FAMILY.blue, FAMILY.gold, FAMILY.sky, FAMILY.orange];
+export const PALETTE = [...LEAD_PALETTE, ...Object.values(FAMILY).filter((c) => !LEAD_PALETTE.includes(c))];
 
 /**
  * Ten categories (the events figure's lanes): PALETTE, then darker shades of
@@ -86,9 +68,9 @@ const HISTOGRAM_BAR_OPACITY = 0.7;
 /** White ring around scatter dots so overlapping points stay separate */
 const DOT_RING = '#fff';
 
-/** Colour of a metric, from its group */
-export function metricColor(key: MetricKey): string {
-  return METRIC_GROUP_COLORS[metricDef(key).group] ?? GROUP_COLOR;
+/** Histogram bar colour: one colour for every metric (metrics have no groups) */
+export function metricColor(_key: MetricKey): string {
+  return GROUP_COLOR;
 }
 
 /** Give a fixed-size chart a viewBox so it scales down cleanly (narrow screens, print) */

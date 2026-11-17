@@ -96,12 +96,24 @@ export function physioChannels(raw: PhysioResult): PhysioChannels {
   return { raw: { ...raw, columns, data }, signals, excluded };
 }
 
+/**
+ * Whether a sidecar unit is a physical one: given, and not "arbitrary".
+ * BIDS: "Arbitrary units SHOULD be indicated with the string "arbitrary""
+ * (BIDS Specification, Common principles, Units; checked 2026-11-16).
+ * Matched exactly as BIDS writes it; other spellings (e.g. "a.u.") count as physical.
+ */
+export function hasPhysicalUnit(unit: string | undefined): boolean {
+  return unit !== undefined && unit !== '' && unit !== 'arbitrary';
+}
+
 /** One row per physiological channel of one recording of a scan; non-physio columns (e.g. trigger) get no row */
 export function scanQualityRows(
   scan: ScanEntry,
   fullRaw: PhysioResult,
   /** Datatype folder whose data t = 0 refers to (timeDatatype, server/bids-layout.ts); the recording's own when not given */
   t0Datatype: string = fullRaw.datatype,
+  /** Units per column from the physio sidecar (readChannelUnits) */
+  channelUnits: Record<string, string> = {},
 ): QualityRow[] {
   const { raw, signals } = physioChannels(fullRaw);
   const { metrics } = computeSQI(raw);
@@ -110,6 +122,9 @@ export function scanQualityRows(
     const q = raw.quality?.[channel];
     const values = {} as Record<MetricKey, number>;
     for (const c of METRIC_COLUMNS) values[c.key] = m[c.key];
+    // The reported mean (the DC level) means nothing in arbitrary or unknown units, so it is n/a there.
+    // Only this column: means used inside other metrics are computed whatever the units.
+    if (!hasPhysicalUnit(channelUnits[channel])) values.mean = NaN;
     return {
       ...toScanKey(scan),
       recording: raw.recording,
@@ -322,7 +337,8 @@ export function runQualityMetrics(opts: QualityRunOptions): QualityRunResult {
         const label = recordingLabel(id, raw.recording);
         const { excluded } = physioChannels(raw);
         for (const e of excluded) excludedHere.set(e.channel, e.reason);
-        const recordingRows = scanQualityRows(scan, raw, physio.timeDatatype);
+        const units = readChannelUnits(index, scan, raw.recording);
+        const recordingRows = scanQualityRows(scan, raw, physio.timeDatatype, units);
         if (recordingRows.length === 0) {
           failedScans.push({ scan: label, reason: 'no physiological channels' });
           log(`  [${i + 1}/${scans.length}] ${label}: skipped (no physiological channels in ${raw.columns.join(', ')})`);
@@ -333,7 +349,6 @@ export function runQualityMetrics(opts: QualityRunOptions): QualityRunResult {
         rows.push(...recordingRows);
         recordingRows.forEach((r) => channels.add(r.channel));
         // First unit seen for a channel wins (scans are in sorted order, so this is deterministic)
-        const units = readChannelUnits(index, scan, raw.recording);
         for (const r of recordingRows) {
           if (units[r.channel] && !channelUnits.has(r.channel)) channelUnits.set(r.channel, units[r.channel]);
         }

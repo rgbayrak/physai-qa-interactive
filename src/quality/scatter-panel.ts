@@ -81,7 +81,7 @@ export function createScatterPanel(els: ScatterElements, onOpenScan: (scan: Scan
   let data: LoadedDataset | null = null;
   let channel = '';
   let xValue = 'snr';
-  let yValue = 'beatCorrelation';
+  let yValue = 'kurtosis';
   /** Set from the dataset's choices in show() */
   let colorBy: ColorBy = 'task';
   let chart: ChartInstance | null = null;

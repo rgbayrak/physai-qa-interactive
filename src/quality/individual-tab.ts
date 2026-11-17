@@ -16,6 +16,7 @@ import {
   formatMetric,
   formatSeconds,
   metricDef,
+  metricTooltip,
   metricAxisLabel,
   ordinal,
   rowsForChannel,
@@ -113,7 +114,8 @@ function channelTableHtml(r: QualityRow, group: QualityRow[], keys: MetricKey[])
   let body = '';
   for (const k of keys) {
     const d = metricDef(k);
-    head += `<th${d.description ? ` title="${esc(d.description)}"` : ''}>${esc(d.label)}</th>`;
+    const tip = metricTooltip(d);
+    head += `<th${tip ? ` title="${esc(tip)}"` : ''}>${esc(d.label)}</th>`;
     const v = r.metrics[k];
     const p = percentileRank(group.map((g) => g.metrics[k]), v);
     const pct = Number.isFinite(p) ? `<span class="pct">${ordinal(p)} pct</span>` : '';
@@ -172,10 +174,10 @@ export function createIndividualTab(
       els.metrics.appendChild(section);
 
       for (const k of keys as MetricKey[]) {
-        // No title: the x-axis label names the metric; its description shows on hover
+        // No title: the x-axis label names the metric; its description and paper show on hover
         const plot = document.createElement('div');
-        const description = metricDef(k).description;
-        if (description) plot.title = description;
+        const tip = metricTooltip(metricDef(k));
+        if (tip) plot.title = tip;
         grid.appendChild(plot);
         const marker = Number.isFinite(r.metrics[k]) ? r.metrics[k] : undefined;
         const chart = drawHistogram({

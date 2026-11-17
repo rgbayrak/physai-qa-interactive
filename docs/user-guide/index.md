@@ -14,6 +14,7 @@ public-datasets
 datasets
 explore-and-annotate
 quality-metrics
+metric-definitions
 troubleshooting
 user-study
 ```

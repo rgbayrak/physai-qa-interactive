@@ -78,7 +78,7 @@ src/
 │   ├── report.ts              # PDF report: lays out pages on a canvas, rasterises the charts
 │   ├── pdf.ts                 # Minimal PDF writer (one JPEG per page, pure)
 │   ├── charts.ts              # Scatter, histogram and static waveform charts (createChart)
-│   ├── metric-columns.ts      # Metric labels, groups and number format (SQI_COLUMNS; pure)
+│   ├── metric-columns.ts      # Metric labels, sources and number format (SQI_COLUMNS; pure)
 │   ├── model.ts               # Labels, summaries, axis choices, scatter data (pure)
 │   ├── metrics-tsv.ts         # TSV/JSON formats shared with the script (pure)
 │   ├── channels.ts            # Excluded (non-physiological) column names and signal types (pure)
@@ -131,8 +131,8 @@ Browser (src/data/bids-physio-reader.ts)
   ↓  toDataPoints() / toConfoundPoints() materialize {time, value}[] arrays
   ↓
 SQI (src/data/sqi-metrics.ts)
-  ↓  computeSQI() — 12 per-channel metrics: mean, std dev, SNR, kurtosis, skewness, ZCR,
-  ↓  PaPaGei morphology (sVRI, IPA, SQI) and PhysioQC (windowed kurtosis, ApEn, beat correlation)
+  ↓  computeSQI() — 10 per-channel metrics: mean, std dev (raw and filtered), SNR, kurtosis, skewness, entropy, zero crossing,
+  ↓  perfusion, relative power
   ↓
 Viewer (src/viewer/)
   ↓  main.ts holds the state and wires events; charts/ builds focus+context,
@@ -198,9 +198,9 @@ How the server and viewer line up physio, confounds and triggers in time is desc
 A metric is computed in one place and listed in three:
 
 1. **Compute it** in `computeChannelMetrics()` (`src/data/sqi-metrics.ts`) and add the field to the `ChannelMetrics` interface. Return `NaN` when it does not apply to a channel.
-2. **Label it** in `SQI_COLUMNS` (`src/quality/metric-columns.ts`): label, decimals, description and group. The scatter plot, the Stats tab and the PDF use these labels.
+2. **Label it** in `SQI_COLUMNS` (`src/quality/metric-columns.ts`): label, decimals, description and source (the paper, as "Author Year"; none for a plain statistic). The scatter plot, the Stats tab and the PDF use these labels.
 3. **Give it a TSV column** in `METRIC_COLUMNS` (`src/quality/metrics-tsv.ts`), in snake_case. The column order there is the TSV column order.
-4. **Document it** in the metrics map: what it computes, which channels it applies to, and its citation.
+4. **Document it** in `docs/user-guide/metric-definitions.md`: what it computes, which channels it applies to, and its citation.
 5. **Test it** in `src/data/__tests__/sqi-metrics.test.ts` with a synthetic signal of known value, and add the field to the `ChannelMetrics` sample in `src/quality/__tests__/metric-columns.test.ts`, which checks that every metric has a column definition.
 6. **Rerun the script** for every dataset. `parseQualityTsv` refuses a TSV that lacks a column listed in `METRIC_COLUMNS`, so old outputs stop loading until they are recomputed.
 
