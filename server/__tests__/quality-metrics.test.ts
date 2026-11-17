@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { mkdtempSync, mkdirSync, readFileSync, existsSync, rmSync, writeFileSync } from 'fs';
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, existsSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { buildScans, readPhysio } from '../bids-layout';
@@ -61,6 +61,18 @@ describe('runQualityMetrics (bids-sessions fixture)', () => {
     expect(existsSync(join(outDir, DATASET_JSON_NAME))).toBe(true);
   });
 
+  it('computes only the first N scans with maxScans (--max-scans), in Prev/Next order', () => {
+    const all = runQualityMetrics({ dataDir: FIXTURES, dataset: 'bids-sessions', outRoot: out });
+    const { rows, summary, scans } = runQualityMetrics({ dataDir: FIXTURES, dataset: 'bids-sessions', outRoot: out, maxScans: 2 });
+    expect(scans.map((s) => s.id)).toEqual(all.scans.slice(0, 2).map((s) => s.id));
+    expect(summary.nScans).toBe(2);
+    expect(new Set(rows.map((r) => r.id))).toEqual(new Set(scans.map((s) => s.id)));
+    // Only the subset's waveforms are written
+    expect(readdirSync(join(out, 'bids-sessions', 'waveforms'), { recursive: true }).filter((f) => String(f).endsWith('.json'))).toHaveLength(2);
+    // More than there are: every scan
+    expect(runQualityMetrics({ dataDir: FIXTURES, dataset: 'bids-sessions', outRoot: out, maxScans: 99 }).scans).toHaveLength(4);
+  });
+
   it('round-trips through the TSV, NaN included', () => {
     const { rows, outDir } = runQualityMetrics({ dataDir: FIXTURES, dataset: 'bids-sessions', outRoot: out });
     const text = readFileSync(join(outDir, METRICS_TSV_NAME), 'utf-8');
@@ -89,6 +101,12 @@ describe('runQualityMetrics (bids-sessions fixture)', () => {
     expect(kept.signals).toEqual(['cardiac', 'respiratory']);
     expect(kept.excluded).toEqual([{ channel: 'trigger', reason: 'scanner trigger' }]);
     expect(scanQualityRows(scan, raw).map((r) => r.channel)).toEqual(['cardiac', 'respiratory']);
+  });
+
+  it('writes which folder t = 0 refers to: the recording own, or the one given (timeDatatype)', () => {
+    const { scan, raw } = allRaw()[0];
+    expect(scanQualityRows(scan, raw).map((r) => r.t0Datatype)).toEqual([raw.datatype, raw.datatype]);
+    expect(scanQualityRows(scan, raw, 'func')[0].t0Datatype).toBe('func');
   });
 
   it('carries the desc-quality sidecar and timing status', () => {

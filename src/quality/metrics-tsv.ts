@@ -36,6 +36,8 @@ const SCAN_COLUMNS = [
   'task',
   'run',
   'datatype',
+  /** Datatype folder whose data t = 0 refers to (timeDatatype, server/bids-layout.ts): datatype, or for beh/ the events' neural folder */
+  't0_datatype',
   /** The scan's id (src/data/scan-key.ts), e.g. func/sub-01_task-rest_acq-mb_run-01: the key of the row */
   'scan',
   /** recording- label of the physio file; n/a when the file has none */
@@ -74,6 +76,8 @@ export function waveformFileName(s: ScanKeyLike, recording = ''): string {
 export interface QualityRow extends ScanKeyLike {
   /** recording- label of the physio file; '' when it has none */
   recording: string;
+  /** Datatype folder whose data t = 0 refers to (timeReference, src/data/scan-key.ts) */
+  t0Datatype: string;
   filename: string;
   /** Column name; "<column> (recording-<label>)" on the pages when another recording of the scan has the same column (labelRecordingChannels) */
   channel: string;
@@ -124,6 +128,7 @@ function rowCells(r: QualityRow): string[] {
     formatText(r.task),
     formatText(r.run),
     formatText(r.datatype),
+    formatText(r.t0Datatype),
     formatText(r.id),
     formatText(r.recording),
     formatText(r.filename),
@@ -167,6 +172,7 @@ export function parseQualityTsv(text: string): QualityRow[] {
     return {
       ...makeScanKey(key.datatype, key.entities),
       recording: parseText(cell('recording')),
+      t0Datatype: parseText(cell('t0_datatype')),
       filename: parseText(cell('filename')),
       channel: parseText(cell('channel')),
       signalType: parseText(cell('signal_type')),

@@ -81,13 +81,51 @@ export function toScanKey(s: ScanKeyLike): ScanKeyLike {
   return makeScanKey(s.datatype, s.entities);
 }
 
+// Scan levels: what the viewer's scan dropdowns pick by. A level is an entity
+// key (sub, ses, task, acq, run, …) or 'datatype' (the folder).
+
+/** The scan's value for one level; '' when the scan has no such entity (or no datatype folder) */
+export function levelValue(s: ScanKeyLike, level: string): string {
+  return level === 'datatype' ? s.datatype : (s.entities[level] ?? '');
+}
+
+/**
+ * Locked levels (e.g. { task: 'rest' }): fixed while the user steps through scans. A scan matches when it has every locked value.
+ */
+export type ScanLocks = Record<string, string>;
+
+export function matchesLocks(s: ScanKeyLike, locks: ScanLocks): boolean {
+  return Object.entries(locks).every(([level, value]) => levelValue(s, level) === value);
+}
+
+/** Locks as query parameters: lock=task:rest (BIDS labels are alphanumeric, so ':' cannot occur in them) */
+export function locksToQuery(locks: ScanLocks): string {
+  return Object.entries(locks)
+    .map(([level, value]) => `lock=${encodeURIComponent(`${level}:${value}`)}`)
+    .join('&');
+}
+
+/** Locks from lock=level:value parameters; malformed ones are left out */
+export function locksFromQuery(params: string[]): ScanLocks {
+  const locks: ScanLocks = {};
+  for (const p of params) {
+    const i = p.indexOf(':');
+    if (i > 0) locks[p.slice(0, i)] = p.slice(i + 1);
+  }
+  return locks;
+}
+
 // What t = 0 is. BIDS defines a physio file's StartTime "in relation to the
 // start of acquisition of the first data sample in the corresponding (neural)
 // dataset" (BIDS specification, physiological recordings, StartTime; checked
 // on the stable spec page and src/schema/objects/metadata.yaml). The spec does
 // not say which data file corresponds; it is taken here to be the data in the
 // physio file's own datatype folder: the first BOLD volume for func/, the
-// first EEG sample for eeg/, and so on.
+// first EEG sample for eeg/, and so on. beh/ physio is the exception: BIDS
+// names no corresponding dataset for it (the beh page only says beh/ data may
+// be recorded "alongside imaging data acquisitions"), so this project takes the
+// neural folder its events come from (timeDatatype, server/bids-layout.ts);
+// that is this project's reading, not a BIDS rule.
 
 /** Datatypes whose data are MRI or PET scans: t = 0 is the scan onset */
 const SCAN_DATATYPES = new Set(['func', 'anat', 'dwi', 'perf', 'fmap', 'pet']);

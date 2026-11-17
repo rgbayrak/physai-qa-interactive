@@ -1,21 +1,11 @@
 /** Every element the viewer uses from index.html */
 interface ViewerElements {
-  subjectSelect: HTMLSelectElement;
-  sessionSelect: HTMLSelectElement;
-  /** Session label: hidden when the subject has no sessions */
-  sessionLabel: HTMLLabelElement;
-  taskSelect: HTMLSelectElement;
-  runSelect: HTMLSelectElement;
-  runLabel: HTMLLabelElement;
-  /** Datatype / Scan dropdown: tells apart scans that share sub/ses/task/run (src/viewer/controls.ts) */
-  variantSelect: HTMLSelectElement;
-  variantLabel: HTMLLabelElement;
-  /** Its heading text, "Datatype" or "Scan" */
-  variantHeading: HTMLElement;
+  /** Holds the scan controls, built per dataset (buildScanSelects, src/viewer/controls.ts) */
+  scanSelects: HTMLElement;
   channelSelect: HTMLSelectElement;
   confoundSelect: HTMLSelectElement;
   confoundLabel: HTMLLabelElement;
-  /** Events column dropdown and its "Event" label in the Auxiliary row */
+  /** Events column dropdown and its "EVENT" label in the Auxiliary row */
   eventsSelect: HTMLSelectElement;
   eventsLabel: HTMLLabelElement;
   /** TRIAL: "Peaks (trial)" checkbox and its label (src/viewer/peaks-trial.ts) */
@@ -77,15 +67,7 @@ function byId<T extends HTMLElement>(id: string): T {
 /** Look up all viewer elements once; throws naming the first one that is missing */
 export function getElements(): ViewerElements {
   return {
-    subjectSelect: byId('subject-select'),
-    sessionSelect: byId('session-select'),
-    sessionLabel: byId('session-label'),
-    taskSelect: byId('task-select'),
-    runSelect: byId('run-select'),
-    runLabel: byId('run-label'),
-    variantSelect: byId('variant-select'),
-    variantLabel: byId('variant-label'),
-    variantHeading: byId('variant-heading'),
+    scanSelects: byId('scan-selects'),
     channelSelect: byId('channel-select'),
     confoundSelect: byId('confound-select'),
     confoundLabel: byId('confound-label'),

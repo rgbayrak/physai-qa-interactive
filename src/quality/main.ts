@@ -1,6 +1,8 @@
 import { fetchServedDataset, fetchDatasetQuality, fetchReportStatus, saveReport, OutdatedMetricsError } from './data';
 import type { LoadedDataset, ServedDataset } from './data';
-import { shareScanWithViewer, viewerScan } from './linked-scan';
+import { shareScanWithViewer, viewerLocks, viewerScan } from './linked-scan';
+import { clearOldLocalStorage, sessionStore } from '@/viewer/persistence';
+import type { MetricPicker } from './metric-picker';
 import { parseScanHash, scanHash, viewerUrl } from './route';
 import type { ScanKeyLike } from './metrics-tsv';
 import { sameScanKey } from './metrics-tsv';
@@ -9,7 +11,7 @@ import { buildQualityReport } from './report';
 import { createMetricPicker } from './metric-picker';
 import { esc, parseVisibleMetrics, serializeVisibleMetrics } from './model';
 import { runSentence } from './run-log';
-import { fetchDatasetInfo } from '@/data/bids-physio-reader';
+import { fetchDatasetInfo, fetchLaunchId } from '@/data/bids-physio-reader';
 import { renderDatasetInfo } from '@/viewer/info';
 import type { VisibleMetrics } from './model';
 
@@ -36,12 +38,16 @@ const els = {
   viewerTab: byId<HTMLAnchorElement>('viewer-tab'),
 };
 
-// Metrics shown: which metrics the Stats tables and histograms show; remembered in this browser only
+// Metrics shown: which metrics the Stats tables and histograms show; kept for
+// this visit only (sessionStorage, keyed by the dev server launch, like the
+// viewer's choices in src/viewer/persistence.ts): a new launch shows the default set
 const VISIBLE_METRICS_KEY = 'physai-quality-visible-metrics';
+/** This dev server launch (/api/bids/launch); '' until known */
+let launch = '';
 
 function readVisibleMetrics(): VisibleMetrics {
   try {
-    return parseVisibleMetrics(localStorage.getItem(VISIBLE_METRICS_KEY));
+    return parseVisibleMetrics(sessionStore()?.getItem(`${VISIBLE_METRICS_KEY}:${launch}`) ?? null);
   } catch {
     return parseVisibleMetrics(null);
   }
@@ -49,21 +55,26 @@ function readVisibleMetrics(): VisibleMetrics {
 
 function saveVisibleMetrics(visible: VisibleMetrics) {
   try {
-    localStorage.setItem(VISIBLE_METRICS_KEY, serializeVisibleMetrics(visible));
+    sessionStore()?.setItem(`${VISIBLE_METRICS_KEY}:${launch}`, serializeVisibleMetrics(visible));
   } catch {
-    // storage unavailable (private window); the choice just won't be remembered
+    // storage unavailable (private window); the choice just won't be kept
   }
 }
 
-const metricPicker = createMetricPicker(byId<HTMLElement>('metric-picker'), readVisibleMetrics(), (visible) => {
-  saveVisibleMetrics(visible);
-  // Keep the page exactly where it is: the redraw changes the graphs' height,
-  // and the browser would otherwise shift or clamp the scroll position
-  const y = window.scrollY;
-  // Only the metric tables and histograms change: no full redraw
-  statsTab.refreshMetrics();
-  window.scrollTo(0, y);
-});
+/** Built once the launch is known (init), so it starts from this visit's ticks */
+let metricPicker: MetricPicker | null = null;
+
+function createPicker() {
+  metricPicker = createMetricPicker(byId<HTMLElement>('metric-picker'), readVisibleMetrics(), (visible) => {
+    saveVisibleMetrics(visible);
+    // Keep the page exactly where it is: the redraw changes the graphs' height,
+    // and the browser would otherwise shift or clamp the scroll position
+    const y = window.scrollY;
+    // Only the metric tables and histograms change: no full redraw
+    statsTab.refreshMetrics();
+    window.scrollTo(0, y);
+  });
+}
 
 const statsTab = createIndividualTab(
   {
@@ -76,7 +87,7 @@ const statsTab = createIndividualTab(
     metrics: byId('subject-metrics'),
   },
   openScan,
-  () => metricPicker.visible(),
+  () => metricPicker?.visible() ?? parseVisibleMetrics(null),
 );
 
 /** The dataset the dev server serves (same as Explore and Annotate) and its loaded metrics */
@@ -96,13 +107,13 @@ function setStatus(html: string) {
 
 function showScanFromHash(): void {
   if (!served || !data) return;
-  // No scan in the link: open the one last shown in Explore and Annotate
-  const wanted = parseScanHash(location.hash) ?? viewerScan(served.name);
-  const shown = statsTab.show(served.id, data, wanted);
+  // No scan in the link: open the one last shown in Explore and Annotate (this visit)
+  const wanted = parseScanHash(location.hash) ?? viewerScan(served.name, undefined, launch);
+  // Prev/Next follow the viewer's locks, so the scan taken back always has them
+  const shown = statsTab.show(served.id, data, wanted, viewerLocks(served.name, undefined, launch));
   // ...and make Explore and Annotate open the scan shown here: both links name it
-  // (without a scan in the link, Explore opens the earliest scan not annotated yet)
   if (shown) {
-    shareScanWithViewer(served.name, shown);
+    shareScanWithViewer(served.name, shown, undefined, launch);
     els.openViewer.href = viewerUrl(shown);
     els.viewerTab.href = viewerUrl(shown);
   }
@@ -149,11 +160,15 @@ async function ensureReport() {
 }
 
 async function init() {
-  const [servedDataset, datasetInfo] = await Promise.all([
+  const [servedDataset, datasetInfo, launchId] = await Promise.all([
     fetchServedDataset().catch(() => null),
     fetchDatasetInfo().catch(() => null),
+    fetchLaunchId().catch(() => ''),
   ]);
   served = servedDataset;
+  launch = launchId;
+  clearOldLocalStorage([VISIBLE_METRICS_KEY]);
+  createPicker();
   // Dataset header under the tabs, same as Explore and Annotate
   renderDatasetInfo(els.datasetInfo, datasetInfo);
   if (!els.datasetInfo.hasChildNodes() && served) els.datasetInfo.textContent = served.id;

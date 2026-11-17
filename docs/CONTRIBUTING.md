@@ -132,8 +132,7 @@ Browser (src/data/bids-physio-reader.ts)
   ↓
 SQI (src/data/sqi-metrics.ts)
   ↓  computeSQI() — 12 per-channel metrics: mean, std dev, SNR, kurtosis, skewness, ZCR,
-  ↓  PaPaGei morphology (sVRI, IPA, SQI) and PhysioQC (windowed kurtosis, ApEn, beat correlation);
-  ↓  definitions and sources in REVIEW.md
+  ↓  PaPaGei morphology (sVRI, IPA, SQI) and PhysioQC (windowed kurtosis, ApEn, beat correlation)
   ↓
 Viewer (src/viewer/)
   ↓  main.ts holds the state and wires events; charts/ builds focus+context,
@@ -201,7 +200,7 @@ A metric is computed in one place and listed in three:
 1. **Compute it** in `computeChannelMetrics()` (`src/data/sqi-metrics.ts`) and add the field to the `ChannelMetrics` interface. Return `NaN` when it does not apply to a channel.
 2. **Label it** in `SQI_COLUMNS` (`src/quality/metric-columns.ts`): label, decimals, description and group. The scatter plot, the Stats tab and the PDF use these labels.
 3. **Give it a TSV column** in `METRIC_COLUMNS` (`src/quality/metrics-tsv.ts`), in snake_case. The column order there is the TSV column order.
-4. **Document it** in [REVIEW.md](https://github.com/rgbayrak/physai-qa-interactive/blob/main/REVIEW.md): what it computes, which channels it applies to, and its citation.
+4. **Document it** in the metrics map: what it computes, which channels it applies to, and its citation.
 5. **Test it** in `src/data/__tests__/sqi-metrics.test.ts` with a synthetic signal of known value, and add the field to the `ChannelMetrics` sample in `src/quality/__tests__/metric-columns.test.ts`, which checks that every metric has a column definition.
 6. **Rerun the script** for every dataset. `parseQualityTsv` refuses a TSV that lacks a column listed in `METRIC_COLUMNS`, so old outputs stop loading until they are recomputed.
 
@@ -398,6 +397,6 @@ Only individual D3 modules (no monolithic `d3` package):
 
 `d3-selection`, `d3-scale`, `d3-axis`, `d3-shape`, `d3-array`, `d3-zoom`, `d3-brush`, `d3-transition`
 
-Plus `@fontsource/ibm-plex-sans`, the page font, bundled so it works offline (imported in `src/shell/tabs.css`).
+Plus `@fontsource/ibm-plex-sans`, the page font, bundled so it works offline (its Latin and Latin Extended files declared with `@font-face` in `src/shell/tabs.css`).
 
 The BIDS version check (`server/bids-structure.ts`) needs no package: its rules are JSON files in `server/schema-rules/`, one per BIDS version, cut down from the official [BIDS schema](https://github.com/bids-standard/bids-schema) (`server/bids-rules.ts` describes the format). 1.8.0 and later are written by `scripts/update-bids-rules.ts` from each version's compiled `schema.json`; 1.6.0 and 1.7.0, which only have the schema's YAML sources, were converted once by hand into the same format, and older versions can be added the same way. `.github/workflows/bids-rules.yml` runs the script weekly and opens a pull request when a new BIDS release appears.

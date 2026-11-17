@@ -83,5 +83,3 @@ The scan open in Explore and Annotate is the one Stats opens, and the other way 
 
 One scan's page in the PDF report: its waveforms and every metric, with each value's percentile in the dataset.
 ```
-
-What each metric computes, and its source, is described in [REVIEW.md](https://github.com/rgbayrak/physai-qa-interactive/blob/main/REVIEW.md).

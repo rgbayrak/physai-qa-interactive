@@ -4,6 +4,9 @@ import type { TimingStatus } from '@/data/bids-physio-reader';
 import { sameScanKey, scanId } from './metrics-tsv';
 import type { MetricKey, QualityRow, ScanKeyLike, ParticipantsTable } from './metrics-tsv';
 import { fetchWaveforms } from './data';
+import { stepWithinLocks } from './linked-scan';
+import { matchesLocks } from '@/data/scan-key';
+import type { ScanLocks } from '@/data/scan-key';
 import type { LoadedDataset } from './data';
 import { drawHistogram, drawWaveform, metricColor } from './charts';
 import {
@@ -20,6 +23,7 @@ import {
   uniqueScans,
   recordingFiles,
   recordingRates,
+  scanTimeReference,
 } from './model';
 import type { VisibleMetrics } from './model';
 import { percentileRank } from './stats';
@@ -36,8 +40,12 @@ interface IndividualTabElements {
 }
 
 interface IndividualTab {
-  /** Show one scan of a loaded dataset (first scan when scan is null); returns the scan shown */
-  show: (dataset: string, data: LoadedDataset, scan: ScanKeyLike | null) => ScanKeyLike | null;
+  /**
+   * Show one scan of a loaded dataset (first scan when scan is null; with
+   * locks, the first scan with them); returns the scan shown. Prev/Next step
+   * only through scans with every locked value (the viewer's locks, this visit)
+   */
+  show: (dataset: string, data: LoadedDataset, scan: ScanKeyLike | null, locks?: ScanLocks) => ScanKeyLike | null;
   /**
    * Metrics picker changed: redraw only the metric tables and histograms of the
    * scan shown, keeping the waveforms and the scroll position
@@ -131,10 +139,11 @@ export function createIndividualTab(
   /** Ignores waveform responses for a scan the user has already left */
   let requestId = 0;
 
-  function step(delta: number) {
-    if (!current) return;
-    const i = scans.findIndex((s) => sameScanKey(s, current!));
-    const next = scans[i + delta];
+  /** The viewer's locks: Prev/Next skip scans without the locked values */
+  let locks: ScanLocks = {};
+
+  function step(delta: -1 | 1) {
+    const next = stepWithinLocks(scans, current, delta, locks);
     if (next) onSelectScan(next);
   }
 
@@ -195,6 +204,7 @@ export function createIndividualTab(
     const wf = await fetchWaveforms(dataset, scan, scanRows);
     if (id !== requestId) return;
     els.waveforms.innerHTML = '';
+    const t0 = scanTimeReference(scanRows);
     if (!wf) {
       els.waveforms.innerHTML = '<div class="muted">No waveform file for this scan. Re-run the quality metrics script.</div>';
       return;
@@ -211,6 +221,7 @@ export function createIndividualTab(
         max: ch.max,
         units: units?.[ch.channel],
         timeLabel: i === wf.length - 1,
+        timeAxisLabel: t0.axisLabel,
         // Fill the graphs column (3/4 of the page beside the sidebar)
         width: el.clientWidth || undefined,
       });
@@ -218,7 +229,7 @@ export function createIndividualTab(
     });
     const note = document.createElement('div');
     note.className = 'muted';
-    note.textContent = 'Dashed line: scan onset (t = 0). Each band shows the min and max of the signal per time bin.';
+    note.textContent = `Dashed line: ${t0.marker}. Each band shows the min and max of the signal per time bin.`;
     els.waveforms.appendChild(note);
   }
 
@@ -228,17 +239,18 @@ export function createIndividualTab(
       if (shown) metricsFor(shown.scanRows, shown.all, shown.units);
     },
 
-    show(dataset, data, scan) {
+    show(dataset, data, scan, scanLocks = {}) {
       const id = ++requestId;
       charts.forEach((c) => c.destroy());
       charts = [];
       shown = null;
 
+      locks = scanLocks;
       scans = uniqueScans(data.rows);
-      current = (scan && scans.find((s) => sameScanKey(s, scan))) ?? scans[0] ?? null;
-      const i = current ? scans.findIndex((s) => sameScanKey(s, current!)) : -1;
-      els.prevBtn.disabled = i <= 0;
-      els.nextBtn.disabled = i === -1 || i >= scans.length - 1;
+      current =
+        (scan && scans.find((s) => sameScanKey(s, scan))) ?? scans.find((s) => matchesLocks(s, locks)) ?? scans[0] ?? null;
+      els.prevBtn.disabled = !stepWithinLocks(scans, current, -1, locks);
+      els.nextBtn.disabled = !stepWithinLocks(scans, current, 1, locks);
 
       if (!current) {
         els.filename.textContent = '';

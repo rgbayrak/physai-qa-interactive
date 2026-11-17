@@ -9,3 +9,5 @@ CLAUDE.md
 .DS_Store
 docs/_build/
 paper/JOSS-TODO.md
+REVIEW.md
+metrics_map.py

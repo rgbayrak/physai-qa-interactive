@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { stepScan, resolveSearch, isScanStepKey, pickStartScan, firstUnannotatedTarget } from '../navigation';
+import { stepScan, resolveSearch, isScanStepKey, pickStartScan, firstUnannotatedTarget, lockedScans } from '../navigation';
 import { validStacked, toggleStacked, physioColumns } from '../controls';
 import { makeScanKey } from '@/data/scan-key';
 
@@ -90,6 +90,30 @@ describe('resolveSearch', () => {
   it('returns null for no match or an empty query', () => {
     expect(resolveSearch('sub-99', scans, '01')).toBeNull();
     expect(resolveSearch('   ', scans, '01')).toBeNull();
+  });
+});
+
+describe('lockedScans: review one label across subjects', () => {
+  const t = (sub: string, task: string) => makeScanKey('func', { sub, task, run: '01' });
+  const tasks = [t('01', 'occombe'), t('01', 'rest'), t('02', 'rest'), t('03', 'occombe'), t('04', 'occombe')];
+
+  it('keeps only the scans with every locked value; all of them without locks', () => {
+    expect(lockedScans(tasks, {})).toBe(tasks);
+    expect(lockedScans(tasks, { task: 'occombe' }).map((x) => x.sub)).toEqual(['01', '03', '04']);
+    expect(lockedScans(tasks, { task: 'occombe', datatype: 'func' })).toHaveLength(3);
+    expect(lockedScans(tasks, { task: 'occombe', datatype: 'eeg' })).toEqual([]);
+  });
+
+  it('steps across subjects without leaving the locked task, skipping a subject without it', () => {
+    const locked = lockedScans(tasks, { task: 'occombe' });
+    expect(stepScan(locked, tasks[0], 1).sub).toBe('03');
+    expect(stepScan(locked, tasks[4], 1).sub).toBe('01');
+  });
+
+  it('searches within the locked scans', () => {
+    const locked = lockedScans(tasks, { task: 'occombe' });
+    expect(resolveSearch('sub-02', locked, '01')).toBeNull();
+    expect(resolveSearch('sub-03', locked, '01')).toEqual(tasks[3]);
   });
 });
 

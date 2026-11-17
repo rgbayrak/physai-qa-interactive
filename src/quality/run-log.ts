@@ -3,7 +3,7 @@
 // Relative imports only: this module is also loaded by Node scripts.
 
 export const RUN_LOG_NAME = 'quality_runs.tsv';
-export const RUN_LOG_HEADER = ['run_date', 'scans_computed', 'scans_available', 'scans_failed', 'count_source'];
+export const RUN_LOG_HEADER = ['run_date', 'scans_computed', 'scans_available', 'scans_failed', 'count_source', 'max_scans'];
 
 export interface QualityRun {
   /** Local date and time of the run, e.g. 2026-11-05T15:40:12 */
@@ -19,6 +19,11 @@ export interface QualityRun {
   scansFailed: number;
   /** How the available count was made: git-annex or files on disk */
   countSource: string;
+  /**
+   * --max-scans N of a subset run (only the first N scans computed); absent
+   * for a full run, and for lines written before the column existed (n/a in the TSV)
+   */
+  maxScans?: number;
 }
 
 /** Local date and time without milliseconds or time zone, e.g. 2026-11-05T15:40:12 */
@@ -28,36 +33,56 @@ export function localTimestamp(d: Date = new Date()): string {
 }
 
 export function runLogLine(run: QualityRun): string {
-  return [run.runDate, run.scansComputed, run.scansAvailable, run.scansFailed, run.countSource].join('\t');
+  return [run.runDate, run.scansComputed, run.scansAvailable, run.scansFailed, run.countSource, run.maxScans ?? 'n/a'].join(
+    '\t',
+  );
 }
 
 /** The last well-formed run in the log, or null if there is none */
 export function parseLastRun(tsv: string): QualityRun | null {
   const lines = tsv.split(/\r?\n/).filter((l) => l.trim().length > 0);
   for (let i = lines.length - 1; i >= 1; i--) {
-    const [runDate, computed, available, failed, source] = lines[i].split('\t');
+    const [runDate, computed, available, failed, source, max] = lines[i].split('\t');
     const nums = [computed, available, failed].map(Number);
     if (!runDate || nums.some((n) => !Number.isInteger(n) || n < 0)) continue;
+    const maxScans = Number(max);
     return {
       runDate,
       scansComputed: nums[0],
       scansAvailable: nums[1],
       scansFailed: nums[2],
       countSource: source ?? '',
+      ...(max && Number.isInteger(maxScans) && maxScans > 0 ? { maxScans } : {}),
     };
   }
   return null;
 }
 
-/** Listed physio recordings that were not downloaded when the metrics ran */
+/**
+ * Listed physio recordings that were not downloaded when the metrics ran;
+ * unknown (0) for a subset run, whose other recordings were not looked at
+ */
 export function notDownloaded(run: QualityRun): number {
+  if (run.maxScans !== undefined) return 0;
   return Math.max(0, run.scansAvailable - run.scansComputed - run.scansFailed);
 }
 
-/** "Quality metrics were last computed on 2026-11-05 for 78 of 120 physio recordings (40 not downloaded, 2 failed)." */
+/** "a subset: the first 10 scans" for a --max-scans run, else '' */
+export function subsetNote(run: QualityRun): string {
+  return run.maxScans === undefined ? '' : `a subset: the first ${run.maxScans} ${run.maxScans === 1 ? 'scan' : 'scans'}`;
+}
+
+/**
+ * "Quality metrics were last computed on 2026-11-05 for 78 of 120 physio recordings (40 not downloaded, 2 failed)."
+ * A subset run: "… for 12 of 120 physio recordings (a subset: the first 10 scans)."
+ */
 export function runSentence(run: QualityRun): string {
   const missing = notDownloaded(run);
-  const notes = [missing > 0 ? `${missing} not downloaded` : '', run.scansFailed > 0 ? `${run.scansFailed} failed` : '']
+  const notes = [
+    subsetNote(run),
+    missing > 0 ? `${missing} not downloaded` : '',
+    run.scansFailed > 0 ? `${run.scansFailed} failed` : '',
+  ]
     .filter(Boolean)
     .join(', ');
   return (

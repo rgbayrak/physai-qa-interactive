@@ -1,7 +1,7 @@
 import { SQI_COLUMNS, formatMetricValue } from './metric-columns';
 import { escapeHtml } from '@/utils/html';
 import { METRIC_COLUMNS, sameScanKey, scanId } from './metrics-tsv';
-import { toScanKey } from '../data/scan-key';
+import { timeReference, toScanKey } from '../data/scan-key';
 import { channelLabel, clashingNames } from '../data/recordings';
 import type { MetricKey, QualityRow, ScanKeyLike, ParticipantsTable } from './metrics-tsv';
 import { finiteValues } from './stats';
@@ -119,6 +119,16 @@ export function labelRecordingChannels(rows: QualityRow[]): QualityRow[] {
     const label = channelLabel(r, clashes.get(r.id)!);
     return label === r.channel ? r : { ...r, column: r.channel, channel: label };
   });
+}
+
+/**
+ * What t = 0 is for a scan's waveforms (axis label and the dashed marker's
+ * name), from the t0_datatype the metrics script wrote: the same rule as the
+ * viewer (timeDatatype, server/bids-layout.ts)
+ */
+export function scanTimeReference(scanRows: QualityRow[]): { axisLabel: string; marker: string } {
+  const r0 = scanRows[0];
+  return timeReference(r0 ? r0.t0Datatype || r0.datatype : 'func');
 }
 
 /** The scan's physio file names, one per recording, comma-separated */

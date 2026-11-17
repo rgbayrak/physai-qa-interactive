@@ -1,5 +1,6 @@
 import type { DatasetInfo, PhysioFileCount, PhysioRaw, TimingStatus } from '@/data/bids-physio-reader';
 import type { QualityRun } from '@/quality/run-log';
+import { subsetNote } from '@/quality/run-log';
 import { descriptionNoticeLines } from '@/data/dataset-notice';
 import type { NoticePart } from '@/data/dataset-notice';
 import { structureLine } from '@/data/bids-structure';
@@ -134,6 +135,15 @@ export function metricsLine(status: MetricsStatus | undefined): SummaryPart[] | 
   }
   const date = run.runDate.slice(0, 10);
   const failed = run.scansFailed > 0 ? `; ${run.scansFailed} could not be computed` : '';
+  // --max-scans run: the rest was left out on purpose, not missing
+  if (run.maxScans !== undefined) {
+    return [
+      `Quality metrics cover ${run.scansComputed} of ${run.scansAvailable} ${recordings(run.scansAvailable)}, ` +
+        `${subsetNote(run)} (computed on ${date}${failed}). For the full dataset, rerun `,
+      { code: QUALITY_SCRIPT },
+      ' without --max-scans.',
+    ];
+  }
   if (run.scansComputed >= run.scansAvailable) {
     return [`Quality metrics cover all ${run.scansAvailable} ${recordings(run.scansAvailable)} (computed on ${date}).`];
   }

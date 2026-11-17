@@ -32,6 +32,18 @@ describe('run sentence', () => {
     );
   });
 
+  it('says a --max-scans run is a subset, not missing downloads, and round-trips its limit', () => {
+    const subset = { ...run, scansComputed: 12, scansFailed: 0, maxScans: 10 };
+    expect(notDownloaded(subset)).toBe(0);
+    expect(runSentence(subset)).toBe(
+      'Quality metrics were last computed on 2026-11-05 for 12 of 120 physio recordings (a subset: the first 10 scans).',
+    );
+    expect(parseLastRun(`${HEADER}\tmax_scans\n${runLogLine(subset)}\n`)).toEqual(subset);
+    // A line written before the max_scans column, or n/a: a full run
+    expect(parseLastRun(`${HEADER}\n2026-11-04T10:00:00\t10\t120\t0\tfiles on disk\n`)?.maxScans).toBeUndefined();
+    expect(runLogLine(run).endsWith('\tn/a')).toBe(true);
+  });
+
   it('writes local time without milliseconds', () => {
     expect(localTimestamp(new Date(2026, 10, 5, 9, 4, 7))).toBe('2026-11-05T09:04:07');
   });
@@ -63,6 +75,15 @@ describe('dataset summary: quality metrics line', () => {
         'not the full dataset. To include the rest, download them and rerun ',
       SCRIPT,
       '.',
+    ]);
+  });
+
+  it('says a --max-scans run is a subset and how to get the full dataset, not to download', () => {
+    expect(metricsLine({ found: true, lastRun: { ...run, scansComputed: 12, scansFailed: 0, maxScans: 10 } })).toEqual([
+      'Quality metrics cover 12 of 120 recordings, a subset: the first 10 scans (computed on 2026-11-05). ' +
+        'For the full dataset, rerun ',
+      SCRIPT,
+      ' without --max-scans.',
     ]);
   });
 

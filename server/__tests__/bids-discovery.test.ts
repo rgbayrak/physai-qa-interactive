@@ -11,6 +11,7 @@ import {
   readConfounds,
   readEvents,
   readPhysio,
+  timeDatatype,
 } from '../bids-layout';
 import { buildBidsIndex, entitiesMatch, indexSummaryLines, nameEntities } from '../bids-index';
 import { parseScanId } from '../../src/data/scan-key';
@@ -30,7 +31,8 @@ const dataset = () => {
 };
 const write = (path: string, content: string | Buffer = '') => {
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, content);
+  // A physio file becomes a scan only with content on disk (hasPhysioContent): gzip even an empty one
+  writeFileSync(path, path.endsWith('_physio.tsv.gz') && typeof content === 'string' ? gzipSync(content) : content);
 };
 const json = (path: string, obj: object) => write(path, JSON.stringify(obj));
 const index = (bidsRoot: string) => buildBidsIndex({ bidsRoot });
@@ -186,6 +188,8 @@ describe('events, by the BIDS inheritance principle and the corresponding (neura
     write(join(ses, 'func', 'sub-01_ses-1_task-search_run-2_events.tsv'), events(9)); // another run: not used
     const e = readEvents(index(root), 'beh/sub-01_ses-1_task-search_run-1');
     expect([e?.filename, e?.datatype, e?.onset]).toEqual(['sub-01_ses-1_task-search_run-1_events.tsv', 'func', [3]]);
+    // t = 0 follows those events' folder: the scan onset (viewer and quality metrics alike)
+    expect(timeDatatype(index(root), 'beh/sub-01_ses-1_task-search_run-1')).toBe('func');
   });
 
   it('uses beh/ events of its own first', () => {
@@ -195,6 +199,7 @@ describe('events, by the BIDS inheritance principle and the corresponding (neura
     write(join(sub, 'beh', 'sub-01_task-search_events.tsv'), events(1));
     write(join(sub, 'func', 'sub-01_task-search_events.tsv'), events(3));
     expect(readEvents(index(root), 'beh/sub-01_task-search')?.datatype).toBe('beh');
+    expect(timeDatatype(index(root), 'beh/sub-01_task-search')).toBe('beh');
   });
 
   it('takes none when two neural folders match (func/ and eeg/): which one is ambiguous', () => {
@@ -204,6 +209,7 @@ describe('events, by the BIDS inheritance principle and the corresponding (neura
     write(join(sub, 'func', 'sub-01_task-search_events.tsv'), events(3));
     write(join(sub, 'eeg', 'sub-01_task-search_events.tsv'), events(7));
     expect(readEvents(index(root), 'beh/sub-01_task-search')).toBeNull();
+    expect(timeDatatype(index(root), 'beh/sub-01_task-search')).toBe('beh');
   });
 
   it('never gives func/ physio events from beh/ or another folder', () => {
@@ -213,6 +219,17 @@ describe('events, by the BIDS inheritance principle and the corresponding (neura
     write(join(sub, 'beh', 'sub-01_task-search_events.tsv'), events(1));
     write(join(sub, 'eeg', 'sub-01_task-search_events.tsv'), events(7));
     expect(readEvents(index(root), 'func/sub-01_task-search')).toBeNull();
+    expect(timeDatatype(index(root), 'func/sub-01_task-search')).toBe('func');
+  });
+
+  it('times beh/ physio without any events, and eeg/ physio, against their own data', () => {
+    const root = dataset();
+    const sub = join(root, 'sub-01');
+    write(join(sub, 'beh', 'sub-01_task-game_physio.tsv.gz'));
+    write(join(sub, 'eeg', 'sub-01_task-rest_physio.tsv.gz'));
+    expect(timeDatatype(index(root), 'beh/sub-01_task-game')).toBe('beh');
+    expect(timeDatatype(index(root), 'eeg/sub-01_task-rest')).toBe('eeg');
+    expect(timeDatatype(index(root), 'func/sub-09_task-none')).toBe(''); // unknown scan
   });
 });
 
@@ -288,6 +305,23 @@ describe('one physio file per scan', () => {
     expect(ids(root)).toEqual(['eeg/sub-01_task-rest', 'func/sub-01_task-rest']);
     expect(findPhysioFiles(idx, 'eeg/sub-01_task-rest')?.file.datatype).toBe('eeg');
     expect(idx.duplicates).toEqual([]);
+  });
+
+  it('the physio folder given wins: BIDSPHYS_ROOT when set, else the BIDS_ROOT dataset over its derivatives/', () => {
+    const root = dataset();
+    const raw = join(root, 'sub-01', 'func', 'sub-01_task-rest_physio.tsv.gz');
+    const prep = join(root, 'derivatives', 'physprep', 'sub-01', 'func', 'sub-01_task-rest_desc-preproc_physio.tsv.gz');
+    write(raw);
+    write(prep);
+    const path = (roots: Parameters<typeof buildBidsIndex>[0]) => findPhysioFiles(buildBidsIndex(roots), 'func/sub-01_task-rest')?.tsvGzPath;
+    // BIDS_ROOT alone: its own (raw) file, not the desc-preproc copy in derivatives/
+    expect(path({ bidsRoot: root })).toBe(raw);
+    // BIDSPHYS_ROOT inside BIDS_ROOT, or next to it (CNeuroMod physprep): its file
+    expect(path({ bidsRoot: root, physioRoot: join(root, 'derivatives', 'physprep') })).toBe(prep);
+    const beside = join(dir, `phys${++n}`);
+    const besideFile = join(beside, 'sub-01', 'func', 'sub-01_task-rest_desc-preproc_physio.tsv.gz');
+    write(besideFile);
+    expect(path({ bidsRoot: root, physioRoot: beside })).toBe(besideFile);
   });
 
   it('desc-preproc over the raw file, then name order for recording- files, the others logged', () => {

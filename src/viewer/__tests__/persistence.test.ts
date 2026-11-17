@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { lastViewedKey, saveLastViewed, readLastViewed, resumeFrom } from '../persistence';
+import {
+  DEFAULT_LAST_VIEWED_KEY,
+  clearOldLocalStorage,
+  lastViewedKey,
+  saveLastViewed,
+  readLastViewed,
+  resumeFrom,
+} from '../persistence';
 import type { LastViewed } from '../persistence';
 import { parseScanId } from '@/data/scan-key';
 
@@ -68,7 +75,14 @@ describe('resumeFrom', () => {
     expect(resumeFrom(saved, scans)).toEqual({
       scan: scans[1],
       selection: { channel: 'respiratory', confound: 'rot_x', event: 'trial_type', stacked: ['cardiac'] },
+      locks: {},
     });
+  });
+
+  it('restores locks that some scan still has, and drops the others', () => {
+    expect(resumeFrom({ ...saved, locks: { task: 'rest' } }, scans)?.locks).toEqual({ task: 'rest' });
+    expect(resumeFrom({ ...saved, locks: { task: 'gone' } }, scans)?.locks).toEqual({});
+    expect(resumeFrom({ ...saved, locks: ['task'] as unknown as Record<string, string> }, scans)?.locks).toEqual({});
   });
 
   it('treats entries saved before the events figure existed as no events column', () => {
@@ -91,5 +105,26 @@ describe('resumeFrom', () => {
     const old: LastViewed = { ...saved };
     delete old.stacked;
     expect(resumeFrom(old, scans)?.selection.stacked).toEqual([]);
+  });
+});
+
+describe('choices kept for one visit only', () => {
+  it('keys the entry by dataset and dev server launch, so a new launch finds nothing', () => {
+    expect(lastViewedKey('ds', 'L1')).not.toBe(lastViewedKey('ds', 'L2'));
+    const store = memoryStorage();
+    const entry: LastViewed = { ...scans[1], channel: 'cardiac', confound: '', locks: { sub: '02' } };
+    saveLastViewed(lastViewedKey('ds', 'L1'), entry, store);
+    expect(resumeFrom(readLastViewed(lastViewedKey('ds', 'L1'), store), scans)?.locks).toEqual({ sub: '02' });
+    expect(readLastViewed(lastViewedKey('ds', 'L2'), store)).toBeNull();
+  });
+
+  it('removes what earlier versions left in localStorage, and nothing else', () => {
+    const store = memoryStorage();
+    store.setItem(`${DEFAULT_LAST_VIEWED_KEY}:ds`, '{}');
+    store.setItem('physai-quality-visible-metrics', '[]');
+    store.setItem('unrelated', 'x');
+    clearOldLocalStorage([DEFAULT_LAST_VIEWED_KEY, 'physai-quality-visible-metrics'], store);
+    expect([...Array(store.length).keys()].map((i) => store.key(i))).toEqual(['unrelated']);
+    clearOldLocalStorage([DEFAULT_LAST_VIEWED_KEY], throwingStorage); // blocked storage: no error
   });
 });
