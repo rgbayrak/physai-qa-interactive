@@ -1,14 +1,15 @@
-import { accessSync, constants, readdirSync, readFileSync } from 'fs';
+import { accessSync, closeSync, constants, openSync, readdirSync, readFileSync, readSync } from 'fs';
 import type { Dirent } from 'fs';
-import { basename, dirname, join, relative, sep } from 'path';
+import { basename, dirname, join, relative, resolve, sep } from 'path';
 import { makeScanKey, scanEntities } from '../src/data/scan-key';
 import type { ScanKeyLike } from '../src/data/scan-key';
 
 // One walk over the BIDS folders, done once at start-up. Files are found by
 // their names wherever they sit (any datatype folder, extra levels, raw or
 // derivatives), not at fixed paths. Only names are read during the walk, plus
-// each dataset_description.json's DatasetType and an access check on physio
-// files, so it works on DataLad datasets whose files are not downloaded.
+// each dataset_description.json's DatasetType and the first bytes of each
+// physio file (hasPhysioContent), so it works on DataLad datasets whose files
+// are not downloaded: only physio files whose content is here become scans.
 // Spec: https://bids-specification.readthedocs.io/en/stable/modality-specific-files/physiological-recordings.html
 
 /** BIDS datatype folders; a file's datatype is the nearest of these above it */
@@ -34,7 +35,8 @@ export const CONFOUNDS_PATTERNS = [
 export type FileKind = 'physio' | 'physioSidecar' | 'physioEvents' | 'quality' | 'bold' | 'confounds' | 'events';
 
 function classify(name: string): FileKind | null {
-  if (/_physio\.tsv\.gz$/.test(name)) return 'physio';
+  // BIDS names physio files *_physio.tsv.gz; an uncompressed *_physio.tsv (outside BIDS) is read too
+  if (/_physio\.tsv(\.gz)?$/.test(name)) return 'physio';
   if (/_physio\.json$/.test(name)) return 'physioSidecar';
   if (/_physioevents\.(tsv\.gz|json)$/.test(name)) return 'physioEvents';
   if (/_desc-quality\.json$/.test(name)) return 'quality';
@@ -128,6 +130,32 @@ export function isReadable(filePath: string): boolean {
     return true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * True when a physio file's content is on disk: readable (not a dangling
+ * git-annex symlink, DataLad's default for a file never fetched with datalad
+ * get), not empty, and for *.tsv.gz starting with the gzip magic bytes 1f 8b
+ * (RFC 1952); a plain *.tsv must not be a git-annex pointer file, the small
+ * text file "/annex/objects/<key>" an unlocked dataset keeps in place of
+ * content not fetched (git-annex documentation, "unlocked files"; unverified,
+ * from memory). Sidecars (*.json) are not checked: DataLad keeps them in git,
+ * so they are always here and never tell whether the data is.
+ */
+export function hasPhysioContent(path: string): boolean {
+  if (!isReadable(path)) return false;
+  let fd: number | null = null;
+  try {
+    fd = openSync(path, 'r');
+    const buf = Buffer.alloc(15);
+    const n = readSync(fd, buf, 0, buf.length, 0);
+    if (path.endsWith('.gz')) return n >= 2 && buf[0] === 0x1f && buf[1] === 0x8b;
+    return n > 0 && !buf.subarray(0, n).toString('latin1').startsWith('/annex/objects/');
+  } catch {
+    return false;
+  } finally {
+    if (fd !== null) closeSync(fd);
   }
 }
 
@@ -256,7 +284,7 @@ export function buildBidsIndex(roots: IndexRoots): BidsIndex {
         ...nameEntities(e.name),
         datatype,
         dataset,
-        readable: kind === 'physio' ? isReadable(path) : true,
+        readable: kind === 'physio' ? hasPhysioContent(path) : true,
       });
     }
   };
@@ -288,7 +316,7 @@ export function buildBidsIndex(roots: IndexRoots): BidsIndex {
     else byKey.set(key, [f]);
   }
 
-  const { scans, duplicates, unkeyed } = selectScanFiles(files);
+  const { scans, duplicates, unkeyed } = selectScanFiles(files, roots.physioRoot);
   const physioByDatatype: Record<string, number> = {};
   for (const f of files) {
     if (f.kind === 'physio' && f.readable) {
@@ -322,11 +350,25 @@ export function buildBidsIndex(roots: IndexRoots): BidsIndex {
   };
 }
 
-/** Preference among physio files of one scan and recording: desc-preproc first, then name, then path */
-function physioPreference(a: IndexedFile, b: IndexedFile): number {
-  const preproc = Number(b.entities.desc === 'preproc') - Number(a.entities.desc === 'preproc');
-  if (preproc) return preproc;
-  return byNumeric(a.name, b.name) || byNumeric(a.path, b.path);
+/**
+ * Preference among physio files of one scan and recording (user decision,
+ * 2026-11-16): the physio folder the user gave wins. With BIDSPHYS_ROOT, a file
+ * under it first (e.g. CNeuroMod physprep over the raw copy); then a file of
+ * the BIDS_ROOT dataset itself, over copies in its derivatives/ (so with
+ * BIDS_ROOT alone, its own raw file wins). Ties: desc-preproc, then .tsv.gz
+ * (the BIDS extension) over .tsv, then name, then path.
+ */
+function physioPreference(physioRoot: string | undefined) {
+  const physioDir = physioRoot ? resolve(physioRoot) + sep : null;
+  const given = (f: IndexedFile) => Number(physioDir !== null && resolve(f.path).startsWith(physioDir));
+  const main = (f: IndexedFile) => Number(f.dataset?.main === true);
+  return (a: IndexedFile, b: IndexedFile): number =>
+    given(b) - given(a) ||
+    main(b) - main(a) ||
+    Number(b.entities.desc === 'preproc') - Number(a.entities.desc === 'preproc') ||
+    Number(b.name.endsWith('.gz')) - Number(a.name.endsWith('.gz')) ||
+    byNumeric(a.name, b.name) ||
+    byNumeric(a.path, b.path);
 }
 
 /** A physio file's recording- label; '' when it has none */
@@ -338,9 +380,11 @@ export const recordingOf = (f: IndexedFile): string => f.entities.recording ?? '
  * scans. Within a scan, BIDS splits signals with different sampling rates or
  * devices into recording-<label> files: every recording is loaded, one file
  * each. Other files of the same recording (a desc-preproc copy, the same file
- * in another folder) are kept in duplicates for the log.
+ * in another folder) are kept in duplicates for the log; which one is loaded:
+ * physioPreference (BIDSPHYS_ROOT, when given, wins).
  */
-function selectScanFiles(files: IndexedFile[]) {
+function selectScanFiles(files: IndexedFile[], physioRoot?: string) {
+  const preference = physioPreference(physioRoot);
   const groups = new Map<string, IndexedFile[]>();
   const unkeyed: IndexedFile[] = [];
   for (const f of files) {
@@ -365,7 +409,7 @@ function selectScanFiles(files: IndexedFile[]) {
     }
     const recordings: IndexedFile[] = [];
     for (const label of [...byRecording.keys()].sort(byNumeric)) {
-      const [chosen, ...others] = byRecording.get(label)!.sort(physioPreference);
+      const [chosen, ...others] = byRecording.get(label)!.sort(preference);
       recordings.push(chosen);
       if (others.length) duplicates.push({ chosen, others });
     }
@@ -459,6 +503,41 @@ export function qualitySidecar(index: BidsIndex, file: IndexedFile): string | nu
   return found[0]?.path ?? null;
 }
 
+/**
+ * Physio files not downloaded, one line per folder setting, e.g.
+ * "in BIDS_ROOT = 354 physio files listed but not downloaded (skipped)" and
+ * "in BIDSPHYS_ROOT = 235 …": with BIDSPHYS_ROOT the folders add up, so one
+ * total would hide which folder is missing files. A file counts for the
+ * innermost folder setting it is under (BIDSPHYS_ROOT inside BIDS_ROOT counts
+ * as BIDSPHYS_ROOT); a setting with none missing gets no line. When some of
+ * the setting's physio files are downloaded, the count says "other" ("235
+ * other physio files …"): those are skipped, the rest are loaded.
+ */
+function notDownloadedLines(index: BidsIndex): string[] {
+  const settings = (
+    [
+      ['BIDS_ROOT', index.bidsRoot],
+      ['BIDSPHYS_ROOT', index.physioRoot],
+      ['BIDSDER_ROOT', index.derivRoot],
+    ] as const
+  ).flatMap(([label, root]) => (root ? [{ label, dir: resolve(root) + sep, listed: 0, missing: 0 }] : []));
+  for (const f of index.files) {
+    if (f.kind !== 'physio') continue;
+    const path = resolve(f.path);
+    const inside = settings.filter((s) => path.startsWith(s.dir));
+    if (!inside.length) continue;
+    const s = inside.reduce((a, b) => (b.dir.length > a.dir.length ? b : a));
+    s.listed++;
+    if (!f.readable) s.missing++;
+  }
+  return settings
+    .filter((s) => s.missing > 0)
+    .map(
+      (s) =>
+        `in ${s.label} = ${s.missing} ${s.missing < s.listed ? 'other ' : ''}physio files listed but not downloaded (skipped)`,
+    );
+}
+
 /** Start-up log lines: folders walked, walk time, physio per datatype, files skipped or not loaded */
 export function indexSummaryLines(index: BidsIndex): string[] {
   const lines = [
@@ -469,7 +548,7 @@ export function indexSummaryLines(index: BidsIndex): string[] {
     .sort((a, b) => byNumeric(a[0], b[0]))
     .map(([dt, n]) => `${n} in ${dt === 'none' ? 'no datatype folder' : `${dt}/`}`);
   lines.push(`Readable physio files: ${perType.length ? perType.join(', ') : 'none'}`);
-  if (index.stats.unreadablePhysio) lines.push(`${index.stats.unreadablePhysio} physio files listed but not downloaded (skipped)`);
+  if (index.stats.unreadablePhysio) lines.push(...notDownloadedLines(index));
   if (index.stats.physioEvents) lines.push(`${index.stats.physioEvents} physioevents files recognised and skipped`);
   if (index.unkeyed.length) {
     lines.push(

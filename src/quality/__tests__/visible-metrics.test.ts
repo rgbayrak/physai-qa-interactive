@@ -23,6 +23,7 @@ function row(metrics: Partial<Record<MetricKey, number>>): QualityRow {
   return {
     ...makeScanKey('func', { sub: '01', task: 'rest' }),
     recording: '',
+    t0Datatype: 'func',
     filename: 'f',
     channel: 'cardiac',
     signalType: 'cardiac',

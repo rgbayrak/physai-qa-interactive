@@ -51,6 +51,7 @@ import {
   labelRecordingChannels,
   recordingFiles,
   recordingRates,
+  scanTimeReference,
 } from '../model';
 
 function row(over: Partial<QualityRow> = {}, metrics: Partial<Record<MetricKey, number>> = {}): QualityRow {
@@ -66,6 +67,7 @@ function row(over: Partial<QualityRow> = {}, metrics: Partial<Record<MetricKey, 
   });
   return {
     recording: '',
+    t0Datatype: datatype,
     filename: 'sub-01_ses-01_task-rest_run-01_physio.tsv.gz',
     channel: 'cardiac',
     signalType: 'cardiac',
@@ -134,6 +136,26 @@ describe('metrics TSV', () => {
       .map((l) => l.split('\t').filter((_, i) => i !== TSV_HEADER.indexOf('scan')).join('\t'))
       .join('\n');
     expect(() => parseQualityTsv(old)).toThrow(/missing columns: scan .*compute-quality-metrics/);
+  });
+
+  it('keeps which folder t = 0 refers to (beh/ physio timed by func/ events), and needs that column', () => {
+    const beh = row({ datatype: 'beh', t0Datatype: 'func' });
+    const text = rowsToTsv([beh]);
+    expect(parseQualityTsv(text)[0].t0Datatype).toBe('func');
+    const old = text
+      .split('\n')
+      .map((l) => l.split('\t').filter((_, i) => i !== TSV_HEADER.indexOf('t0_datatype')).join('\t'))
+      .join('\n');
+    expect(() => parseQualityTsv(old)).toThrow(/missing columns: t0_datatype/);
+  });
+});
+
+describe('scanTimeReference: what t = 0 is on the Stats waveforms and in the PDF', () => {
+  it('follows t0_datatype: scan onset for func/ (and beh/ timed by func/), the recording start otherwise', () => {
+    expect(scanTimeReference([row()]).axisLabel).toBe('Time from scan onset (s)');
+    expect(scanTimeReference([row({ datatype: 'beh', t0Datatype: 'func' })]).marker).toBe('scan onset (t = 0)');
+    expect(scanTimeReference([row({ datatype: 'eeg' })]).axisLabel).toBe('Time from start of the EEG recording (s)');
+    expect(scanTimeReference([row({ datatype: 'beh' })]).marker).toBe('start of the behavioural recording (t = 0)');
   });
 });
 

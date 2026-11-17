@@ -1,6 +1,7 @@
 import type { SubjectInfo, ScanEntry, PhysioScan, ConfoundsRaw, EventsRaw } from '@/data/bids-physio-reader';
 import type { Annotation, WaveformAssessment } from './annotations';
 import { NO_ASSESSMENT } from './annotations';
+import type { ScanLocks } from '@/data/scan-key';
 
 /** Channel, confound, events column and stack restored from the last session, consumed by the first scan load */
 export interface RestoredSelection {
@@ -34,6 +35,7 @@ interface ViewerState {
   /** Rating and comment for the whole waveform of the current scan and main channel */
   waveform: WaveformAssessment;
   restoredSelection: RestoredSelection | null;
+  locks: ScanLocks;
 }
 
 export function createState(): ViewerState {
@@ -49,5 +51,6 @@ export function createState(): ViewerState {
     annotations: [],
     waveform: { ...NO_ASSESSMENT },
     restoredSelection: null,
+    locks: {},
   };
 }

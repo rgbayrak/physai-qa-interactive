@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { dirname, join } from 'path';
+import { gzipSync } from 'zlib';
 import {
   getSubjects,
   findPhysioFiles,
@@ -206,7 +207,7 @@ describe('fixture: events', () => {
       const func = join(dir, 'sub-01', 'func');
       mkdirSync(func, { recursive: true });
       cpSync(join(NOSES_ROOT, 'sub-01', 'func', 'sub-01_task-motor_events.tsv'), join(func, 'sub-01_task-motor_events.tsv'));
-      for (const run of ['1', '02']) writeFileSync(join(func, `sub-01_task-motor_run-${run}_physio.tsv.gz`), '');
+      for (const run of ['1', '02']) writeFileSync(join(func, `sub-01_task-motor_run-${run}_physio.tsv.gz`), gzipSync(''));
       const idx = index(dir);
       for (const run of ['1', '02']) {
         expect(readEvents(idx, `func/sub-01_task-motor_run-${run}`)?.filename).toBe('sub-01_task-motor_events.tsv');
@@ -294,7 +295,8 @@ describe('index: found by content, not folder names', () => {
   let dir: string;
   const touch = (path: string) => {
     mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, '');
+    // A physio file becomes a scan only with content on disk (hasPhysioContent): an empty gzip
+    writeFileSync(path, path.endsWith('.gz') ? gzipSync('') : '');
   };
   beforeAll(() => {
     dir = mkdtempSync(join(tmpdir(), 'bids-roots-'));

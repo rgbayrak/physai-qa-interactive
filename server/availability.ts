@@ -1,13 +1,12 @@
-import { openSync, readSync, closeSync } from 'fs';
 import { execFileSync } from 'child_process';
 import { relative, sep } from 'path';
-import { isReadable } from './bids-index';
 import type { BidsIndex } from './bids-index';
 
 // How many physio files a dataset lists, and how many of them are downloaded.
 // DataLad datasets list every file, but a file that was never fetched
 // (datalad get) is a dangling symlink, or in "unlocked" mode a small pointer
-// file. git-annex knows which is which; without it, the file itself is checked.
+// file. git-annex knows which is which; without it, the file itself is checked
+// (hasPhysioContent, the same check that decides which files become scans).
 
 export interface PhysioFileCount {
   /** Physio files listed in the dataset, downloaded or not */
@@ -19,7 +18,7 @@ export interface PhysioFileCount {
 }
 
 /**
- * Every *_physio.tsv.gz in the index, downloaded or not, in any folder:
+ * Every physio file (*_physio.tsv.gz, or *_physio.tsv) in the index, downloaded or not, in any folder:
  * the folder walked and the path relative to it (with '/'), sorted.
  */
 export function listPhysioPaths(index: BidsIndex): { root: string; path: string }[] {
@@ -27,21 +26,6 @@ export function listPhysioPaths(index: BidsIndex): { root: string; path: string 
     .filter((f) => f.kind === 'physio')
     .map((f) => ({ root: f.root, path: relative(f.root, f.path).split(sep).join('/') }))
     .sort((a, b) => a.root.localeCompare(b.root) || a.path.localeCompare(b.path));
-}
-
-/** Readable and gzip content (not a dangling symlink, nor an unlocked git-annex pointer file) */
-function hasGzipContent(path: string): boolean {
-  if (!isReadable(path)) return false;
-  let fd: number | null = null;
-  try {
-    fd = openSync(path, 'r');
-    const buf = Buffer.alloc(2);
-    return readSync(fd, buf, 0, 2, 0) === 2 && buf[0] === 0x1f && buf[1] === 0x8b;
-  } catch {
-    return false;
-  } finally {
-    if (fd !== null) closeSync(fd);
-  }
 }
 
 /** Paths in `git annex find --not --in=here` output (one per line, relative to the folder it ran in) */
@@ -97,7 +81,7 @@ export function countPhysioFiles(index: BidsIndex, useAnnex = true): PhysioFileC
   }
   return {
     onDisk: paths.length,
-    downloaded: index.files.filter((f) => f.kind === 'physio' && hasGzipContent(f.path)).length,
+    downloaded: index.files.filter((f) => f.kind === 'physio' && f.readable).length,
     source: 'files on disk',
   };
 }

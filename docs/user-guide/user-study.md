@@ -50,6 +50,14 @@ npx vite-node scripts/compute-quality-metrics.ts friends --bids-root data/friend
 
 It writes `data/quality/<name>/`. Without it, the tool still works for exploring and annotating; the scatter plot and the Stats tab only appear once the metrics exist. *In the study session, skip this step: task 2 runs it.*
 
+To try it quickly, or when the full dataset takes too long, add `--max-scans <N>` to compute only the first N scans, in the order Prev and Next step through them (subject, session, task, run). For example, `--max-scans 10` computes the first 10 scans, starting with sub-01:
+
+```bash
+npx vite-node scripts/compute-quality-metrics.ts ds006644 --max-scans 10
+```
+
+A subset run replaces the results of the last run, like a full one. The Stats tab and the On disk data summary say the metrics cover a subset (e.g. "10 of 80 physio recordings, a subset: the first 10 scans"), and the scatter plot and histograms compare only those scans. Run the script again without `--max-scans` for the whole dataset.
+
 **4. Start the tool:**
 
 ```bash

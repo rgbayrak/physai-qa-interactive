@@ -28,6 +28,7 @@ import {
   rowsForScan,
   recordingFiles,
   recordingRates,
+  scanTimeReference,
   scatterData,
   summaryTable,
   uniqueScans,
@@ -444,6 +445,7 @@ export async function buildQualityReport(opts: ReportOptions): Promise<Blob> {
 
         const wf = await fetchWaveforms(dataset, scan, scanRows);
         if (wf) {
+          const t0 = scanTimeReference(scanRows);
           for (const [ci, ch] of wf.entries()) {
             const img = await renderChart(host, (el) =>
               drawWaveform({
@@ -454,12 +456,13 @@ export async function buildQualityReport(opts: ReportOptions): Promise<Blob> {
                 max: ch.max,
                 units: s.channelUnits?.[ch.channel],
                 timeLabel: ci === wf.length - 1,
+                timeAxisLabel: t0.axisLabel,
                 height: 110,
               }),
             );
             if (img) await L.image(img, CONTENT_W, heightAt(img, CONTENT_W));
           }
-          await L.text('Dashed line: scan onset (t = 0). Bands show the min and max of the signal per time bin.', 8, {
+          await L.text(`Dashed line: ${t0.marker}. Bands show the min and max of the signal per time bin.`, 8, {
             color: '#666',
           });
         } else {

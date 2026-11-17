@@ -1,6 +1,7 @@
 import type { DescriptionNotice } from './dataset-notice';
 import type { BidsStructure } from './bids-structure';
-import type { ScanKeyLike } from './scan-key';
+import type { ScanKeyLike, ScanLocks } from './scan-key';
+import { locksToQuery } from './scan-key';
 import type { ChannelRef } from './recordings';
 
 /** A scan: datatype folder plus entities, with its id (src/data/scan-key.ts) */
@@ -24,6 +25,12 @@ export interface PhysioScan {
   recordings: PhysioRaw[];
   /** Files of the scan whose sidecar could not be used */
   skipped: { filename: string; reason: string }[];
+  /**
+   * Datatype folder whose data t = 0 refers to (timeReference, src/data/scan-key.ts):
+   * the physio file's own, or for beh/ physio the neural folder its events come
+   * from (timeDatatype, server/bids-layout.ts)
+   */
+  timeDatatype: string;
 }
 
 /** One recording of a scan */
@@ -108,9 +115,29 @@ export async function fetchScans(): Promise<ScanEntry[]> {
   return json.scans;
 }
 
+/** This dev server launch, for keying the visit's choices (src/viewer/persistence.ts); '' when unknown */
+export async function fetchLaunchId(): Promise<string> {
+  const res = await fetch('/api/bids/launch');
+  if (!res.ok) return '';
+  const body = await res.json();
+  return typeof body?.id === 'string' ? body.id : '';
+}
+
+/** The first scan with no annotations in any channel (within the locks), or null when every scan has some */
+export async function fetchFirstUnannotatedScan(locks: ScanLocks = {}): Promise<ScanEntry | null> {
+  const lockQuery = locksToQuery(locks);
+  const res = await fetch(`/api/bids/first-unannotated${lockQuery ? `?${lockQuery}` : ''}`);
+  if (!res.ok) return null;
+  return (await res.json()).scan ?? null;
+}
+
 export async function fetchPhysioRaw(scan: ScanEntry): Promise<PhysioScan> {
   const res = await fetch(`/api/bids/physio?${scanQuery(scan)}`);
-  if (!res.ok) throw new Error(`Failed to fetch physio for ${scan.id}`);
+  if (!res.ok) {
+    // The server says why (e.g. a recording that is not downloaded); else a generic message
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.error ? `${scan.id}: ${body.error}` : `Failed to fetch physio for ${scan.id}`);
+  }
   return res.json();
 }
 
@@ -274,9 +301,17 @@ interface AnnotationProgress {
  * Counted by column name, in whichever recording holds it; `recording` limits
  * it to one recording, for a column two recordings share (e.g. respiratory of belt1)
  */
-export async function fetchAnnotationProgress(channel: string, recording?: string): Promise<AnnotationProgress | null> {
+/** Annotation progress for one channel, over the scans with every lock (all scans when none) */
+export async function fetchAnnotationProgress(
+  channel: string,
+  recording?: string,
+  locks: ScanLocks = {},
+): Promise<AnnotationProgress | null> {
   const only = recording === undefined ? '' : `&recording=${encodeURIComponent(recording)}`;
-  const res = await fetch(`/api/bids/annotation-progress?channel=${encodeURIComponent(channel)}${only}`);
+  const lockQuery = locksToQuery(locks);
+  const res = await fetch(
+    `/api/bids/annotation-progress?channel=${encodeURIComponent(channel)}${only}${lockQuery ? `&${lockQuery}` : ''}`,
+  );
   if (!res.ok) return null;
   return res.json();
 }

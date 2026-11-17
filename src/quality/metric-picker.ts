@@ -7,7 +7,7 @@ import type { VisibleMetrics } from './model';
 // the right, plus Show all / Hide all. Receives its element and reports
 // changes; main.ts decides what to redraw.
 
-interface MetricPicker {
+export interface MetricPicker {
   visible: () => VisibleMetrics;
 }
 

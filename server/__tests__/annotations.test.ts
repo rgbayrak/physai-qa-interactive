@@ -2,7 +2,18 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, existsSync, readdirSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { dirname, join } from 'path';
-import { readAnnotations, writeAnnotations, validateChannel, isAnnotated, annotationProgress, buildScans } from '../bids-layout';
+import { gzipSync } from 'zlib';
+import {
+  readAnnotations,
+  writeAnnotations,
+  validateChannel,
+  isAnnotated,
+  annotationProgress,
+  buildScans,
+  firstScanWithoutAnnotations,
+  hasAnyAnnotation,
+} from '../bids-layout';
+import { locksFromQuery, matchesLocks } from '../../src/data/scan-key';
 import type { AnnotationsFile } from '../bids-layout';
 import { buildBidsIndex } from '../bids-index';
 import type { BidsIndex } from '../bids-index';
@@ -53,7 +64,8 @@ beforeEach(() => {
   const bids = join(tmp, 'bids');
   for (const rel of PHYSIO) {
     mkdirSync(dirname(join(bids, rel)), { recursive: true });
-    writeFileSync(join(bids, rel), '');
+    // A physio file becomes a scan only with content on disk (hasPhysioContent): an empty gzip
+    writeFileSync(join(bids, rel), gzipSync(''));
   }
   writeFileSync(join(bids, 'dataset_description.json'), '{}');
   index = buildBidsIndex({ bidsRoot: bids });
@@ -72,6 +84,19 @@ describe('annotation progress', () => {
     expect(isAnnotated(payload())).toBe(true); // one time window
     expect(isAnnotated(payload({ annotations: [], waveform_quality: 'good' }))).toBe(true);
     expect(isAnnotated(payload({ annotations: [], waveform_comment: 'noisy start' }))).toBe(true);
+  });
+
+  it('finds the first scan with no annotations in any channel (where a fresh launch opens)', () => {
+    const scans = [{ id: ID.func }, { id: ID.sub02 }, { id: ID.sub03 }];
+    expect(firstScanWithoutAnnotations(root, index, scans)).toBe(scans[0]);
+    writeAnnotations(root, index, payload({ channel: 'respiratory' })); // sub-01: another channel than cardiac
+    writeAnnotations(root, index, payload({ scan: ID.sub02, annotations: [] })); // saved but empty: still to do
+    expect(hasAnyAnnotation(root, index, ID.func)).toBe(true);
+    expect(hasAnyAnnotation(root, index, ID.sub02)).toBe(false);
+    expect(firstScanWithoutAnnotations(root, index, scans)).toBe(scans[1]);
+    writeAnnotations(root, index, payload({ scan: ID.sub02, waveform_quality: 'good' }));
+    writeAnnotations(root, index, payload({ scan: ID.sub03 }));
+    expect(firstScanWithoutAnnotations(root, index, scans)).toBeNull();
   });
 
   it('counts annotated scans for one channel out of all scans', () => {
@@ -100,6 +125,16 @@ describe('annotation progress', () => {
       total: 2,
       firstUnannotated: scans[0],
     });
+  });
+
+  it('counts only the locked scans, as the progress route does for ?lock=datatype:func', () => {
+    const locks = locksFromQuery(new URLSearchParams('lock=datatype%3Afunc').getAll('lock'));
+    const scans = buildScans(index).filter((s) => matchesLocks(s, locks));
+    expect(scans.every((s) => s.datatype === 'func')).toBe(true);
+    writeAnnotations(root, index, payload()); // func/ sub-01 cardiac
+    const p = annotationProgress(root, index, scans, 'cardiac');
+    expect([p.annotated, p.total]).toEqual([1, scans.length]);
+    expect(p.firstUnannotated?.datatype ?? 'func').toBe('func'); // never the eeg/ scan of sub-01
   });
 
   it('has no first unannotated scan once every scan is annotated', () => {

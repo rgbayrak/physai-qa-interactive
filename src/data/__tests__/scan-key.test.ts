@@ -1,5 +1,41 @@
 import { describe, it, expect } from 'vitest';
-import { makeScanKey, parseScanId, sameScanKey, scanEntities, scanPrefix, timeReference } from '../scan-key';
+import {
+  levelValue,
+  locksFromQuery,
+  locksToQuery,
+  makeScanKey,
+  matchesLocks,
+  parseScanId,
+  sameScanKey,
+  scanEntities,
+  scanPrefix,
+  timeReference,
+} from '../scan-key';
+
+describe('scan levels and locks', () => {
+  const s = parseScanId('func/sub-01_task-rest_acq-mb')!;
+
+  it('reads an entity or the datatype folder; a missing entity is empty', () => {
+    expect(levelValue(s, 'acq')).toBe('mb');
+    expect(levelValue(s, 'datatype')).toBe('func');
+    expect(levelValue(s, 'run')).toBe('');
+  });
+
+  it('matches a scan that has every locked value', () => {
+    expect(matchesLocks(s, {})).toBe(true);
+    expect(matchesLocks(s, { task: 'rest', datatype: 'func' })).toBe(true);
+    expect(matchesLocks(s, { task: 'rest', acq: 'sb' })).toBe(false);
+    expect(matchesLocks(s, { run: '' })).toBe(true); // locked on "none"
+  });
+
+  it('round-trips locks through query parameters, dropping malformed ones', () => {
+    const locks = { task: 'rest', datatype: 'func' };
+    const params = new URLSearchParams(locksToQuery(locks)).getAll('lock');
+    expect(locksFromQuery(params)).toEqual(locks);
+    expect(locksFromQuery(['task', ':rest', 'run:'])).toEqual({ run: '' });
+    expect(locksToQuery({})).toBe('');
+  });
+});
 
 describe('scan key', () => {
   it('is the datatype folder plus every entity but recording- and desc-, in file-name order', () => {

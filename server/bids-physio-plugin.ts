@@ -4,7 +4,7 @@ import type { Plugin } from 'vite';
 import { METRICS_TSV_NAME, REPORT_PDF_NAME } from '../src/quality/metrics-tsv';
 import {
   getSubjects,
-  readPhysio,
+  readScanRecordings,
   readConfounds,
   readEvents,
   readPeaks,
@@ -14,6 +14,7 @@ import {
   readDatasetInfo,
   validateChannel,
   annotationProgress,
+  firstScanWithoutAnnotations,
 } from './bids-layout';
 import type { AnnotationsFile } from './bids-layout';
 import { buildBidsIndex, indexSummaryLines, recordingOf, scanRecordings } from './bids-index';
@@ -24,6 +25,7 @@ import { checkRootSettings, noPhysioLines } from './bids-roots-check';
 import { bannerLines, readAppVersion } from './startup-banner';
 import { descriptionNoticeLines, noticeText } from '../src/data/dataset-notice';
 import { structureLine, structureText } from '../src/data/bids-structure';
+import { locksFromQuery, matchesLocks } from '../src/data/scan-key';
 import type { ServerResponse } from 'http';
 
 function replyError(res: ServerResponse, status: number, error: string): void {
@@ -134,6 +136,12 @@ export function bidsPhysioPlugin(): Plugin {
   let cachedScansJson: string;
   let cachedDatasetJson: string;
   let scans: ReturnType<typeof buildScans> = [];
+  /**
+   * This dev server launch: the pages keep the visit's choices (scan, channel,
+   * locks, …) in sessionStorage under it, so a new launch starts clean
+   * (src/viewer/persistence.ts)
+   */
+  const launchId = new Date().toISOString();
 
   /** Index the folders once, then cache subjects, scans and dataset info, and log what was found */
   function cacheDataset() {
@@ -194,6 +202,21 @@ export function bidsPhysioPlugin(): Plugin {
           return;
         }
 
+        if (req.url === '/api/bids/launch') {
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ id: launchId }));
+          return;
+        }
+
+        // Where a fresh launch opens: the first scan (Prev/Next order) with no annotations in any channel
+        if (req.url?.startsWith('/api/bids/first-unannotated')) {
+          const locks = locksFromQuery(new URL(req.url, 'http://localhost').searchParams.getAll('lock'));
+          const scan = firstScanWithoutAnnotations(ANNOTATIONS_ROOT, INDEX, scans.filter((s) => matchesLocks(s, locks)));
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ scan }));
+          return;
+        }
+
         if (req.url === '/api/bids/scans') {
           res.setHeader('Content-Type', 'application/json');
           res.end(cachedScansJson);
@@ -204,9 +227,11 @@ export function bidsPhysioPlugin(): Plugin {
         if (req.url?.startsWith('/api/bids/physio')) {
           const scan = knownScan(res, new URL(req.url, 'http://localhost').searchParams.get('scan'));
           if (!scan) return;
-          const result = readPhysio(INDEX, scan);
-          if (!result) {
-            replyError(res, 404, 'Physio sidecar not found or without Columns and SamplingFrequency');
+          // A recording that cannot be read is left out and listed in `skipped`; with none left, say why
+          const result = readScanRecordings(INDEX, scan);
+          if (!result || result.recordings.length === 0) {
+            const why = result?.skipped.map((s) => `${s.filename}: ${s.reason}`).join('; ');
+            replyError(res, 404, why || 'Physio sidecar not found or without Columns and SamplingFrequency');
             return;
           }
           res.setHeader('Content-Type', 'application/json');
@@ -257,8 +282,11 @@ export function bidsPhysioPlugin(): Plugin {
           }
           // recording: only for a channel name two recordings share (e.g. respiratory of belt1)
           const recording = url.searchParams.get('recording') ?? undefined;
+          // lock=task:rest: count only the scans with every locked value (the viewer's locks)
+          const locks = locksFromQuery(url.searchParams.getAll('lock'));
+          const counted = scans.filter((s) => matchesLocks(s, locks));
           res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify(annotationProgress(ANNOTATIONS_ROOT, INDEX, scans, channel, recording)));
+          res.end(JSON.stringify(annotationProgress(ANNOTATIONS_ROOT, INDEX, counted, channel, recording)));
           return;
         }
 

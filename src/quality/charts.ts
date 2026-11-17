@@ -314,6 +314,8 @@ interface WaveformOptions {
   units?: string | null;
   /** Label the time axis (the bottom chart of a stack) */
   timeLabel?: boolean;
+  /** What t = 0 is, e.g. "Time from scan onset (s)" (scanTimeReference, src/quality/model.ts) */
+  timeAxisLabel?: string;
   width?: number;
   height?: number;
 }
@@ -334,7 +336,7 @@ export function drawWaveform(opts: WaveformOptions): ChartInstance | null {
     margin: { top: 8, right: 20, bottom: 26 + extra, left: 60 },
     xScale: { type: 'linear', domain: [times[0], times[times.length - 1]] },
     yScale: { type: 'linear', domain: yDom },
-    xAxis: { position: 'bottom', tickCount: 8, label: opts.timeLabel ? TIME_AXIS_LABEL : undefined },
+    xAxis: { position: 'bottom', tickCount: 8, label: opts.timeLabel ? (opts.timeAxisLabel ?? TIME_AXIS_LABEL) : undefined },
     yAxis: {
       position: 'left',
       tickCount: 3,

@@ -72,6 +72,36 @@
       width: 120px;
     }
 
+    /* Scan controls sit in the row like the other labels */
+    .scan-selects {
+      display: contents;
+    }
+
+    /* Lock beside a scan dropdown: a grey icon, red when locked */
+    #controls .lock-btn {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px;
+      border: 1px solid transparent;
+      border-radius: 4px;
+      background: none;
+      color: var(--text-3);
+      cursor: pointer;
+    }
+
+    #controls .lock-btn:hover {
+      color: var(--text-2);
+    }
+
+    #controls .lock-btn.active,
+    #controls .lock-btn.active:hover {
+      color: var(--alert);
+    }
+
+    #controls .lock-btn:focus-visible {
+      outline: 2px solid var(--link);
+    }
+
     /* TRIAL peaks toggle: the key's swatches match the dots (src/viewer/charts/peaks-trial.ts) */
     #controls .peaks-toggle {
       cursor: pointer;
@@ -92,9 +122,11 @@
       box-sizing: border-box;
     }
 
+    /* "Loading...", errors and "No match": red and bold (the buttons' weight), so the user notices and waits */
     #loading {
       font-size: var(--fs-sm);
-      color: var(--text-3);
+      font-weight: 600;
+      color: var(--alert);
     }
 
     /* Badges on the "Now viewing" line, a little apart from the file name */
@@ -483,7 +515,8 @@
 
     /* Auxiliary row: "Auxiliary Signal Options:", then Event, Confound and Stack,
        in the same text as the other control labels (Subject, Channel, …) */
-    .aux-title {
+    /* Row titles: "CURRENT INQUIRY:" (scan and channel) and "AUXILIARY SIGNAL OPTIONS:" */
+    .row-title {
       font-size: var(--fs-lg);
       color: var(--text);
     }
@@ -508,11 +541,6 @@
       display: flex;
       flex-direction: column;
       gap: 4px;
-    }
-
-    /* "INTERACTIVE QUALITY ASSESSMENT TOOL", the heading of the dropdowns */
-    #controls .tool-title {
-      margin: 0;
     }
 
     .aux-item {
@@ -553,16 +581,13 @@
     <!-- Shown once the dataset's quality metrics are found (src/viewer/main.ts) -->
     <a id="stats-tab" class="folder-tab" href="/quality.html" style="display:none">Stats</a>
   </nav>
+  <h3 class="tool-title">INTERACTIVE QUALITY ASSESSMENT TOOL</h3>
   <div id="dataset-info" class="dataset-header"></div>
   <div id="controls">
-    <h3 class="tool-title">INTERACTIVE QUALITY ASSESSMENT TOOL</h3>
     <div class="controls-row">
-      <label>Subject <select id="subject-select"></select></label>
-      <label id="session-label">Session <select id="session-select"></select></label>
-      <label>Task <select id="task-select"></select></label>
-      <label id="run-label" style="display:none">Run <select id="run-select"></select></label>
-      <!-- Shown only when several scans share sub/ses/task/run (e.g. physio in func/ and eeg/) -->
-      <label id="variant-label" style="display:none"><span id="variant-heading">Scan</span> <select id="variant-select"></select></label>
+      <!-- One control per entity of the dataset, then Datatype: a dropdown with a lock when it has two or more values, else its value as text (src/viewer/controls.ts) -->
+      <span class="row-title">CURRENT INQUIRY:</span>
+      <span id="scan-selects" class="scan-selects"></span>
       <label>Channel <select id="channel-select"></select></label>
       <!-- TRIAL: peaks from a physprep-style events file, shown only when the channel has some (src/viewer/peaks-trial.ts) -->
       <label id="peaks-label" class="peaks-toggle" style="display:none">
@@ -573,11 +598,11 @@
     </div>
     <!-- What the Auxiliary charts below show; each part, and the row, hides when there is nothing to pick -->
     <div class="controls-row" id="aux-row" style="display:none">
-      <span class="aux-title">Auxiliary Signal Options:</span>
-      <label id="events-label" class="aux-item" style="display:none">Event <select id="events-select"></select></label>
-      <label id="confound-label" class="aux-item" style="display:none">Confound <select id="confound-select"></select></label>
+      <span class="row-title">AUXILIARY SIGNAL OPTIONS:</span>
+      <label id="events-label" class="aux-item" style="display:none">EVENT <select id="events-select"></select></label>
+      <label id="confound-label" class="aux-item" style="display:none">CONFOUND <select id="confound-select"></select></label>
       <span id="stack-row" class="aux-item" style="display:none">
-        <span class="stack-title">Stack</span>
+        <span class="stack-title">STACK</span>
         <span id="stack-channels"></span>
       </span>
     </div>

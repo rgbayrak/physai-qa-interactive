@@ -1,4 +1,4 @@
-import { readFileSync, mkdirSync, writeFileSync } from 'fs';
+import { readFileSync, readdirSync, mkdirSync, writeFileSync } from 'fs';
 import { gunzipSync } from 'zlib';
 import { join, dirname, basename, relative, isAbsolute } from 'path';
 import { isPlaceholder } from '../src/data/dataset-notice';
@@ -161,6 +161,15 @@ function matchEntities(file: IndexedFile): Record<string, string> {
  * unknown scan, or when no recording can be read.
  */
 export function readPhysio(index: BidsIndex, scanId: string) {
+  const result = readScanRecordings(index, scanId);
+  return result && result.recordings.length ? result : null;
+}
+
+/**
+ * As readPhysio, but for a known scan also when no recording can be read
+ * (`recordings` empty, `skipped` says why); null only for an unknown scan
+ */
+export function readScanRecordings(index: BidsIndex, scanId: string) {
   const files = findRecordings(index, scanId);
   if (files.length === 0) return null;
   // BOLD timing is the same for every recording of a func/ scan: read it once
@@ -174,11 +183,28 @@ export function readPhysio(index: BidsIndex, scanId: string) {
   const recordings: Recording[] = [];
   const skipped: { filename: string; reason: string }[] = [];
   for (const found of files) {
-    const r = readRecording(found, bold);
+    let r: ReturnType<typeof readRecording>;
+    try {
+      r = readRecording(found, bold);
+    } catch (err) {
+      // Content checked at start-up (hasPhysioContent), but the file can be corrupt, or dropped since
+      const what = found.tsvGzName.endsWith('.gz') ? 'gzip' : 'text';
+      skipped.push({
+        filename: found.tsvGzName,
+        reason: `could not read the ${what} file (${err instanceof Error ? err.message : String(err)}): corrupt, or not downloaded (datalad get)`,
+      });
+      continue;
+    }
     if (r) recordings.push(r);
     else skipped.push({ filename: found.tsvGzName, reason: 'sidecar not found or without Columns and SamplingFrequency' });
   }
-  return recordings.length ? { recordings, skipped } : null;
+  return { recordings, skipped, timeDatatype: timeDatatype(index, scanId) };
+}
+
+/** A physio file's bytes: gunzipped for *.tsv.gz, as they are for a plain *.tsv */
+function readPhysioBytes(path: string): Buffer {
+  const buf = readFileSync(path);
+  return path.endsWith('.gz') ? gunzipSync(buf) : buf;
 }
 
 export type Recording = NonNullable<ReturnType<typeof readRecording>>;
@@ -198,7 +224,7 @@ function readRecording(
   if (!found.sidecar) return null;
   const sidecar = found.sidecar as unknown as PhysioSidecar;
   if (!Array.isArray(sidecar.Columns) || typeof sidecar.SamplingFrequency !== 'number') return null;
-  const columns = parsePhysioTsv(gunzipSync(readFileSync(found.tsvGzPath)), sidecar.Columns.length);
+  const columns = parsePhysioTsv(readPhysioBytes(found.tsvGzPath), sidecar.Columns.length);
 
   // Read quality sidecar if available
   let quality: Record<string, { assessment: string; percentValid: number }> | null = null;
@@ -564,6 +590,22 @@ function findEventsFile(
   return folders.size === 1 ? neural[0] : null;
 }
 
+/**
+ * Datatype folder whose data t = 0 refers to (timeReference, src/data/scan-key.ts):
+ * the physio file's own, except beh/ physio whose events come from the same
+ * acquisition's neural folder (findEventsFile with the fallback, as readEvents
+ * uses): its StartTime is taken to be relative to that data. BIDS names no
+ * corresponding dataset for beh/ physio, so this is the project's reading.
+ * One rule for the viewer (readPhysio) and the quality metrics (t0_datatype).
+ */
+export function timeDatatype(index: BidsIndex, scanId: string): string {
+  const physio = scanFile(index, scanId);
+  const own = physio?.datatype ?? '';
+  if (!physio || own !== 'beh') return own;
+  const events = findEventsFile(index, physio, (f) => f.dataset.type === 'raw', true);
+  return events?.datatype && NEURAL_DATATYPES.has(events.datatype) ? events.datatype : own;
+}
+
 /** Parse an events TSV; null without an onset column or rows */
 function parseEventsFile(filePath: string) {
   const lines = readFileSync(filePath, 'utf-8')
@@ -755,6 +797,40 @@ export function annotationProgress<S extends { id: string }>(
     else firstUnannotated ??= s;
   }
   return { annotated, total: scans.length, firstUnannotated };
+}
+
+const ANNOTATIONS_SUFFIX = '_annotations.json';
+
+/**
+ * True when any channel of any recording of the scan has annotations
+ * (isAnnotated): the annotation files are found by their names in the
+ * recording's folder (annotationsFilePath's naming, any channel), then read
+ */
+export function hasAnyAnnotation(root: string, index: BidsIndex, scanId: string): boolean {
+  for (const file of scanRecordings(index, scanId)) {
+    const folder = relative(file.dataset.root, file.dir);
+    if (folder.startsWith('..') || isAbsolute(folder)) continue;
+    const recording = recordingOf(file);
+    const start = `${scanPrefix(scanOf(file).entities)}${recording ? `_recording-${recording}` : ''}_channel-`;
+    let names: string[];
+    try {
+      names = readdirSync(join(root, folder));
+    } catch {
+      continue; // no annotations folder yet
+    }
+    for (const name of names) {
+      if (!name.startsWith(start) || !name.endsWith(ANNOTATIONS_SUFFIX)) continue;
+      const channel = name.slice(start.length, -ANNOTATIONS_SUFFIX.length);
+      if (validateChannel(channel)) continue;
+      if (isAnnotated(readAnnotations(root, index, scanId, recording, channel))) return true;
+    }
+  }
+  return false;
+}
+
+/** The first scan (in the given order) with no annotations in any channel; null when every scan has some */
+export function firstScanWithoutAnnotations<S extends { id: string }>(root: string, index: BidsIndex, scans: S[]): S | null {
+  return scans.find((s) => !hasAnyAnnotation(root, index, s.id)) ?? null;
 }
 
 /**

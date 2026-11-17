@@ -8,6 +8,8 @@ import {
   fetchPeaks,
   fetchAnnotations,
   fetchAnnotationProgress,
+  fetchFirstUnannotatedScan,
+  fetchLaunchId,
   saveAnnotations,
   getViewExtent,
 } from '@/data/bids-physio-reader';
@@ -32,6 +34,9 @@ import type { BidsStructure } from '@/data/bids-structure';
 import {
   populateSelect,
   firstScanFor,
+  scanLevels,
+  levelValues,
+  buildScanSelects,
   showScanInSelects,
   scanInSelects,
   renderStackControls,
@@ -41,9 +46,17 @@ import {
   scanChannels,
   recordingFor,
 } from './controls';
+import type { ScanSelects } from './controls';
 import { parseRefKey } from '@/data/recordings';
-import { stepScan, resolveSearch, isScanStepKey, pickStartScan, firstUnannotatedTarget } from './navigation';
-import { DEFAULT_LAST_VIEWED_KEY, lastViewedKey, saveLastViewed, readLastViewed, resumeFrom } from './persistence';
+import { stepScan, resolveSearch, isScanStepKey, pickStartScan, firstUnannotatedTarget, lockedScans } from './navigation';
+import {
+  DEFAULT_LAST_VIEWED_KEY,
+  clearOldLocalStorage,
+  lastViewedKey,
+  saveLastViewed,
+  readLastViewed,
+  resumeFrom,
+} from './persistence';
 import { buildFocusContext } from './charts/focus-context';
 import type { FocusContextHandle } from './charts/focus-context';
 import { buildConfoundsChart } from './charts/confounds';
@@ -60,7 +73,7 @@ import { fetchServedDataset, fetchDatasetQuality, OutdatedMetricsError } from '@
 import { createScatterPanel } from '@/quality/scatter-panel';
 import { parseScanHash, statsUrl } from '@/quality/route';
 import { scanId, sameScanKey } from '@/quality/metrics-tsv';
-import { timeReference } from '@/data/scan-key';
+import { levelValue, timeReference } from '@/data/scan-key';
 
 // Entry point: owns the DOM, the state object and the live charts, and wires
 // user events to the modules that do the work.
@@ -83,9 +96,17 @@ function setLoading(msg: string) {
   els.loading.textContent = msg;
 }
 
+/** The scan controls, built once the scan list has loaded (one per entity of the dataset) */
+let scanUi: ScanSelects | null = null;
+
 /** Scan currently shown in the dropdowns; the loaded one, or the first, if they name none */
 function selectedScan(): ScanEntry {
-  return scanInSelects(els, state.scans) ?? state.current ?? state.scans[0];
+  return (scanUi && scanInSelects(scanUi, state.scans)) || state.current || state.scans[0];
+}
+
+/** The scans ←/→, search and the dropdowns go through: those with every locked value */
+function navigableScans(): ScanEntry[] {
+  return lockedScans(state.scans, state.locks);
 }
 
 function rememberLastViewed() {
@@ -96,6 +117,7 @@ function rememberLastViewed() {
     confound: els.confoundSelect.value,
     event: els.eventsSelect.value,
     stacked: state.stackedChannels,
+    locks: state.locks,
   });
 }
 
@@ -131,14 +153,12 @@ function mainRaw(): PhysioRaw | null {
 }
 
 /**
- * Datatype whose data t = 0 refers to: the physio file's own, except beh/
- * physio whose events came from the same acquisition's neural folder (e.g.
- * func/): its StartTime is relative to that data (BIDS: "the corresponding
- * (neural) dataset")
+ * Datatype whose data t = 0 refers to, from the server (timeDatatype,
+ * server/bids-layout.ts): the physio file's own, except beh/ physio whose
+ * events come from the same acquisition's neural folder (e.g. func/)
  */
 function timeDatatype(raw: PhysioRaw): string {
-  const own = raw.datatype ?? 'func';
-  return own === 'beh' && state.events?.datatype ? state.events.datatype : own;
+  return state.physio?.timeDatatype ?? raw.datatype ?? 'func';
 }
 
 /** Recording for the progress count: only when the shown name carries it (two recordings share the column) */
@@ -177,7 +197,9 @@ function persistAnnotations() {
 async function refreshAnnotationProgress() {
   const key = els.channelSelect.value;
   if (!key) return;
-  const progress = await fetchAnnotationProgress(parseRefKey(key).channel, progressRecording(key)).catch(() => null);
+  const progress = await fetchAnnotationProgress(parseRefKey(key).channel, progressRecording(key), state.locks).catch(
+    () => null,
+  );
   if (key !== els.channelSelect.value) return; // channel changed while waiting
   els.annotationProgress.innerHTML = progress
     ? `(${progress.annotated}/${progress.total} <span class="channel-name">${escapeHtml(labelOf(key))}</span> signals are annotated)`
@@ -499,42 +521,49 @@ async function loadPhysio(scan: ScanEntry) {
 
     state.restoredSelection = null;
     rememberLastViewed();
-    setLoading('');
+    // Recordings the server could not read (corrupt, not downloaded): the scan shows the others
+    setLoading(physio.skipped.length ? `Not loaded: ${physio.skipped.map((s) => `${s.filename} (${s.reason})`).join('; ')}` : '');
   } catch (err) {
-    setLoading(`Error: ${err}`);
+    setLoading(`Error: ${err instanceof Error ? err.message : err}`);
   }
 }
 
 function goToScan(scan: ScanEntry) {
-  showScanInSelects(els, state.scans, scan);
+  if (scanUi) showScanInSelects(scanUi, state.scans, scan, state.locks);
   return loadPhysio(scan);
 }
 
 function step(delta: number) {
-  return goToScan(stepScan(state.scans, selectedScan(), delta));
+  return goToScan(stepScan(navigableScans(), selectedScan(), delta));
 }
 
 // ── Event wiring ────────────────────────────────────────
 
-// Changing Subject, Session, Task or Run opens the first scan under the new
-// choice (hierarchy order); the Datatype / Scan dropdown opens the one picked
-const levelSelects = [
-  [els.subjectSelect, 'sub'],
-  [els.sessionSelect, 'ses'],
-  [els.taskSelect, 'task'],
-  [els.runSelect, 'run'],
-] as const;
-levelSelects.forEach(([select, level], i) => {
-  select.addEventListener('change', () => {
-    // Levels above keep the loaded scan's values; this one takes the new choice
-    const wanted = { ...selectedScan() };
-    for (const [s, l] of levelSelects.slice(0, i + 1)) wanted[l] = s.value;
-    const scan = firstScanFor(state.scans, wanted, level);
-    if (scan) void goToScan(scan);
-  });
-});
+// Changing a scan dropdown opens the first scan (hierarchy order) with the new
+// choice, the values of the dropdowns before it and every lock. Changing a
+// locked dropdown moves its lock to the new value.
+function onScanLevelChange(level: string) {
+  if (!scanUi) return;
+  const { levels, selects } = scanUi;
+  const wanted = levelValues(selectedScan(), levels);
+  for (const l of levels.slice(0, levels.findIndex((x) => x.key === level) + 1)) {
+    const select = selects.get(l.key);
+    if (select) wanted[l.key] = select.value;
+  }
+  if (level in state.locks) state.locks = { ...state.locks, [level]: wanted[level] };
+  const scan = firstScanFor(state.scans, levels, wanted, level, state.locks);
+  if (scan) void goToScan(scan);
+}
 
-els.variantSelect.addEventListener('change', () => void goToScan(selectedScan()));
+// A lock keeps the loaded scan's value of that level; clicking again frees it
+function onLockToggle(level: string) {
+  if (!scanUi || !state.current) return;
+  const { [level]: had, ...rest } = state.locks;
+  state.locks = had === undefined ? { ...state.locks, [level]: levelValue(state.current, level) } : rest;
+  showScanInSelects(scanUi, state.scans, state.current, state.locks);
+  void refreshAnnotationProgress(); // the count and "first unannotated" follow the locks
+  rememberLastViewed();
+}
 
 els.channelSelect.addEventListener('change', () => {
   if (state.physio) {
@@ -577,7 +606,7 @@ els.searchInput.addEventListener('keydown', async (e) => {
   if (e.key !== 'Enter') return;
   const q = els.searchInput.value.trim();
   if (!q) return;
-  const match = resolveSearch(q, state.scans, els.subjectSelect.value);
+  const match = resolveSearch(q, navigableScans(), levelValue(selectedScan(), 'sub'));
   if (!match) {
     setLoading(`No match for "${q}"`);
     return;
@@ -657,36 +686,43 @@ function setScatterChannel(key: string) {
 async function init() {
   void loadQualityMetrics(); // independent of the scan loading below
   setLoading('Loading subjects...');
-  const [subjects, scans, datasetInfo] = await Promise.all([
+  const [subjects, scans, datasetInfo, launch] = await Promise.all([
     fetchSubjects(),
     fetchScans(),
     fetchDatasetInfo().catch(() => null),
+    fetchLaunchId().catch(() => ''),
   ]);
   state.subjects = subjects;
   state.scans = scans;
+  scanUi = buildScanSelects(els.scanSelects, scanLevels(scans), onScanLevelChange, onLockToggle);
   renderDatasetInfo(els.datasetInfo, datasetInfo);
   summaryCount = datasetInfo?.physioFiles;
   summaryStructure = datasetInfo?.structure;
   refreshSummary();
 
-  // Keep the last session's channel, confound and stacked channels
-  storageKey = lastViewedKey(datasetInfo?.name);
+  // This visit's choices (channel, confound, events column, stack, locks): kept
+  // while switching tabs, gone on a new launch (src/viewer/persistence.ts)
+  clearOldLocalStorage([DEFAULT_LAST_VIEWED_KEY]);
+  storageKey = lastViewedKey(datasetInfo?.name, launch);
   const resumed = resumeFrom(readLastViewed(storageKey), scans);
-  if (resumed) state.restoredSelection = resumed.selection;
+  if (resumed) {
+    state.restoredSelection = resumed.selection;
+    state.locks = resumed.locks; // only those some scan still has (resumeFrom)
+  }
 
-  // Which scan to open: a linked one (#scan?… from Stats), else the earliest
-  // one not annotated yet for the remembered channel (so a skipped scan always
-  // comes back), else the last viewed, else the first
-  const linked = parseScanHash(location.hash);
-  if (linked) history.replaceState(null, '', location.pathname); // a reload then follows the rules below
-  // The remembered channel key; counted by column name here (which recordings
-  // share a column is only known once a scan is loaded)
-  const channel = resumed?.selection.channel;
-  const progress =
-    !linked && channel ? await fetchAnnotationProgress(parseRefKey(channel).channel).catch(() => null) : null;
-  const first = pickStartScan(scans, {
+  // Which scan to open: the one linked from Stats (#scan?…), else this visit's
+  // last scan (a reload); on a new launch, the first scan without annotations
+  // in any channel, else the first. The locks always stay: a linked scan
+  // without the locked values (e.g. from a scatter double-click) gives way to
+  // the visit's last scan, which has them
+  const hashScan = parseScanHash(location.hash);
+  if (hashScan) history.replaceState(null, '', location.pathname); // a reload then follows the rules below
+  const linked = hashScan && lockedScans([hashScan], state.locks).length ? hashScan : null;
+  const firstUnannotated =
+    !linked && !resumed ? await fetchFirstUnannotatedScan(state.locks).catch(() => null) : null;
+  const first = pickStartScan(navigableScans(), {
     linked,
-    firstUnannotated: progress?.firstUnannotated,
+    firstUnannotated,
     lastViewed: resumed?.scan,
   });
   if (!first) {

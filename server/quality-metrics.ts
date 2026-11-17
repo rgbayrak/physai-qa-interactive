@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
-import { getSubjects, buildScans, readPhysio, readDatasetInfo, isReadable, findRecordings } from './bids-layout';
+import { getSubjects, buildScans, readScanRecordings, readDatasetInfo, isReadable, findRecordings } from './bids-layout';
 import type { Recording, ScanEntry } from './bids-layout';
 import { buildBidsIndex, indexSummaryLines } from './bids-index';
 import type { BidsIndex, IndexRoots } from './bids-index';
@@ -97,7 +97,12 @@ export function physioChannels(raw: PhysioResult): PhysioChannels {
 }
 
 /** One row per physiological channel of one recording of a scan; non-physio columns (e.g. trigger) get no row */
-export function scanQualityRows(scan: ScanEntry, fullRaw: PhysioResult): QualityRow[] {
+export function scanQualityRows(
+  scan: ScanEntry,
+  fullRaw: PhysioResult,
+  /** Datatype folder whose data t = 0 refers to (timeDatatype, server/bids-layout.ts); the recording's own when not given */
+  t0Datatype: string = fullRaw.datatype,
+): QualityRow[] {
   const { raw, signals } = physioChannels(fullRaw);
   const { metrics } = computeSQI(raw);
   return metrics.map((m, i) => {
@@ -108,6 +113,7 @@ export function scanQualityRows(scan: ScanEntry, fullRaw: PhysioResult): Quality
     return {
       ...toScanKey(scan),
       recording: raw.recording,
+      t0Datatype,
       filename: raw.filename,
       channel,
       signalType: signals[i] ?? '',
@@ -227,6 +233,8 @@ interface QualityRunOptions {
   /** Folder holding the physio files when they are not in bidsRoot */
   physioRoot?: string;
   derivRoot?: string;
+  /** Compute only the first N readable scans (hierarchy order, as Prev/Next); all when not given */
+  maxScans?: number;
   buckets?: number;
   log?: (msg: string) => void;
 }
@@ -237,6 +245,8 @@ interface QualityRunResult {
   summary: DatasetQualityFile;
   /** The files found, e.g. to count the physio files downloaded */
   index: BidsIndex;
+  /** The scans computed: every readable scan, or the first maxScans of them */
+  scans: ScanEntry[];
 }
 
 /** Compute metrics for every readable scan and write the TSV, dataset.json, waveforms and index */
@@ -270,8 +280,13 @@ export function runQualityMetrics(opts: QualityRunOptions): QualityRunResult {
   rmSync(join(outDir, REPORT_PDF_NAME), { force: true });
 
   const subjects = getSubjects(index);
-  const scans = buildScans(index);
-  log(`${paths.dataset}: ${scans.length} readable scans from ${subjects.length} subjects`);
+  const readableScans = buildScans(index);
+  log(`${paths.dataset}: ${readableScans.length} readable scans from ${subjects.length} subjects`);
+  // --max-scans: the first N in hierarchy order (e.g. sub-01's first scans), for a quick look or the user study
+  const scans = opts.maxScans === undefined ? readableScans : readableScans.slice(0, opts.maxScans);
+  if (scans.length < readableScans.length) {
+    log(`Computing the first ${scans.length} of ${readableScans.length} readable scans (--max-scans ${opts.maxScans})`);
+  }
 
   const rows: QualityRow[] = [];
   const failedScans: { scan: string; reason: string }[] = [];
@@ -289,7 +304,8 @@ export function runQualityMetrics(opts: QualityRunOptions): QualityRunResult {
   scans.forEach((scan, i) => {
     const id = scanId(scan);
     try {
-      const physio = readPhysio(index, scan.id);
+      // A recording that cannot be read (corrupt, not downloaded) is listed as failed with its reason
+      const physio = readScanRecordings(index, scan.id);
       if (!physio) {
         failedScans.push({ scan: id, reason: 'physio file or sidecar not found' });
         log(`  [${i + 1}/${scans.length}] ${id}: skipped (physio file or sidecar not found)`);
@@ -306,7 +322,7 @@ export function runQualityMetrics(opts: QualityRunOptions): QualityRunResult {
         const label = recordingLabel(id, raw.recording);
         const { excluded } = physioChannels(raw);
         for (const e of excluded) excludedHere.set(e.channel, e.reason);
-        const recordingRows = scanQualityRows(scan, raw);
+        const recordingRows = scanQualityRows(scan, raw, physio.timeDatatype);
         if (recordingRows.length === 0) {
           failedScans.push({ scan: label, reason: 'no physiological channels' });
           log(`  [${i + 1}/${scans.length}] ${label}: skipped (no physiological channels in ${raw.columns.join(', ')})`);
@@ -372,5 +388,5 @@ export function runQualityMetrics(opts: QualityRunOptions): QualityRunResult {
   writeFileSync(join(outDir, DATASET_JSON_NAME), JSON.stringify(summary, null, 2) + '\n');
   log(`Wrote ${rows.length} rows to ${join(outDir, METRICS_TSV_NAME)}`);
 
-  return { outDir, rows, summary, index };
+  return { outDir, rows, summary, index, scans };
 }

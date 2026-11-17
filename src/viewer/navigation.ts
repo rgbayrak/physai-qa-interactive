@@ -1,5 +1,16 @@
 import type { ScanEntry } from '@/data/bids-physio-reader';
 import { sameScanKey } from '@/quality/metrics-tsv';
+import { matchesLocks } from '@/data/scan-key';
+import type { ScanLocks } from '@/data/scan-key';
+
+/**
+ * The scans that have every locked value (e.g. task-rest in all subjects):
+ * the ones ←/→, search, the dropdowns and "first unannotated" go through.
+ * All scans when nothing is locked.
+ */
+export function lockedScans(scans: ScanEntry[], locks: ScanLocks): ScanEntry[] {
+  return Object.keys(locks).length === 0 ? scans : scans.filter((s) => matchesLocks(s, locks));
+}
 
 /**
  * The scan `delta` steps away from `current` in hierarchy order, wrapping at

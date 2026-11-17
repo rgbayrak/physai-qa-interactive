@@ -247,8 +247,8 @@
       margin: 20px 0 8px;
     }
 
-    /* Short divider line between sections (not before a tab's first section) */
-    h3:not(:first-child)::before {
+    /* Short divider line between sections (not before a tab's first section, nor the tool title) */
+    h3:not(:first-child):not(.tool-title)::before {
       content: '';
       display: block;
       width: 48px;
@@ -389,6 +389,7 @@
       <a id="viewer-tab" class="folder-tab" href="/">Explore and Annotate</a>
       <a class="folder-tab active" href="/quality.html" aria-current="page">Stats</a>
     </nav>
+    <h3 class="tool-title">INTERACTIVE QUALITY ASSESSMENT TOOL</h3>
     <div id="dataset-info" class="dataset-header"></div>
 
     <div id="status" style="display:none"></div>

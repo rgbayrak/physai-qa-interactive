@@ -105,8 +105,6 @@ Every column of the physio file is computed unless it is specifically excluded: 
 - **Metrics shown** (Stats): tick which metrics the tables and histograms show, listed under their groups (Basic, Distribution, PaPaGei, PhysioQC), or use Show all / Hide all. The choice is remembered in your browser.
 - **PDF report:** `data/quality/<dataset>/quality_report.pdf`, with a summary, each channel's scatter plot and one page per scan with its waveforms and every metric. Computing the metrics deletes the old report; the next time Stats opens it builds a new one in the background and the dev server saves it there. The Stats sidebar shows its progress and then a link to open it.
 
-What each metric computes, and its source, is described in [REVIEW.md](REVIEW.md).
-
 ## Timing alignment
 
 All charts share one time axis: **t = 0 is scan onset**, the start of acquisition of the first BOLD volume. All charts start at t = 0, and their x-axis reads "Time from scan onset (s)". Physio recorded before the scan (negative times) is out of view. A dashed purple **scan onset (t = 0)** marker marks the start.
@@ -166,7 +164,7 @@ The Stats tab shows the same dataset, using the metrics computed for it under `d
 
 ## Contributing
 
-Architecture, server API, the chart library's API reference and how to add a metric are in [CONTRIBUTING.md](docs/CONTRIBUTING.md). The metric definitions and open review items are in [REVIEW.md](REVIEW.md), and the user study task sheet is [docs/user-guide/user-study.md](docs/user-guide/user-study.md).
+Architecture, server API, the chart library's API reference and how to add a metric are in [CONTRIBUTING.md](docs/CONTRIBUTING.md), and the user study task sheet is [docs/user-guide/user-study.md](docs/user-guide/user-study.md).
 
 ## Citation
 
