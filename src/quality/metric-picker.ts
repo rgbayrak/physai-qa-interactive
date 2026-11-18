@@ -1,11 +1,10 @@
 import type { MetricKey } from './metrics-tsv';
-import { ALL_METRICS, METRIC_DEFS, METRIC_GROUPS, esc, groupKeys } from './model';
+import { ALL_METRICS, METRIC_DEFS, esc, metricNameWithSource, metricTooltip } from './model';
 import type { VisibleMetrics } from './model';
 
-// "Metrics shown" list in the sidebar: the metric groups (Basic, Distribution,
-// PaPaGei, PhysioQC) as fixed headings, one row per metric with a checkmark on
-// the right, plus Show all / Hide all. Receives its element and reports
-// changes; main.ts decides what to redraw.
+// "Metrics shown" list in the sidebar: one row per metric, named with its paper
+// (hover: description and paper), a checkmark on the right, plus Show all /
+// Hide all. Receives its element and reports changes; main.ts decides what to redraw.
 
 export interface MetricPicker {
   visible: () => VisibleMetrics;
@@ -24,14 +23,10 @@ export function createMetricPicker(
         <button type="button" class="btn" data-action="none">Hide all</button>
       </div>
       <div class="metric-count muted"></div>`;
-    for (const group of METRIC_GROUPS) {
-      html += `<div class="metric-group"><div class="metric-group-name">${esc(group)}</div>`;
-      for (const key of groupKeys(group)) {
-        const def = METRIC_DEFS.find((m) => m.key === key)!;
-        const tip = def.description ? ` title="${esc(def.description)}"` : '';
-        html += `<label class="metric-row"${tip}><span>${esc(def.label)}</span><input type="checkbox" class="metric-check" data-key="${key}"></label>`;
-      }
-      html += '</div>';
+    for (const def of METRIC_DEFS) {
+      const tip = metricTooltip(def);
+      const title = tip ? ` title="${esc(tip)}"` : '';
+      html += `<label class="metric-row"${title}><span>${esc(metricNameWithSource(def))}</span><input type="checkbox" class="metric-check" data-key="${def.key}"></label>`;
     }
     return html;
   };

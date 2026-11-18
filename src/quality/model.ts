@@ -15,11 +15,11 @@ interface MetricDef {
   label: string;
   description?: string;
   decimals: number;
-  /** Group from SQI_COLUMNS (Basic, Distribution, PaPaGei, PhysioQC) */
-  group: string;
+  /** Paper the metric is taken from (e.g. "Elgendi 2016"), from SQI_COLUMNS */
+  source?: string;
 }
 
-/** Metric labels, descriptions and groups come from SQI_COLUMNS (src/quality/metric-columns.ts), the one list of metric names */
+/** Metric labels, descriptions and sources come from SQI_COLUMNS (src/quality/metric-columns.ts), the one list of metric names */
 export const METRIC_DEFS: MetricDef[] = METRIC_COLUMNS.map((c) => {
   const col = SQI_COLUMNS.find((s) => s.key === c.key);
   return {
@@ -27,12 +27,19 @@ export const METRIC_DEFS: MetricDef[] = METRIC_COLUMNS.map((c) => {
     label: col?.label ?? c.column,
     description: col?.description,
     decimals: col?.decimals ?? 3,
-    group: col?.group ?? 'Other',
+    source: col?.source,
   };
 });
 
-/** Metric groups in first-appearance order */
-export const METRIC_GROUPS: string[] = [...new Set(METRIC_DEFS.map((m) => m.group))];
+/** Name with its paper, for the Metrics shown list: "Perfusion (Elgendi 2016)" */
+export function metricNameWithSource(def: MetricDef): string {
+  return def.source ? `${def.label} (${def.source})` : def.label;
+}
+
+/** Hover text: the short description, then the paper */
+export function metricTooltip(def: MetricDef): string {
+  return [def.description, def.source ? `Source: ${def.source}.` : ''].filter(Boolean).join(' ');
+}
 
 // ── Metric visibility (Metrics shown on the Stats tab) ───
 
@@ -58,15 +65,11 @@ export function serializeVisibleMetrics(visible: VisibleMetrics): string {
   return JSON.stringify(ALL_METRICS.filter((k) => visible.has(k)));
 }
 
-export function groupKeys(group: string): MetricKey[] {
-  return METRIC_DEFS.filter((m) => m.group === group).map((m) => m.key);
-}
-
 /** Metrics measured in the channel's own unit (from the physio sidecar, when it gives one) */
-const IN_CHANNEL_UNITS: readonly MetricKey[] = ['mean', 'stdDev'];
+const IN_CHANNEL_UNITS: readonly MetricKey[] = ['mean', 'stdDev', 'stdDevFiltered'];
 
 /** Fixed units for metrics that have one; the rest are unitless ratios or indices */
-const FIXED_UNITS: Partial<Record<MetricKey, string>> = { zeroCrossingRate: 'Hz' };
+const FIXED_UNITS: Partial<Record<MetricKey, string>> = { perfusion: '%' };
 
 /** Unit of a metric for one channel, or null when it has none or it is not known */
 export function metricUnit(key: MetricKey, channel: string, channelUnits?: Record<string, string>): string | null {
@@ -74,7 +77,7 @@ export function metricUnit(key: MetricKey, channel: string, channelUnits?: Recor
   return FIXED_UNITS[key] ?? null;
 }
 
-/** Axis label for a metric: its label plus the unit, unless the label already carries it ("ZCR (Hz)") */
+/** Axis label for a metric: its label plus the unit, unless the label already carries it (e.g. "Rate (Hz)") */
 export function metricAxisLabel(key: MetricKey, channel: string, channelUnits?: Record<string, string>): string {
   const label = metricDef(key).label;
   const unit = metricUnit(key, channel, channelUnits);
@@ -164,7 +167,7 @@ export function defaultMetricPair(rows: QualityRow[]): [MetricKey, MetricKey] {
     avail.find((k) => k !== exclude) ??
     prefs[0];
   const x = pick(['snr', 'stdDev', 'mean']);
-  const y = pick(['beatCorrelation', 'kurtosis', 'skewness'], x);
+  const y = pick(['kurtosis', 'skewness'], x);
   return [x, y];
 }
 

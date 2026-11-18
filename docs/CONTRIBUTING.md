@@ -15,6 +15,7 @@ npm run typecheck  # tsc --noEmit (strict, no output)
 npm run build      # tsc --noEmit + vite build (index.html and quality.html)
 
 npx vite-node scripts/compute-quality-metrics.ts <dataset>  # dataset quality metrics -> data/quality/<dataset>/
+npx vite-node scripts/compute-peaks.ts <dataset> --max-scans <N>  # detected peaks per channel -> data/peaks/<dataset>/ (needs uv)
 npx tsc -p scripts                                           # typecheck scripts/ (outside the root tsconfig)
 npx vite-node scripts/update-bids-rules.ts [x.y.z ...]       # BIDS rules for new releases -> server/schema-rules/
 ```
@@ -51,6 +52,7 @@ src/
 │   ├── bids-physio-reader.ts  # Client-side BIDS physio data fetcher
 │   ├── bids-structure.ts      # BIDS version check result type and its summary line (shared with the server)
 │   ├── dataset-notice.ts      # Notices for a missing or placeholder dataset_description.json (shared with the server)
+│   ├── detected-peaks.ts      # Detected peaks file type, fetch, and peak times on the chart axis (shared with the server)
 │   └── sqi-metrics.ts         # Per-channel signal quality metrics
 ├── viewer/                    # Interactive physio viewer (only main.ts touches the page)
 │   ├── main.ts                # Entry: init, data loading, event wiring
@@ -61,9 +63,10 @@ src/
 │   ├── info.ts                # Dataset info line, On disk data summary, downsampling/timing/quality badges
 │   ├── controls.ts            # Dropdowns, stacked-channel checkboxes
 │   ├── navigation.ts          # Prev/next stepping, search resolution (pure)
-│   ├── persistence.ts         # Last-viewed scan in localStorage
+│   ├── persistence.ts         # The visit's last-viewed scan and choices in sessionStorage
 │   ├── events.ts              # Events columns: rest check, categories, counters, default column (pure)
 │   ├── peaks-trial.ts         # TRIAL: match physprep peaks to the picked channel (pure)
+│   ├── detected-peaks.ts      # Which detector the BUILT-IN PEAK DETECTION row shows (pure)
 │   └── charts/
 │       ├── shared.ts          # Line drawing, y-fit, onset marker, hover readout
 │       ├── focus-context.ts   # Focus + overview charts, brush-to-zoom, annotation boxes, overlay layer
@@ -78,15 +81,15 @@ src/
 │   ├── report.ts              # PDF report: lays out pages on a canvas, rasterises the charts
 │   ├── pdf.ts                 # Minimal PDF writer (one JPEG per page, pure)
 │   ├── charts.ts              # Scatter, histogram and static waveform charts (createChart)
-│   ├── metric-columns.ts      # Metric labels, groups and number format (SQI_COLUMNS; pure)
+│   ├── metric-columns.ts      # Metric labels, sources and number format (SQI_COLUMNS; pure)
 │   ├── model.ts               # Labels, summaries, axis choices, scatter data (pure)
 │   ├── metrics-tsv.ts         # TSV/JSON formats shared with the script (pure)
-│   ├── channels.ts            # Excluded (non-physiological) column names and signal types (pure)
+│   ├── channels.ts            # Excluded (non-physiological) column names, signal types, and the analysis type (PPG/ECG/respiration) shared by metrics and peaks (pure)
 │   ├── envelope.ts            # Min/max downsampling for waveforms (pure)
 │   ├── stats.ts               # Histogram bins, percentiles (pure)
 │   ├── route.ts               # /quality.html#scan?sub=… links (pure)
 │   ├── metric-picker.ts       # "Metrics shown" sidebar list: show/hide each metric
-│   ├── linked-scan.ts         # Shares the open scan with Explore and Annotate (via its localStorage entry)
+│   ├── linked-scan.ts         # Shares the open scan with Explore and Annotate (via its sessionStorage entry)
 │   ├── run-log.ts             # quality_runs.tsv: one line per metrics run, and its sentence (pure; also used by the script)
 │   └── data.ts                # Fetches the served dataset's data/quality/ files
 ├── shell/
@@ -109,11 +112,16 @@ server/
 ├── bids-rules.ts           # Loads the rules for a BIDS version from schema-rules/
 ├── schema-rules/           # One rules file per BIDS release (from the official BIDS schema)
 ├── availability.ts         # Physio files listed vs downloaded (git annex find, else the file's content)
+├── channel-types.ts        # The run's channel types table from the physio.json Columns (shared by both compute scripts)
+├── peaks.ts                # Detected peaks: which channels get detectors, the manifest for detect_peaks.py, reading a channel's file
 ├── quality-run-log.ts      # Appends a run's line to data/quality/<dataset>/quality_runs.tsv
 └── quality-metrics.ts      # Dataset-wide quality metrics: computes and writes data/quality/<dataset>/
 
 scripts/
 ├── compute-quality-metrics.ts  # Command-line wrapper around server/quality-metrics.ts
+├── compute-peaks.ts            # Lists the PPG, ECG and respiratory channels (server/peaks.ts), then runs detect_peaks.py with uv
+├── detect_peaks.py             # The peak detectors kept (NeuroKit2, in-house) with a default per signal type; inline uv dependencies
+├── archive/detect_peaks_tested.py  # Detectors tested and not included (kept for reference, not run)
 ├── update-bids-rules.ts        # Writes server/schema-rules/ files for new BIDS releases
 └── tsconfig.json               # Typecheck settings for scripts/ (npx tsc -p scripts)
 ```
@@ -131,8 +139,8 @@ Browser (src/data/bids-physio-reader.ts)
   ↓  toDataPoints() / toConfoundPoints() materialize {time, value}[] arrays
   ↓
 SQI (src/data/sqi-metrics.ts)
-  ↓  computeSQI() — 12 per-channel metrics: mean, std dev, SNR, kurtosis, skewness, ZCR,
-  ↓  PaPaGei morphology (sVRI, IPA, SQI) and PhysioQC (windowed kurtosis, ApEn, beat correlation)
+  ↓  computeSQI() — 10 per-channel metrics: mean, std dev (raw and filtered), SNR, kurtosis, skewness, entropy, zero crossing,
+  ↓  perfusion, relative power
   ↓
 Viewer (src/viewer/)
   ↓  main.ts holds the state and wires events; charts/ builds focus+context,
@@ -179,6 +187,8 @@ Confounds are read from the derivatives root: `BIDSDER_ROOT` when set, else the 
 
 Annotations are written as JSON files under `ANNOTATIONS_ROOT` (env var, default `data/annotations/` in the project root), in a folder per dataset, one file per `{sub, ses, task, run, channel}`: `<ANNOTATIONS_ROOT>/<dataset>/sub-XX/[ses-YY/]func/…_channel-<channel>_annotations.json`. Each file starts with the full-recording `waveform_quality` (`good`, `bad`, `fixable`, `unknown` or `null`) and `waveform_comment` (Notes), followed by the scan, `sampling_rate` and the time windows in `annotations`. Files saved before these two fields existed still load.
 
+Detected peaks are written by `scripts/compute-peaks.ts` under `PEAKS_ROOT` (env var for the dev server, default `data/peaks/`; the script's `--out`), laid out as the annotations: `<PEAKS_ROOT>/<dataset>/sub-XX/[ses-YY/]<datatype>/…_channel-<channel>_peaks.json`. Each file holds the channel's `sampling_rate` and, per detector, its `id`, `label`, `library`, `reference`, `params`, `peaks` (sample indices from the first sample of the file) and `error` (`DetectedPeaksFile`, `src/data/detected-peaks.ts`). The viewer reads them through `/api/bids/detected-peaks`.
+
 How the server and viewer line up physio, confounds and triggers in time is described in the user guide under [Timing badge](user-guide/explore-and-annotate.md#timing-badge).
 
 ### Design principles
@@ -198,9 +208,9 @@ How the server and viewer line up physio, confounds and triggers in time is desc
 A metric is computed in one place and listed in three:
 
 1. **Compute it** in `computeChannelMetrics()` (`src/data/sqi-metrics.ts`) and add the field to the `ChannelMetrics` interface. Return `NaN` when it does not apply to a channel.
-2. **Label it** in `SQI_COLUMNS` (`src/quality/metric-columns.ts`): label, decimals, description and group. The scatter plot, the Stats tab and the PDF use these labels.
+2. **Label it** in `SQI_COLUMNS` (`src/quality/metric-columns.ts`): label, decimals, description and source (the paper, as "Author Year"; none for a plain statistic). The scatter plot, the Stats tab and the PDF use these labels.
 3. **Give it a TSV column** in `METRIC_COLUMNS` (`src/quality/metrics-tsv.ts`), in snake_case. The column order there is the TSV column order.
-4. **Document it** in the metrics map: what it computes, which channels it applies to, and its citation.
+4. **Document it** in `docs/user-guide/metric-definitions.md`: what it computes, which channels it applies to, and its citation.
 5. **Test it** in `src/data/__tests__/sqi-metrics.test.ts` with a synthetic signal of known value, and add the field to the `ChannelMetrics` sample in `src/quality/__tests__/metric-columns.test.ts`, which checks that every metric has a column definition.
 6. **Rerun the script** for every dataset. `parseQualityTsv` refuses a TSV that lacks a column listed in `METRIC_COLUMNS`, so old outputs stop loading until they are recomputed.
 

@@ -116,6 +116,13 @@
       height: 6px;
     }
 
+    /* Detector peaks: DETECTOR_PEAK_COLOR in src/viewer/charts/peaks-trial.ts */
+    .swatch.detector-peak-swatch {
+      background: #d73027;
+      width: 6px;
+      height: 6px;
+    }
+
     .swatch.peak-corrected-swatch {
       background: transparent;
       border: 1.5px solid #1a9850;
@@ -589,11 +596,22 @@
       <span class="row-title">CURRENT INQUIRY:</span>
       <span id="scan-selects" class="scan-selects"></span>
       <label>Channel <select id="channel-select"></select></label>
-      <!-- TRIAL: peaks from a physprep-style events file, shown only when the channel has some (src/viewer/peaks-trial.ts) -->
-      <label id="peaks-label" class="peaks-toggle" style="display:none">
-        <input type="checkbox" id="peaks-toggle"> Peaks (trial)
+    </div>
+    <!-- Peaks in the scan's physio events file (physprep style); the row shows only when the channel has some (src/viewer/peaks-trial.ts) -->
+    <div class="controls-row" id="events-peaks-row" style="display:none">
+      <span class="row-title">PHYSIO EVENTS:</span>
+      <label class="peaks-toggle">
+        <input type="checkbox" id="peaks-toggle"> Show peaks
         <span class="legend-item"><span class="swatch peak-swatch"></span>detected</span>
         <span class="legend-item"><span class="swatch peak-corrected-swatch"></span>corrected</span>
+      </label>
+    </div>
+    <!-- Peaks computed by scripts/compute-peaks.ts; the row shows only when the channel has a peaks file (src/viewer/detected-peaks.ts) -->
+    <div class="controls-row" id="detected-peaks-row" style="display:none">
+      <span class="row-title">BUILT-IN PEAK DETECTION:</span>
+      <label class="peaks-toggle">
+        <input type="checkbox" id="detected-peaks-toggle"> Show peaks
+        <span class="legend-item"><span class="swatch detector-peak-swatch"></span>detected</span>
       </label>
     </div>
     <!-- What the Auxiliary charts below show; each part, and the row, hides when there is nothing to pick -->

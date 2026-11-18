@@ -727,6 +727,22 @@ const CHANNEL_RE = /^[A-Za-z0-9_-]+$/;
  * build the path: an unknown scan id or recording label is never turned into one.
  */
 function annotationsFilePath(root: string, index: BidsIndex, scanId: string, recording: string, channel: string): string {
+  return channelFilePath(root, index, scanId, recording, channel, '_annotations.json');
+}
+
+/**
+ * Per-channel file of one recording under `root`, laid out as the annotations
+ * are (see annotationsFilePath), ending in `suffix` (e.g. _peaks.json).
+ * Throws for an unknown scan or recording, or an invalid channel name.
+ */
+export function channelFilePath(
+  root: string,
+  index: BidsIndex,
+  scanId: string,
+  recording: string,
+  channel: string,
+  suffix: string,
+): string {
   const error = validateChannel(channel);
   if (error) throw new Error(error);
   if (!scanFile(index, scanId)) throw new Error(`Unknown scan: ${JSON.stringify(scanId)}`);
@@ -735,7 +751,7 @@ function annotationsFilePath(root: string, index: BidsIndex, scanId: string, rec
   const folder = relative(file.dataset.root, file.dir);
   if (folder.startsWith('..') || isAbsolute(folder)) throw new Error(`Physio file outside its dataset: ${file.path}`);
   const label = recording ? `_recording-${recording}` : '';
-  return join(root, folder, `${scanPrefix(scanOf(file).entities)}${label}_channel-${channel}_annotations.json`);
+  return join(root, folder, `${scanPrefix(scanOf(file).entities)}${label}_channel-${channel}${suffix}`);
 }
 
 export function readAnnotations(

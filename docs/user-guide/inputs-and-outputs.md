@@ -1,4 +1,4 @@
-# Datasets
+# Inputs and outputs
 
 ## The three folders
 
@@ -68,4 +68,5 @@ This is not a full BIDS validation: file contents and sidecar fields are not che
 ## Where files are saved
 
 - **Annotations:** `data/annotations/<dataset>/sub-XX/[ses-YY/]func/`, one folder per dataset. Set `ANNOTATIONS_ROOT` to use another folder in place of `data/annotations/`.
+- **Detected peaks:** `data/peaks/<dataset>/sub-XX/[ses-YY/]<datatype>/`, laid out as the annotations (see [Detected peaks](explore-and-annotate.md#detected-peaks)). Set `PEAKS_ROOT` to use another folder in place of `data/peaks/`.
 - **Quality metrics:** `data/quality/<name>/`, where `<name>` is the first folder under `data/` (e.g. `BIDS_ROOT=data/friends/friends` → `friends`). For a dataset outside `data/`, it is the folder name of `BIDS_ROOT`, or set `DATASET_NAME` (useful when the main BIDS folder has a generic name such as `data`).

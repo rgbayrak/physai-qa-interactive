@@ -63,6 +63,8 @@ export function shareScanWithViewer(
   saveLastViewed(
     key,
     {
+      // Everything else the viewer keeps (Show peaks boxes, scatter axes, …) carries across too
+      ...prev,
       ...toScanKey(scan),
       channel: prev?.channel ?? '',
       confound: prev?.confound ?? '',

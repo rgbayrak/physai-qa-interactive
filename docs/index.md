@@ -25,4 +25,5 @@ get-started
 user-guide/index
 glossary
 CONTRIBUTING
+release-notes
 ```

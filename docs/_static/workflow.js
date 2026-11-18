@@ -69,7 +69,7 @@
       href: 'user-guide/quality-metrics.html#stats-tab' },
     { id: 'annotations', stage: 'outputs', from: 'review', title: 'Annotation files', output: true,
       lines: ['One JSON per scan and channel'],
-      href: 'user-guide/datasets.html#where-files-are-saved' },
+      href: 'user-guide/inputs-and-outputs.html#where-files-are-saved' },
     { id: 'metrics', stage: 'outputs', from: 'compare', title: 'Metrics files and PDF report', output: true,
       lines: ['quality_metrics.tsv, run log, PDF'],
       href: 'user-guide/quality-metrics.html#what-it-writes' },

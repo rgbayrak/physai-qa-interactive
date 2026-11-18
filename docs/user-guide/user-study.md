@@ -116,7 +116,7 @@ Check that the script from task 2 has finished, then reload the page: the scatte
 |---|---|---|---|
 | 10 | Find the quality-metric TSV the script wrote. What does one row represent? | | | |
 | 11 | At the bottom of **Explore and Annotate**, find the scatter plot. How many scans does it plot for the channel you are viewing? Does that match task 1? Which point is the scan you are viewing? | | | |
-| 12 | Show **cardiac**, then set **Y = Beat Corr** and **X = SNR**. Hover over the point that looks most unusual and write down its subject and session: \_\_\_\_\_\_\_\_\_\_ | | | |
+| 12 | Show **cardiac**, then set **Y = Kurtosis** and **X = SNR**. Hover over the point that looks most unusual and write down its subject and session: \_\_\_\_\_\_\_\_\_\_ | | | |
 | 13 | Set **X** to a participant variable (e.g. **age** or **sex**), and change what the points are colored by. What do the colors mean? Then set X back to **SNR**. | | | |
 | 14 | **Double-click** the point from task 12. Where did it take you, and is it the scan you picked? | | | |
 | 15 | On the **Stats** tab for that scan, look at the waveforms. Does the signal look clean? Where does the scan sit in the histograms compared with the group (solid dark line = this scan, dashed grey line = group mean)? Hide a metric, then show it again. | | | |

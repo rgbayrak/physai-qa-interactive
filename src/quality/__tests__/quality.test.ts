@@ -96,7 +96,7 @@ describe('metrics TSV', () => {
 
   it('round-trips rows, empty fields included', () => {
     const rows = [
-      row({}, { snr: 1.25, beatCorrelation: 0.9 }),
+      row({}, { snr: 1.25, perfusion: 0.9 }),
       row({ ses: '', run: '', channel: 'respiratory', sidecarAssessment: '', sidecarPercentValid: NaN }, { snr: Infinity }),
     ];
     const text = rowsToTsv(rows);
@@ -263,7 +263,7 @@ describe('recordings in the Stats tab', () => {
 
 describe('model', () => {
   const rows = [
-    row({ sub: '01', channel: 'cardiac', task: 'rest' }, { snr: 1, beatCorrelation: 0.9 }),
+    row({ sub: '01', channel: 'cardiac', task: 'rest' }, { snr: 1, perfusion: 0.9 }),
     row({ sub: '01', channel: 'respiratory', task: 'rest' }, { snr: 2 }),
     row({ sub: '02', channel: 'cardiac', task: 'motor', sidecarAssessment: 'Fail', timingStatus: 'mismatch' }, { snr: 3 }),
     row({ sub: '02', channel: 'trigger', task: 'motor', sidecarAssessment: '', timingStatus: 'mismatch' }),
@@ -271,7 +271,7 @@ describe('model', () => {
 
   it('labels every metric from the metric column definitions', () => {
     expect(METRIC_DEFS).toHaveLength(METRIC_COLUMNS.length);
-    expect(METRIC_DEFS.find((d) => d.key === 'beatCorrelation')!.label).toBe('Beat Corr');
+    expect(METRIC_DEFS.find((d) => d.key === 'perfusion')!.label).toBe('Perfusion');
   });
 
   it('lists scans once each, in order', () => {
@@ -279,8 +279,8 @@ describe('model', () => {
   });
 
   it('picks scatter axes that have values', () => {
-    expect(availableMetrics(rows)).toEqual(['snr', 'beatCorrelation']);
-    expect(defaultMetricPair(rows)).toEqual(['snr', 'beatCorrelation']);
+    expect(availableMetrics(rows)).toEqual(['snr', 'perfusion']);
+    expect(defaultMetricPair(rows)).toEqual(['snr', 'perfusion']);
     const onlySnr = rows.filter((r) => r.channel === 'respiratory');
     const [x, y] = defaultMetricPair(onlySnr);
     expect(x).toBe('snr');

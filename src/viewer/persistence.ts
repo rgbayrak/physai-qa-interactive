@@ -21,6 +21,17 @@ export interface LastViewed extends ScanEntry {
   stacked?: string[];
   /** Locked scan levels (e.g. { task: 'rest' }); absent in entries saved before locks existed */
   locks?: ScanLocks;
+  /** "Show peaks" boxes: PHYSIO EVENTS and BUILT-IN PEAK DETECTION; absent (both unticked) in older entries */
+  showPeaks?: { events: boolean; detected: boolean };
+  /** Scatter plot X, Y and Colour by (e.g. skewness against age); absent (the defaults) in older entries */
+  scatter?: ScatterSelection;
+}
+
+/** The scatter plot's choices, kept for the visit like the channel */
+export interface ScatterSelection {
+  x: string;
+  y: string;
+  color: string;
 }
 
 /** Saved locks that still apply: string values only, and kept only when some scan has them all */

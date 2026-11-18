@@ -20,6 +20,7 @@ import type { AnnotationsFile } from './bids-layout';
 import { buildBidsIndex, indexSummaryLines, recordingOf, scanRecordings } from './bids-index';
 import type { BidsIndex } from './bids-index';
 import { countPhysioFiles } from './availability';
+import { readDetectedPeaks } from './peaks';
 import { checkStructure } from './bids-structure';
 import { checkRootSettings, noPhysioLines } from './bids-roots-check';
 import { bannerLines, readAppVersion } from './startup-banner';
@@ -110,6 +111,7 @@ function resolveRoots() {
   BIDSPHYS_ROOT = check.physioRoot;
   BIDSDER_ROOT = check.derivRoot;
   ANNOTATIONS_ROOT = join(process.env.ANNOTATIONS_ROOT ?? join(DATA_DIR, 'annotations'), datasetName());
+  PEAKS_ROOT = join(process.env.PEAKS_ROOT ?? join(DATA_DIR, 'peaks'), datasetName());
 }
 
 // Dataset name = first folder under data/ (data/friends/friends → friends,
@@ -130,6 +132,10 @@ const MAX_REPORT_BYTES = 500 * 1024 * 1024;
 // its dataset: <annotations>/<dataset>/sub-XX/[ses-YY/]<datatype>/
 // (set in resolveRoots, once the dataset is known)
 let ANNOTATIONS_ROOT = '';
+
+// Detected peaks (scripts/compute-peaks.ts), laid out as the annotations:
+// <peaks>/<dataset>/sub-XX/[ses-YY/]<datatype>/ (set in resolveRoots)
+let PEAKS_ROOT = '';
 
 export function bidsPhysioPlugin(): Plugin {
   let cachedSubjectsJson: string;
@@ -257,6 +263,24 @@ export function bidsPhysioPlugin(): Plugin {
           // No events file (e.g. rest) is not an error: reply null (200), not 404
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify(readEvents(INDEX, scan) ?? null));
+          return;
+        }
+
+        // Peaks of one channel from each detector (scripts/compute-peaks.ts); null if not computed
+        if (req.url?.startsWith('/api/bids/detected-peaks')) {
+          const url = new URL(req.url, 'http://localhost');
+          const scan = knownScan(res, url.searchParams.get('scan'));
+          if (!scan) return;
+          const channel = url.searchParams.get('channel');
+          const error = channel ? validateChannel(channel) : 'Missing channel parameter';
+          if (error || !channel) {
+            replyError(res, 400, error ?? 'Missing channel parameter');
+            return;
+          }
+          const recording = url.searchParams.get('recording') ?? '';
+          if (!knownRecording(res, scan, recording)) return;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify(readDetectedPeaks(PEAKS_ROOT, INDEX, scan, recording, channel) ?? null));
           return;
         }
 

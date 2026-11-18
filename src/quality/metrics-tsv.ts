@@ -1,5 +1,6 @@
 import type { ChannelMetrics } from '../data/sqi-metrics';
 import type { DescriptionNotice } from '../data/dataset-notice';
+import type { ChannelTypeRow } from './channels';
 import { makeScanKey, parseScanId } from '../data/scan-key';
 import type { ScanKeyLike } from '../data/scan-key';
 
@@ -17,16 +18,14 @@ export type MetricKey = Exclude<keyof ChannelMetrics, 'channelName'>;
 export const METRIC_COLUMNS: { key: MetricKey; column: string }[] = [
   { key: 'mean', column: 'mean' },
   { key: 'stdDev', column: 'std_dev' },
+  { key: 'stdDevFiltered', column: 'std_dev_filtered' },
   { key: 'snr', column: 'snr' },
   { key: 'kurtosis', column: 'kurtosis' },
   { key: 'skewness', column: 'skewness' },
-  { key: 'zeroCrossingRate', column: 'zero_crossing_rate' },
-  { key: 'svri', column: 'svri' },
-  { key: 'ipa', column: 'ipa' },
-  { key: 'sqi', column: 'sqi' },
-  { key: 'kurtosisWindowed', column: 'kurtosis_windowed' },
-  { key: 'approxEntropy', column: 'approx_entropy' },
-  { key: 'beatCorrelation', column: 'beat_correlation' },
+  { key: 'entropy', column: 'entropy' },
+  { key: 'zeroCrossing', column: 'zero_crossing' },
+  { key: 'perfusion', column: 'perfusion' },
+  { key: 'relativePower', column: 'relative_power' },
 ];
 
 /** Scan/channel columns that precede the metrics */
@@ -232,6 +231,8 @@ export interface DatasetQualityFile {
   excludedChannels: { channel: string; reason: string; scans: number }[];
   /** Units per channel from the physio sidecars ("<column>": {"Units": …}), where given */
   channelUnits?: Record<string, string>;
+  /** What each column was taken as for the metrics, and why (src/quality/channels.ts); absent in older files */
+  channelTypes?: ChannelTypeRow[];
   metricsFile: string;
 }
 
