@@ -2,7 +2,7 @@
 
 ```{glossary}
 Annotation
-  What you record about a scan in the Annotations box: a Signal Quality rating and Notes for the whole recording, and labelled time windows. Saved as one JSON file per scan and channel.
+  What you record about a scan in the Annotations box: a Signal Quality rating and Notes for the whole recording, and labelled time windows. Saved as one JSON file per scan, recording and channel.
 
 Artifact
   A part of a recording that does not reflect the physiology being measured, for example from movement, a loose sensor or scanner interference.
@@ -38,10 +38,10 @@ Physiological recording
   A signal recorded alongside the scan, such as cardiac (pulse or ECG), respiratory or electrodermal activity. In BIDS, stored as `*_physio.tsv.gz` with a JSON sidecar.
 
 Scan
-  One run of one task for one subject (and session), with its physiological recording. The tool steps through scans one at a time.
+  One acquisition with its physiological recording: a datatype folder (such as `func/` or `eeg/`) and a set of BIDS entities (subject, session, task, run, and others such as `acq`). A scan can be split into several `recording-<label>` files. The tool steps through scans one at a time.
 
 Scan onset
-  The start of the first BOLD volume of a scan. All charts use it as t = 0.
+  The start of the first BOLD volume of a scan in `func/`, used as t = 0 by all charts. In other datatype folders, t = 0 is the start of that folder's own data.
 
 Sidecar
   A JSON file next to a data file that describes it, for example `SamplingFrequency`, `StartTime` and `Columns` for a physiological recording.

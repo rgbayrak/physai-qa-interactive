@@ -22,7 +22,15 @@ npx vite-node scripts/update-bids-rules.ts [x.y.z ...]       # BIDS rules for ne
 
 ### Tests
 
-Tests run against two tiny synthetic BIDS datasets in `test/fixtures/` (sessions/runs with fMRIPrep-style derivatives, and a session-less layout), so they need no downloaded data. They cover every timing badge, sidecar fallbacks, confounds (fMRIPrep and MRIQC names), task events and their inheritance, the trial peaks, downloaded-file counts, annotations and path safety, finding the physio and derivatives folders by their content (`bids-layout.fixtures.test.ts`), the BIDS version check of file and folder names (`bids-structure.test.ts`), the `BIDS_ROOT` start check (`bids-roots-check.test.ts`), the startup banner, dataset description notices (`dataset-notice.test.ts`), where the viewer opens and the first unannotated scan (`navigation.test.ts`), and the dataset quality metrics pipeline, including the run log (TSV round trip, identical output on reruns, which columns are excluded, participant axes and the PDF writer). Regenerate the fixtures after changing them with:
+Tests run against three tiny synthetic BIDS datasets in `test/fixtures/` (`bids-sessions`: sessions and runs with fMRIPrep-style derivatives; `bids-nosessions`: a session-less layout; `bids-recordings`: scans split into `recording-` files), plus small datasets written to temporary folders, so they need no downloaded data. They cover:
+
+- **Finding files** (`server/__tests__/`): the one walk of the dataset, physio in any datatype folder, sidecar and events inheritance, which copy of a recording is loaded, beh/ timing (`bids-discovery.test.ts`); `recording-` files (`recordings.test.ts`); every timing badge, sidecar fallbacks, confounds (fMRIPrep and MRIQC names), task events, the trial peaks, annotations and path safety (`bids-layout.fixtures.test.ts`, `timing.test.ts`, `annotations.test.ts`); downloaded-file counts and the content check (`availability.test.ts`); downsampling (`downsample.test.ts`); detected peaks files (`peaks.test.ts`); the BIDS version check of file and folder names (`bids-structure.test.ts`); the `BIDS_ROOT` start check (`bids-roots-check.test.ts`); the startup banner (`startup-banner.test.ts`)
+- **Scan ids and data** (`src/data/__tests__/`): scan keys, locks and t = 0 per datatype (`scan-key.test.ts`), the client fetchers (`bids-physio-reader.test.ts`), dataset description notices (`dataset-notice.test.ts`), filters, spectrum and the signal quality metrics (`filters.test.ts`, `spectrum.test.ts`, `sqi-metrics.test.ts`)
+- **Viewer** (`src/viewer/__tests__/`): scan controls (`scan-selects.test.ts`), where the viewer opens, Prev/Next with locks, search and the first unannotated scan (`navigation.test.ts`), choices kept for the visit (`persistence.test.ts`), the annotation model (`annotations.test.ts`), events columns (`events.test.ts`), the info line and badges (`info.test.ts`), chart helpers (`charts.test.ts`), trial and detected peaks (`peaks-trial.test.ts`, `detected-peaks.test.ts`)
+- **Chart library** (`src/core/__tests__/`): compact tick labels, y-axis title position and tick count (`axes.test.ts`); min/max downsampling for the context chart (`viewportCulling.test.ts`)
+- **Quality metrics** (`src/quality/__tests__/`, `server/__tests__/quality-metrics.test.ts`): the pipeline (identical output on reruns, which columns are excluded; `quality-metrics.test.ts`), the metrics TSV, scatter colour legend, histogram stats, Stats links and t = 0 label (`quality.test.ts`), the run log (`run-log.test.ts`), channel types and the docs vocabulary table (`channels.test.ts`), metric names and Metrics shown (`visible-metrics.test.ts`), metric labels (`metric-columns.test.ts`), participant and scatter axes and the PDF writer (`axes-pdf.test.ts`), the scan shared with Explore and Annotate (`linked-scan.test.ts`)
+
+Regenerate the fixtures after changing them with:
 
 ```bash
 python3 test/fixtures/make_fixtures.py
@@ -53,6 +61,10 @@ src/
 │   ├── bids-structure.ts      # BIDS version check result type and its summary line (shared with the server)
 │   ├── dataset-notice.ts      # Notices for a missing or placeholder dataset_description.json (shared with the server)
 │   ├── detected-peaks.ts      # Detected peaks file type, fetch, and peak times on the chart axis (shared with the server)
+│   ├── filters.ts             # Zero-phase Butterworth band-pass, matching NeuroKit2's signal_filter (used by the metrics)
+│   ├── recordings.ts          # Channels of a scan split into recording- files, and how they are named (shared by the viewer, Stats and scripts)
+│   ├── scan-key.ts            # Scan ids (datatype + entities), hierarchy order, locks, t = 0 per datatype (shared with the server)
+│   ├── spectrum.ts            # Welch power spectral density, matching NeuroKit2's signal_psd (used by the metrics)
 │   └── sqi-metrics.ts         # Per-channel signal quality metrics
 ├── viewer/                    # Interactive physio viewer (only main.ts touches the page)
 │   ├── main.ts                # Entry: init, data loading, event wiring
@@ -61,8 +73,8 @@ src/
 │   ├── annotations.ts         # Annotation model <-> stored JSON (pure)
 │   ├── annotation-panel.ts    # Annotation list rendering, progress bar colour
 │   ├── info.ts                # Dataset info line, On disk data summary, downsampling/timing/quality badges
-│   ├── controls.ts            # Dropdowns, stacked-channel checkboxes
-│   ├── navigation.ts          # Prev/next stepping, search resolution (pure)
+│   ├── controls.ts            # Scan controls from the dataset's entities, with locks; channel dropdowns, stacked-channel checkboxes
+│   ├── navigation.ts          # Prev/next stepping within the locks, search resolution, which scan to open (pure)
 │   ├── persistence.ts         # The visit's last-viewed scan and choices in sessionStorage
 │   ├── events.ts              # Events columns: rest check, categories, counters, default column (pure)
 │   ├── peaks-trial.ts         # TRIAL: match physprep peaks to the picked channel (pure)
@@ -75,7 +87,7 @@ src/
 │       ├── peaks-trial.ts     # TRIAL: peak dots drawn on the focus chart's overlay
 │       └── stack.ts           # Stacked channel charts
 ├── quality/                   # Quality metrics: the Stats tab (quality.html; only main.ts touches that page) and the scatter plot in Explore and Annotate
-│   ├── main.ts                # Stats entry: #scan?… link, dataset loading, builds and saves the PDF report once
+│   ├── main.ts                # Stats entry: #scan?id=… link, dataset loading, builds and saves the PDF report once
 │   ├── individual-tab.ts      # Stats: one scan's header, waveforms, per-channel metric tables and histograms
 │   ├── scatter-panel.ts       # Scatter plot for Explore and Annotate (X: metric or participant; Y: metric; viewed scan highlighted)
 │   ├── report.ts              # PDF report: lays out pages on a canvas, rasterises the charts
@@ -87,7 +99,7 @@ src/
 │   ├── channels.ts            # Excluded (non-physiological) column names, signal types, and the analysis type (PPG/ECG/respiration) shared by metrics and peaks (pure)
 │   ├── envelope.ts            # Min/max downsampling for waveforms (pure)
 │   ├── stats.ts               # Histogram bins, percentiles (pure)
-│   ├── route.ts               # /quality.html#scan?sub=… links (pure)
+│   ├── route.ts               # /quality.html#scan?id=… links (pure)
 │   ├── metric-picker.ts       # "Metrics shown" sidebar list: show/hide each metric
 │   ├── linked-scan.ts         # Shares the open scan with Explore and Annotate (via its sessionStorage entry)
 │   ├── run-log.ts             # quality_runs.tsv: one line per metrics run, and its sentence (pure; also used by the script)
@@ -103,7 +115,8 @@ src/
 └── main.ts                 # Entry point (loads viewer/main)
 
 server/
-├── bids-layout.ts          # Pure BIDS filesystem logic (testable, no Vite dependency)
+├── bids-index.ts           # One walk of the dataset folders: every physio file, sidecar, confounds, events and description file, by name; which copy of a recording is loaded
+├── bids-layout.ts          # Pure BIDS logic on the index: scans, sidecar inheritance, timing, confounds, events, annotation paths (testable, no Vite dependency)
 ├── downsample.ts           # Brings recordings at 2 kHz or more down to about 1 kHz: low-pass filter (no time shift), block maximum for triggers
 ├── bids-physio-plugin.ts   # Vite plugin: checks the folders and prints the banner at start, reads the dataset once the dev server listens, serves every /api/* endpoint
 ├── bids-roots-check.ts     # Stops the dev server when BIDS_ROOT (or BIDSPHYS_ROOT, BIDSDER_ROOT) is missing or not a BIDS dataset
@@ -135,7 +148,7 @@ BIDS dataset on disk
   ↓  Returns compact column-array JSON via /api/bids/* endpoints
   ↓
 Browser (src/data/bids-physio-reader.ts)
-  ↓  fetchDatasetInfo(), fetchSubjects(), fetchScans(), fetchTasks(), fetchRuns(), fetchPhysioRaw(), fetchConfounds(), fetchEvents(), fetchPeaks() (trial)
+  ↓  fetchDatasetInfo(), fetchSubjects(), fetchScans(), fetchLaunchId(), fetchFirstUnannotatedScan(), fetchPhysioRaw(), fetchConfounds(), fetchEvents(), fetchPeaks() (trial), fetchAnnotations(), fetchAnnotationProgress(), saveAnnotations()
   ↓  toDataPoints() / toConfoundPoints() materialize {time, value}[] arrays
   ↓
 SQI (src/data/sqi-metrics.ts)
@@ -168,24 +181,27 @@ Browser (src/quality/)
 |---|---|
 | `GET /api/bids/subjects` | All subjects with their sessions (only those with readable physio files) |
 | `GET /api/bids/dataset` | Dataset metadata from `dataset_description.json` (raw + derivatives `GeneratedBy`), plus `id`: the dataset's folder name under `data/`, and `physioFiles`: `{ onDisk, downloaded, source }`, physio files listed vs downloaded, counted once at startup, and `structure`: file and folder names checked against the rules of the declared `BIDSVersion` (`server/bids-structure.ts`), and `description`: where the title and authors came from, which fields are placeholders, and how to get a missing main description (`src/data/dataset-notice.ts`) |
-| `GET /api/bids/scans` | Flat list of every readable `{sub, ses, task, run}` in hierarchy order |
-| `GET /api/bids/tasks?sub=&ses=` | Tasks available for a given subject/session |
-| `GET /api/bids/runs?sub=&ses=&task=` | Runs available for a given subject/session/task |
-| `GET /api/bids/physio?sub=&ses=&task=&run=` | Physio data as compact column arrays, plus the timing check result (`timing`) |
-| `GET /api/bids/confounds?sub=&ses=&task=&run=` | Motion confounds (FD, RMSD, DVARS, trans/rot) from the fMRIPrep or MRIQC confounds TSV; `null` (200) when the scan has none |
-| `GET /api/bids/events?sub=&ses=&task=&run=` | Task events `{ filename, onset, duration, columns }` from the imaging folders (BIDS inheritance: run, run-less, top-level); `null` (200) when there are none |
-| `GET /api/bids/peaks?sub=&ses=&task=&run=` | TRIAL: detected and corrected peaks `{ filename, time, channel, corrected }` from a physprep-style events file next to the physio; `null` when there are none |
-| `GET /api/bids/annotations?sub=&ses=&task=&run=&channel=` | Stored annotations for a scan/channel, if any |
-| `POST /api/bids/annotations` | Saves (overwrites) annotations for a scan/channel |
+| `GET /api/bids/scans` | Flat list of every scan `{id, datatype, sub, ses, task, run, entities}` in hierarchy order (`ScanKeyLike`, `src/data/scan-key.ts`) |
+| `GET /api/bids/launch` | `{ id }`: this dev server launch, so the viewer's choices last one visit only (sessionStorage key) |
+| `GET /api/bids/first-unannotated?lock=` | `{ scan }`: the first scan (hierarchy order, within the locks) with no annotations in any channel, or `null`; where a new launch opens |
+| `GET /api/bids/physio?scan=` | Every recording of the scan as compact column arrays, each with its timing check (`timing`); recordings that cannot be read are listed in `skipped` (404 with the reasons when none can) |
+| `GET /api/bids/confounds?scan=` | Motion confounds (FD, RMSD, DVARS, trans/rot) from the fMRIPrep or MRIQC confounds TSV; `null` (200) when the scan has none, and always for physio outside `func/` |
+| `GET /api/bids/events?scan=` | Task events `{ filename, onset, duration, columns }` from the raw datasets (`BIDS_ROOT` first; BIDS inheritance: run, run-less, top-level); `null` (200) when there are none |
+| `GET /api/bids/detected-peaks?scan=&channel=&recording=` | Peaks of one channel from each detector, written by `scripts/compute-peaks.ts`; `null` when not computed |
+| `GET /api/bids/peaks?scan=` | TRIAL: detected and corrected peaks `{ filename, time, channel, corrected }` from a physprep-style events file in the physio file's own dataset; `null` when there are none |
+| `GET /api/bids/annotations?scan=&channel=&recording=` | Stored annotations for one channel of one recording, or an empty file for it |
+| `POST /api/bids/annotations` | Saves (overwrites) annotations for one channel of one recording (body: the file, with `scan`, `recording` and `channel`) |
+| `GET /api/bids/annotation-progress?channel=&recording=&lock=` | `{ annotated, total, firstUnannotated }`: scans within the locks with a Signal Quality rating, Notes or a time window saved for that channel (in any recording, or only `recording` when two recordings share the channel name), and the earliest scan (hierarchy order) without any, or `null` |
 | `GET /api/quality-report` | `{ exists, url }`: whether the served dataset's `data/quality/<dataset>/quality_report.pdf` is saved |
 | `POST /api/quality-report` | Saves the PDF report the Stats tab built (body: the PDF; only for the served dataset, only once its metrics exist) |
-| `GET /api/bids/annotation-progress?channel=` | `{ annotated, total, firstUnannotated }`: scans with a Signal Quality rating, Notes or a time window saved for that channel, and the earliest scan (hierarchy order) without any, or `null` |
 
-The server skips broken symlinks (e.g. DataLad/git-annex files that haven't been fetched) using `accessSync(R_OK)`.
+`?scan=` is the scan id, `<datatype>/<file name prefix>` (e.g. `func/sub-01_ses-01_task-rest_run-01`, `src/data/scan-key.ts`); an id the index doesn't know is refused. `lock=` takes `<entity>:<value>` (e.g. `lock=task:rest`), once per lock.
 
-Confounds are read from the derivatives root: `BIDSDER_ROOT` when set, else the folder inside `$BIDS_ROOT/derivatives/` that has confounds files, preferring fMRIPrep's over MRIQC's (`resolveBidsRoots`). The server looks for, in order, fMRIPrep's `*_desc-confounds_timeseries.tsv[.gz]`, the older `*_desc-confounds_regressors.tsv` and `*_bold_confounds.tsv`, then MRIQC's `*_timeseries.tsv` (lowest echo for multi-echo runs), and extracts the motion columns (`framewise_displacement`, `rmsd`, `dvars`, `std_dvars`, `trans_*`, `rot_*`); the **Confound** dropdown picks which one to plot and only appears when a confounds file is found.
+Only physio files whose content is on disk are offered (`hasPhysioContent`, `server/bids-index.ts`): gzip bytes for `.tsv.gz`, and not a git-annex pointer file for a plain `.tsv`. Files DataLad lists but hasn't fetched are counted as not downloaded and skipped.
 
-Annotations are written as JSON files under `ANNOTATIONS_ROOT` (env var, default `data/annotations/` in the project root), in a folder per dataset, one file per `{sub, ses, task, run, channel}`: `<ANNOTATIONS_ROOT>/<dataset>/sub-XX/[ses-YY/]func/…_channel-<channel>_annotations.json`. Each file starts with the full-recording `waveform_quality` (`good`, `bad`, `fixable`, `unknown` or `null`) and `waveform_comment` (Notes), followed by the scan, `sampling_rate` and the time windows in `annotations`. Files saved before these two fields existed still load.
+Confounds are found anywhere in the index (`BIDS_ROOT` with its `derivatives/`, and `BIDSDER_ROOT` when set), for `func/` scans only. The server prefers, in order, fMRIPrep's `*_desc-confounds_timeseries.tsv[.gz]`, the older `*_desc-confounds_regressors.tsv` and `*_bold_confounds.tsv`, then MRIQC's `*_timeseries.tsv` (`CONFOUNDS_PATTERNS`, lowest echo for multi-echo runs), and extracts the motion columns (`framewise_displacement`, `rmsd`, `dvars`, `std_dvars`, `trans_*`, `rot_*`); the **Confound** dropdown picks which one to plot and only appears when a confounds file is found.
+
+Annotations are written as JSON files under `ANNOTATIONS_ROOT` (env var, default `data/annotations/` in the project root), in a folder per dataset, one file per scan, recording and channel, in the physio file's own folder relative to its dataset: `<ANNOTATIONS_ROOT>/<dataset>/sub-XX/[ses-YY/]<datatype>/<scan prefix>[_recording-<label>]_channel-<channel>_annotations.json` (`annotationsFilePath`, `server/bids-layout.ts`). Each file starts with the full-recording `waveform_quality` (`good`, `bad`, `fixable`, `unknown` or `null`) and `waveform_comment` (Notes), followed by `scan`, `datatype`, `sub`, `ses`, `task`, `run`, `recording`, `channel`, `sampling_rate` and the time windows in `annotations`. Files saved before the two waveform fields existed still load.
 
 Detected peaks are written by `scripts/compute-peaks.ts` under `PEAKS_ROOT` (env var for the dev server, default `data/peaks/`; the script's `--out`), laid out as the annotations: `<PEAKS_ROOT>/<dataset>/sub-XX/[ses-YY/]<datatype>/…_channel-<channel>_peaks.json`. Each file holds the channel's `sampling_rate` and, per detector, its `id`, `label`, `library`, `reference`, `params`, `peaks` (sample indices from the first sample of the file) and `error` (`DetectedPeaksFile`, `src/data/detected-peaks.ts`). The viewer reads them through `/api/bids/detected-peaks`.
 

@@ -4,7 +4,7 @@ type: software
 title: "physAI-QA-interactive: an interactive visualization and annotation tool for physiological recordings in BIDS-compliant datasets"
 abstract: >-
   physAI-QA-interactive is a browser-based tool for exploring and annotating
-  physiological recordings in BIDS fMRI datasets. It lets researchers step
+  physiological recordings in BIDS-compliant datasets. It lets researchers step
   through every scan of a dataset, view physiological signals alongside
   fMRIPrep or MRIQC motion confounds, compute per-channel signal quality metrics, and
   annotate artifacts in place, saving the annotations next to the dataset.

@@ -469,19 +469,20 @@ export async function buildQualityReport(opts: ReportOptions): Promise<Blob> {
           await L.text('No waveform file for this scan.', 9, { color: '#a33' });
         }
 
-        const keys = availableMetrics(scanRows);
-        if (keys.length > 0) {
+        // One table per channel, as on the Stats tab: only the metrics this recording
+        // has a value for, so no empty cells from metrics that belong to another channel
+        for (const r of scanRows) {
+          const keys = availableMetrics([r]);
+          if (keys.length === 0) continue;
+          const group = rowsForChannel(data.rows, r.channel);
           L.gap(4);
-          const header = ['Metric', ...scanRows.map((r) => r.channel)];
-          const body = keys.map((k) => [
-            metricDef(k).label,
-            ...scanRows.map((r) => {
-              const v = r.metrics[k];
-              const pr = percentileRank(rowsForChannel(data.rows, r.channel).map((g) => g.metrics[k]), v);
-              return Number.isFinite(pr) ? `${formatMetric(v, k)}  (${ordinal(pr)} pct)` : formatMetric(v, k);
-            }),
-          ]);
-          await L.table(header, body);
+          await L.text(r.channel, 9, { bold: true });
+          const body = keys.map((k) => {
+            const v = r.metrics[k];
+            const pr = percentileRank(group.map((g) => g.metrics[k]), v);
+            return [metricDef(k).label, Number.isFinite(pr) ? `${formatMetric(v, k)}  (${ordinal(pr)} pct)` : formatMetric(v, k)];
+          });
+          await L.table(['Metric', r.channel], body);
         }
       }
     }

@@ -8,7 +8,7 @@ The tool works with any dataset in [BIDS](https://bids.neuroimaging.io) format t
 
 **The dataset.** The dataset should have:
 
-- physiological recordings as `sub-XX/[ses-XX/]func/*_physio.tsv.gz`, each with a JSON sidecar giving `SamplingFrequency`, `StartTime` and `Columns`
+- physiological recordings as `sub-XX/[ses-XX/]<datatype>/*_physio.tsv.gz`, in any datatype folder (`func/`, `eeg/`, `beh/`, …), each with a JSON sidecar giving `SamplingFrequency`, `StartTime` and `Columns`
 
 No dataset of your own? See {doc}`public-datasets` for OpenNeuro datasets with physiological recordings and how to download them with DataLad.
 
@@ -18,8 +18,8 @@ The tool reads from up to three folders. You set them when you start it:
 
 | Setting | When to set it |
 |---|---|
-| `BIDS_ROOT` | To use the dataset description, task events or confounds. Physiological recordings and derivatives inside it are found automatically. |
-| `BIDSPHYS_ROOT` | If the physiological recordings are outside `BIDS_ROOT`, or you aren't setting `BIDS_ROOT` |
+| `BIDS_ROOT` | Always (required): the main BIDS folder, the one with `dataset_description.json`. Physiological recordings and derivatives inside it are found automatically. |
+| `BIDSPHYS_ROOT` | If the physiological recordings are outside `BIDS_ROOT` |
 | `BIDSDER_ROOT` | If the derivatives folder is outside `BIDS_ROOT` |
 
 When the physiological recordings and derivatives are inside the main BIDS folder, as in most OpenNeuro datasets, the tool finds them itself and `BIDS_ROOT` is all you need:
@@ -36,15 +36,22 @@ BIDS_ROOT=/path/to/dataset BIDSPHYS_ROOT=/path/to/physio BIDSDER_ROOT=/path/to/d
 
 See {doc}`inputs-and-outputs` for how the tool finds the folders inside `BIDS_ROOT`, and what each one is read for.
 
-The terminal prints a welcome banner, the folders the tool reads from and what it found in them, then an address (usually `http://localhost:5173`).
+The terminal prints a welcome banner, the folders the tool reads from and what it found in them, then an address (usually `http://localhost:5173`). The banner:
 
-```{figure} ../images/start-terminal-banner.png
-:alt: The welcome banner printed by npm run dev: PHYSAI-QA-INTERACTIVE version 0.1.0 (beta), a one-line description, and the links for docs and issues, citation (Zenodo DOI) and license (MIT), and Ctrl+C to stop
-:name: fig-terminal-banner
-:width: 70%
+```text
+  ────────────────────────────────────────────────────────────────────
+   PHYSAI-QA-INTERACTIVE                                 version 2.0.0
+   Interactive visualization and annotation of physiological
+   recordings in BIDS-compliant datasets. Part of the physAI suite.
 
-The welcome banner. Below it, the terminal lists the three folders, whether you set them or the tool found them, followed by the address to open the tool in your browser. If no physiological recordings were found, a message will tell you which folder setting to fix.
+   Docs and issues  https://github.com/rgbayrak/physai-qa-interactive
+   Cite             https://doi.org/10.5281/zenodo.19389717
+   License          MIT
+   Stop             Ctrl+C
+  ────────────────────────────────────────────────────────────────────
 ```
+
+Below it, the terminal lists the folders you set, the folders it walked, and how many readable physiological recordings it found in each datatype folder, followed by the address to open the tool in your browser. If no physiological recordings were found, a message will tell you which folder setting to fix.
 
 Without `BIDS_ROOT`, or with a folder that does not exist, the server stops and says what to set; see {doc}`troubleshooting`.
 
@@ -63,7 +70,7 @@ Set `BIDSPHYS_ROOT` and `BIDSDER_ROOT` the same way when you need them.
 Open the address in a desktop web browser. The tool keeps running in the terminal until you stop it with Ctrl+C.
 
 ```{figure} ../images/start-first-page.png
-:alt: The Explore and Annotate tab on its first scan of ds006644: dataset title and authors, the Subject, Session, Task and Channel dropdowns, the Auxiliary Signal Options row, the green trigger-verified Timing badge, the respiratory signal with its overview chart, and the framewise displacement chart under Auxiliary
+:alt: The Explore and Annotate tab on its first scan of ds006644 (sub-01, ses-01, task rest, cardiac): dataset title and authors, the CURRENT INQUIRY row with Subject, Task, Datatype, Session and Channel, the BUILT-IN PEAK DETECTION and AUXILIARY SIGNAL OPTIONS rows, Prev, Next and search, the green trigger-verified Timing badge, the cardiac signal with its overview chart, and the framewise displacement chart under Auxiliary
 :name: fig-first-page
 
 The page the tool opens on: the **Explore and Annotate** tab with the dataset's first scan.

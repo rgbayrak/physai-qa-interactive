@@ -80,11 +80,13 @@ table.docutils thead tr:first-child th:last-child { border-top-right-radius: 8px
 table.docutils tbody tr:last-child td:first-child { border-bottom-left-radius: 8px; }
 table.docutils tbody tr:last-child td:last-child { border-bottom-right-radius: 8px; }
 
-/* Figures: full-width screenshots and GIFs at 90% of the text column,
-   centred. Smaller images and ones with their own :width: are unaffected. */
-figure img {
+/* Figures: screenshots and GIFs at most 80% of the text column, centred,
+   including plain Markdown images (e.g. the GIF on the home page). Smaller
+   images and ones with their own :width: are unaffected. */
+figure img,
+section > p > img {
   display: block;
-  max-width: 90%;
+  max-width: 80%;
   height: auto;
   margin: 0 auto;
 }

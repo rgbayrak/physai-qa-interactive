@@ -65,4 +65,6 @@ OpenNeuro publishes every dataset as a [DataLad](https://www.datalad.org) datase
    BIDS_ROOT=data/ds006644 npm run dev
    ```
 
+Optional: `git annex adjust --unlock`, run in the dataset folder, checks files out as regular files instead of symlinks. The tool doesn't need it, but it helps with other tools that don't follow symlinks.
+
 For the full list of files the tool reads (BOLD sidecars, task events, derivatives stored as a subdataset), see [what to download with DataLad](troubleshooting.md#if-using-datalad-what-to--datalad-get).

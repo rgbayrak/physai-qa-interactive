@@ -1,3 +1,7 @@
+---
+tocdepth: 1
+---
+
 # Get started
 
 ## What it is for

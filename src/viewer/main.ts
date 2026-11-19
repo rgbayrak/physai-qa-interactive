@@ -550,7 +550,7 @@ async function loadPhysio(scan: ScanEntry) {
       els.confoundLabel.style.display = '';
       rebuildConfounds(confounds);
     } else {
-      // No derivatives for this scan (or no BIDSDER_ROOT): hide the picker
+      // No confounds for this scan (none found, or physio outside func/): hide the picker
       els.confoundLabel.style.display = 'none';
       els.confoundsSection.style.display = 'none';
     }

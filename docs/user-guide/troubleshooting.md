@@ -2,8 +2,10 @@
 
 Common problems and how to fix them. If yours is not listed, check the dev
 server's terminal output: the lines starting with `[bids-physio]` show which
-folders the server reads (`BIDS root`, `Physio root`, `Derivatives root`) and
-how many physio files it found.
+folders the server reads (`BIDS root`, and `Physio root` and `Derivatives
+root` when you set them), the folders it walked, how many readable physio
+files it found in each datatype folder (`Readable physio files: 80 in func/`),
+and the files it skipped.
 
 ```{contents} On this page
 :local:
@@ -50,14 +52,36 @@ The terminal says `No readable physio files under …`.
   physio is stored in a separate folder (see
   [Pointing the tool at the right folders](#pointing-the-tool-at-the-right-folders)).
 - Check that the physio files are downloaded, not just listed. In a DataLad
-  dataset, files that are not downloaded are broken symlinks. If you meant to explore/annotate the whole dataset, download them with:
+  dataset, files that are not downloaded are broken symlinks (or, in an
+  unlocked dataset, small pointer files). The terminal counts them:
+  `in BIDS_ROOT = 354 physio files listed but not downloaded (skipped)`. If you meant to explore/annotate the whole dataset, download them with:
 
   ```bash
   cd /path/to/dataset
   datalad get sub-*/ses-*/func/*_physio.*
   ```
 
-  See [what to download with DataLad](#if-using-datalad-what-to--datalad-get) for the other files the tool reads.
+  then restart the dev server: it lists the files once, when it starts. See [what to download with DataLad](#if-using-datalad-what-to--datalad-get) for the other files the tool reads.
+
+## A scan shows "Not loaded: …" or "Error: …"
+
+The physio file is listed and looks downloaded, but it can't be read: the
+message names the file and why (for example a corrupt `.tsv.gz`, or a sidecar
+without `Columns` or `SamplingFrequency`). For a scan split into
+`recording-<label>` files, the recordings that can be read are still shown,
+and "Not loaded: …" names the others; when none can be read, the page shows
+"Error: …" with the reasons. Fetch the file again (`datalad get` it, or copy
+it again), then restart the dev server.
+
+## The terminal says "same recording not loaded"
+
+`<file> loaded; same recording not loaded: <other>` means the same recording
+was found twice, for example a raw copy in `BIDS_ROOT` and a processed copy in
+`BIDSPHYS_ROOT` or in `derivatives/`. One copy is loaded: the one under
+`BIDSPHYS_ROOT` when it is set, else the `BIDS_ROOT` dataset's own file; then a
+`desc-preproc` file, then `.tsv.gz` over `.tsv`. To load another copy, set
+`BIDSPHYS_ROOT` to the folder that holds it; leave `BIDSPHYS_ROOT` out to load
+the `BIDS_ROOT` dataset's own file.
 
 ## If using DataLad what to `$ datalad get`
 
@@ -75,10 +99,10 @@ belongs to, without the `derivatives/fmriprep/` prefix.
 |---|---|---|
 | Physio folder (`BIDS_ROOT`, or `BIDSPHYS_ROOT`) | `*_physio.tsv.gz` and `*_physio.json` | The recordings and their sampling rate, start time and channel names |
 | Main BIDS folder (`BIDS_ROOT`) | `dataset_description.json`, `participants.tsv`, `participants.json` | Dataset info box; participant variables (age, sex, …) in the scatter plot and Stats |
-| Main BIDS folder (`BIDS_ROOT`) | `*_bold.json` and top-level `task-*_bold.json` | `RepetitionTime` / `VolumeTiming`: the trigger check and the confounds time axis |
-| Main BIDS folder (`BIDS_ROOT`) | `*_events.tsv` and top-level `task-*_events.tsv` | The events chart for task scans |
-| Derivatives folder (`BIDSDER_ROOT`) | `*_desc-confounds_timeseries.tsv` (fMRIPrep) or `*_timeseries.tsv` (MRIQC), and `dataset_description.json` | The confounds chart and the derivatives' pipeline and version |
-| Derivatives folder (`BIDSDER_ROOT`) | `*_bold.json` | Fallback BOLD timing when the main folder has none |
+| Main BIDS folder (`BIDS_ROOT`), then other raw folders | `*_bold.json` and top-level `task-*_bold.json` | `RepetitionTime` / `VolumeTiming`: the trigger check and the confounds time axis (`func/` scans) |
+| Main BIDS folder (`BIDS_ROOT`), then other raw folders | `*_events.tsv` and top-level `task-*_events.tsv`, in the physio file's datatype folder | The events chart for task scans |
+| Derivatives folder (inside `BIDS_ROOT/derivatives/`, or `BIDSDER_ROOT`) | `*_desc-confounds_timeseries.tsv` (fMRIPrep) or `*_timeseries.tsv` (MRIQC), and `dataset_description.json` | The confounds chart and the derivatives' pipeline and version |
+| Derivatives folder (inside `BIDS_ROOT/derivatives/`, or `BIDSDER_ROOT`) | `*_bold.json` | Fallback BOLD timing when the raw folders have none |
 
 **Physio** (in the main BIDS folder, or the separate physio folder):
 
@@ -138,7 +162,7 @@ yet: download them first, then rerun the script.
 | Setting | Point it at | Used for |
 |---|---|---|
 | `BIDS_ROOT` | Always the main BIDS folder, even when the physio is stored elsewhere | `dataset_description.json`, `participants.tsv`, task events, BOLD sidecars |
-| `BIDSPHYS_ROOT` | The folder holding the physio files, when it is outside `BIDS_ROOT` | Physio files and their sidecars; the list of subjects, sessions, tasks and runs |
+| `BIDSPHYS_ROOT` | The folder holding the physio files, when it is outside `BIDS_ROOT` | Physio files and their sidecars; its copy of a recording is the one loaded |
 | `BIDSDER_ROOT` | The derivatives pipeline folder with the confounds, when it is outside `BIDS_ROOT/derivatives/` | Confounds (fMRIPrep or MRIQC), the derivatives' dataset description |
 | `ANNOTATIONS_ROOT` | Any writable folder (default `data/annotations/`) | Where annotations are saved |
 | `DATASET_NAME` | A short name | Which `data/quality/<name>/` folder Stats reads, for datasets outside `data/` |
@@ -150,17 +174,13 @@ Physio files normally live in the main BIDS folder and derivatives in its
 BIDS_ROOT=/path/to/dataset npm run dev
 ```
 
-When `BIDSPHYS_ROOT` and `BIDSDER_ROOT` are not set, the server looks for them
-inside `BIDS_ROOT` by their files, never by folder name:
-
-- **Physio:** the main folder when its `sub-*/[ses-*/]func/` folders have
-  `*_physio.tsv.gz` files; otherwise the first folder inside it, or inside its
-  `derivatives/`, that has them.
-- **Derivatives:** the folder inside `derivatives/` with confounds files,
-  preferring fMRIPrep's over MRIQC's.
-
-The terminal prints the three folders and how each was chosen. When more than
-one folder matches, it names the others: set the variable to pick one.
+The server walks everything inside `BIDS_ROOT` (its `derivatives/` too), plus
+`BIDSPHYS_ROOT` and `BIDSDER_ROOT` when they are set, and finds the files by
+their names, never by folder name: physio in any datatype folder, confounds
+anywhere (fMRIPrep's over MRIQC's). See
+[Inputs and outputs](inputs-and-outputs.md#the-three-folders) for the details,
+and [The terminal says "same recording not loaded"](#the-terminal-says-same-recording-not-loaded)
+when a recording is found twice.
 
 **Physio or derivatives stored next to the main BIDS folder.** These are not
 searched for: give all three. For example, CNeuroMod datasets keep the main
@@ -171,9 +191,9 @@ BIDS folder (with `dataset_description.json`, `participants.tsv` and the
 BIDS_ROOT=/path/to/dataset BIDSPHYS_ROOT=/path/to/physio BIDSDER_ROOT=/path/to/derivatives npm run dev
 ```
 
-Only the physio files are read from `BIDSPHYS_ROOT`. The dataset description,
-participants, events and BOLD sidecars always come from `BIDS_ROOT`, so point
-it at the main BIDS folder even when the physio is elsewhere.
+The dataset description and participants always come from `BIDS_ROOT`, and
+events and BOLD sidecars come from it first, so point it at the main BIDS
+folder even when the physio is elsewhere.
 
 ## Computing the quality metrics
 
@@ -195,8 +215,9 @@ If that folder only holds other folders (e.g. CNeuroMod's `data/friends`, with
 the main BIDS folder one level down in `data/friends/friends`), it finds no
 dataset description, participants or BOLD sidecars: give `--bids-root`.
 
-The script prints the three folders it uses before it starts. Check them if
-it reports `0 readable scans`.
+Before it starts, the script prints the main BIDS folder (and the physio and
+derivatives folders when given), the folders it walked and the readable physio
+files per datatype folder. Check them if it finds no scans.
 
 Use the same name the dev server uses, so the Stats tab finds the metrics:
 the first folder under `data/` (`data/friends/friends` → `friends`), or
@@ -250,16 +271,17 @@ then restart the dev server and rerun the compute script.
 ## The confounds chart shows approximate timing
 
 Confounds are placed on the time axis using the BOLD sidecar's
-`RepetitionTime` or `VolumeTiming`, read from `BIDS_ROOT` and then from
-`BIDSDER_ROOT`. BOLD sidecars in a separate physio folder are not read. If
-neither folder has one, volumes are spread evenly across the recording, which
-is only approximate. Check that `BIDS_ROOT` is the main BIDS folder.
+`RepetitionTime` or `VolumeTiming`, read from the raw folders (`BIDS_ROOT`
+first) and then from the derivatives. If none has one, volumes are spread
+evenly across the recording, which is only approximate. Check that `BIDS_ROOT`
+is the main BIDS folder and that its `*_bold.json` files are downloaded.
 
 ## No Confound dropdown
 
-The dropdown only appears when the scan has a confounds file under
-`BIDSDER_ROOT`. Check that the folder is right and that the
-`*_desc-confounds_timeseries.tsv` files are downloaded.
+The dropdown only appears for scans in `func/` that have a confounds file,
+inside `BIDS_ROOT/derivatives/` or under `BIDSDER_ROOT`. Check that the folder
+is right and that the `*_desc-confounds_timeseries.tsv` files are downloaded.
+Physio in other datatype folders (`eeg/`, `beh/`, …) has no confounds.
 
 ## The PDF report is missing
 

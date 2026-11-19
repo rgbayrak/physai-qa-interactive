@@ -68,7 +68,7 @@
       lines: ['One scan: waveforms, metrics and', 'where it sits in the dataset'],
       href: 'user-guide/quality-metrics.html#stats-tab' },
     { id: 'annotations', stage: 'outputs', from: 'review', title: 'Annotation files', output: true,
-      lines: ['One JSON per scan and channel'],
+      lines: ['One JSON per scan, recording, channel'],
       href: 'user-guide/inputs-and-outputs.html#where-files-are-saved' },
     { id: 'metrics', stage: 'outputs', from: 'compare', title: 'Metrics files and PDF report', output: true,
       lines: ['quality_metrics.tsv, run log, PDF'],

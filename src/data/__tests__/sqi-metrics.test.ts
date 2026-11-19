@@ -6,8 +6,7 @@ import type { PhysioRaw } from '../bids-physio-reader';
 /**
  * SQI metrics on synthetic signals whose statistics are known analytically.
  * A pure sine has mean 0, SD 1/sqrt(2), skewness 0, Pearson kurtosis 1.5,
- * and crosses zero twice per cycle; every cycle has the same shape, so
- * beat-to-beat correlation is 1.
+ * and crosses zero twice per cycle.
  */
 
 const FS = 100;

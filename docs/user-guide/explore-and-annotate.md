@@ -3,22 +3,24 @@
 The **Explore and Annotate** tab shows one scan at a time: its physiological signals, auxiliary charts on the same time axis, and the Annotations box where you rate and mark the recording.
 
 ```{figure} ../images/explore-annotate-overview.png
-:alt: Explore and Annotate with a respiratory recording: Prev and Next buttons and search, the file name with a trigger-verified Timing badge, the focus and overview charts, framewise displacement under Auxiliary, and on the right the Annotations box (12 of 80 respiratory signals annotated) and the On disk data summary
+:alt: Explore and Annotate on a respiratory recording of ds006644: the CURRENT INQUIRY row with Subject and Session dropdowns and their padlocks, Task and Datatype shown as text, and Channel; the BUILT-IN PEAK DETECTION row with Show peaks ticked; the AUXILIARY SIGNAL OPTIONS row with framewise displacement and cardiac stacked; Prev, Next and search; the trigger-verified Timing badge; the focus chart zoomed in with red peak dots and a time window labelled signal drop out; the stacked cardiac and framewise displacement charts under Auxiliary; and on the right the Annotations box (Fixable selected, 2 of 80 respiratory signals annotated, the time window listed) and the On disk data summary
 :name: fig-explore-overview
 
-The signal charts on the left; the Annotations box and the On disk data summary on the right.
+The scan controls and option rows at the top, the signal charts on the left, and the Annotations box and On disk data summary on the right.
 ```
 
 ## Moving between scans
 
-- **Dropdowns:** Subject, Session, Task and Run (when the dataset has them), and Channel, the signal shown in the main charts.
-- **Prev / Next** buttons, or the ← and → keys, step through scans in subject, session, task and run order.
+- **Scan controls** (in the CURRENT INQUIRY row): one control per entity the dataset's scans have, in the order Subject, Task, Datatype, Session, then the others by their BIDS key (e.g. `acq`) and Run. A level the dataset has several values for is a dropdown listing all of them; a level with one value for the shown scan is shown as text. Picking a value that exists only in another session opens that session.
+- **Locks:** the padlock next to a level keeps its value fixed, e.g. lock Task on `rest` to step through rest scans only. Prev / Next, search, the annotated count and **Go to the first unannotated scan** then stay within the locked values. Run has no lock.
+- **Channel:** the signal shown in the main charts.
+- **Prev / Next** buttons, or the ← and → keys, step through scans in subject, session, task and run order, then datatype and the other entities.
 - **Search:** type e.g. `sub-03` or `ses-012` to jump to a scan.
 - The page shows the exact `.tsv.gz` file being viewed.
 
-**Where it opens.** On the earliest scan with nothing annotated yet for the remembered channel, so a skipped scan always comes back. Once every scan is annotated, it opens on the last-viewed scan. A link from the Stats tab opens that scan instead. The **Go to the first unannotated scan** button, under the annotation progress bar, opens that earliest scan at any time.
+**Where it opens.** On a new launch of the tool, on the earliest scan with nothing annotated yet in any channel, so a skipped scan always comes back; when every scan has annotations, on the first scan. A reload during the visit, or coming back from the Stats tab, opens the scan you were on. A link from the Stats tab opens that scan instead. The **Go to the first unannotated scan** button, under the annotation progress bar, opens the earliest scan with nothing annotated for the channel shown, at any time.
 
-**What is remembered.** The channel and stacked channels stay the same when you step through scans. A reload, or going to the Stats tab and back, keeps the channel, stacked channels, events column, confound, the **Show peaks** boxes and the scatter plot's X, Y and Colour by (e.g. skewness against age). They are kept per dataset for the visit (this browser tab), and a new launch of the tool starts clean.
+**What is remembered.** The channel and stacked channels stay the same when you step through scans. The locks are kept for the visit too. A reload, or going to the Stats tab and back, keeps the channel, stacked channels, events column, confound, the **Show peaks** boxes and the scatter plot's X, Y and Colour by (e.g. skewness against age). They are kept per dataset for the visit (this browser tab), and a new launch of the tool starts clean.
 
 ## Signal charts
 
@@ -26,13 +28,15 @@ The signal charts on the left; the Annotations box and the On disk data summary 
 - **Context chart** (bottom): shows the whole recording. Drag the window to move along it, or drag its edges to change its length. The window length is shown over it.
 
 ```{figure} ../images/zoom-scroll.gif
-:alt: Hovering over the cardiac signal shows the time and value under the pointer; dragging on the focus chart zooms into a time window, and dragging the window on the context chart moves along the recording
+:alt: Hovering over a cardiac signal shows the time and value under the pointer; dragging on the focus chart zooms in to an 18 s window, and dragging that window on the context chart moves along the recording
 :name: fig-zoom-scroll
 
 Hover readout, brush to zoom and drag the context window.
 ```
 
-All charts share one time axis: **t = 0 is scan onset**, the start of the first BOLD volume. A dashed purple **scan onset (t = 0)** line marks it. Physiological data recorded before the scan (negative times) is out of view.
+All charts share one time axis. For physiological recordings in `func/`, **t = 0 is scan onset**, the start of the first BOLD volume. A dashed purple **scan onset (t = 0)** line marks it. Physiological data recorded before the scan (negative times) is out of view.
+
+In other datatype folders, t = 0 is the start of that folder's own data: the EEG recording for `eeg/`, the MEG recording for `meg/`. BIDS defines `StartTime` relative to "the first data sample in the corresponding (neural) dataset" without naming that dataset, so taking it to be the data in the same folder is this tool's reading. Physiological recordings in `beh/` with no events of their own use the events of the same acquisition in a neural datatype folder, and t = 0 is that folder's data. The trigger check and the confounds apply to `func/` only.
 
 ## Detected peaks
 
@@ -55,6 +59,20 @@ In the viewer, peaks have their own rows under **CURRENT INQUIRY**, each shown o
 - **BUILT-IN PEAK DETECTION**: peaks computed by `scripts/compute-peaks.ts` with the default detector of the channel's signal type, as red dots on the focus chart.
 
 Both rows have a **Show peaks** box, unticked when a visit starts and kept across scans and reloads during the visit.
+
+```{figure} ../images/explore-annotate-peaks.png
+:alt: A cardiac recording zoomed in to about 55 to 165 s with Show peaks ticked in the BUILT-IN PEAK DETECTION row: a red dot on each detected beat of the focus chart; the task events chart under Auxiliary
+:name: fig-detected-peaks
+
+Detected peaks (red dots) from the default PPG detector on a `cardiac` channel.
+```
+
+```{figure} ../images/peaks.gif
+:alt: With Show peaks ticked, Next steps through cardiac recordings and each one shows its red detected peaks; zooming in on a stretch with artifacts shows which beats got a peak
+:name: fig-detected-peaks-step
+
+Detected peaks stay shown as you step through scans and zoom in.
+```
 
 Each detector runs with its library's defaults. The cleaning step is paired with it the way the library's own pipeline does (NeuroKit2 passes the same method name to its cleaning and peak functions where the cleaner has one).
 
@@ -80,24 +98,24 @@ References:
 
 ## Auxiliary Signal Options
 
-The **Auxiliary Signal Options** row adds charts under AUXILIARY, below the signal of interest. They all follow the focus chart's time window.
+The **AUXILIARY SIGNAL OPTIONS** row adds charts under AUXILIARY, below the signal of interest. They all follow the focus chart's time window.
 
 - **Event:** for task scans (not rest) with a BIDS `*_events.tsv`. Each event is a block from its onset to onset + duration. A column with at most 10 categories (by default `trial_type`, else `condition` or similar) gets one coloured lane per category with a colour key. Any other column draws every event in one grey lane, with its value in the tooltip. Counters such as `trial_number` are not offered, and the figure is hidden when every column has the same value throughout.
 - **Confound:** a head-motion confound from fMRIPrep or MRIQC, shown only when confounds exist for the scan. Framewise displacement is colour-coded by severity (green, amber, red) with 0.2 mm and 0.5 mm reference lines.
 - **Stack:** tick channels to add a compact figure for each. Each fits its own Y-axis and has its own hover readout.
 
 ```{figure} ../images/explore-annotate-events.png
-:alt: A task scan (task cuedSGT) with the respiratory signal on top and, under Auxiliary, the events chart for its events.tsv: the Condition column gives five coloured lanes (Other, Past, Control, Null, Future) with a colour key, each event a block from its onset to onset plus duration
+:alt: A task scan (task cuedSGT, run 02) with Subject locked (red padlock) and EVENT set to Condition: the cardiac signal on top and, under Auxiliary, the events chart for its events.tsv, where the Condition column gives five coloured lanes (Other, Past, Control, Null, Future) with a colour key, each event a block from its onset to onset plus duration
 :name: fig-events
 
 The **Event** chart for a task scan: one coloured lane per value of the `Condition` column.
 ```
 
 ```{figure} ../images/explore-annotate-stack.png
-:alt: An EDA recording as the signal of interest, with RSP ticked under Stack so it appears as a compact figure under Auxiliary, and framewise displacement below it; next to the file name, the sidecar-only Timing badge and quality badges PPG Fail (50%), ECG Pass, RSP Pass and EDA Pass
+:alt: A cardiac recording zoomed in to about 55 to 165 s with red detected peaks, with respiratory ticked under STACK so it appears as a compact figure under Auxiliary, and the Condition events chart below it; next to the file name, the sidecar-only Timing badge
 :name: fig-stack
 
-A stacked channel (RSP) and a confound under the signal of interest (EDA), all on the same time axis. Next to the file name: the Timing badge and the per-channel quality badges.
+A stacked channel (respiratory) and the task events under the signal of interest (cardiac), all on the same time axis.
 ```
 
 Channel and Stack offer every column of the physio file except those specifically excluded, the same ones the quality metrics leave out: `trigger`, `time` and other scanner, marker and time stamp columns.
@@ -117,10 +135,18 @@ The physiological sidecar's `StartTime` is the reference: it is the time of the 
 | triggers disagree (red) | Some intervals differ from TR, or the pulse count doesn't match the volume count | Uses `StartTime` as it is, and flags the scan for review |
 | sidecar only (amber) | No trigger channel or pulses, or no BOLD TR to check against | Uses `StartTime` as it is, unverified |
 
+**Why trigger verification matters.** Many uses of the physiological recording need it to sit on the BOLD volume times: physiological noise regressors such as the cardiac and respiratory phase used by RETROICOR (Glover et al. 2000), respiration variation (Birn et al. 2006) and heart rate variation (Chang et al. 2009), and the timing of events and artifact annotations against the scan. `StartTime` is written by a conversion step and can be wrong: the physiological recording and the scanner run on separate clocks, dummy scans may have been discarded, the recording may have been started or cut at the wrong time, or `SamplingFrequency` may be wrong. Scanner trigger pulses recorded with the physiological signals are independent evidence of the volume times, on the recording's own clock. **trigger-verified** means the pulses confirm the alignment; **sidecar only** means `StartTime` is used unchecked. In BIDS, `trigger` is an optional column ("continuous measurement of the scanner trigger signal") and `StartTime` is the reference; the trigger check itself is this tool's own, not part of BIDS.
+
+References:
+
+- Birn, R. M., Diamond, J. B., Smith, M. A., & Bandettini, P. A. (2006). Separating respiratory-variation-related fluctuations from neuronal-activity-related fluctuations in fMRI. *NeuroImage*, 31, 1536–1548.
+- Chang, C., Cunningham, J. P., & Glover, G. H. (2009). Influence of heart rate on the BOLD signal: the cardiac response function. *NeuroImage*, 44(3), 857–869. <https://doi.org/10.1016/j.neuroimage.2008.09.029>
+- Glover, G. H., Li, T.-Q., & Ress, D. (2000). Image-based method for retrospective correction of physiological motion effects in fMRI: RETROICOR. *Magnetic Resonance in Medicine*, 44(1), 162–167.
+
 **How the other charts are timed.**
 
 - **Confounds** have one row per volume. Volume *i* sits at `VolumeTiming[i]`, or at *i* × `RepetitionTime`, read from the BOLD sidecars. If no sidecar has timing, volumes are spread evenly across the recording; that is only approximate. For multi-echo runs, the lowest echo is used.
-- **Events** are read from the main BIDS folder, following BIDS inheritance (the run's own file, else the run-less file, else a top-level `task-<task>_events.tsv`). Their onsets are already in seconds from the first volume, so they are drawn as they are.
+- **Events** are read from the raw folders (the main BIDS folder first, never the derivatives), in the physiological recording's own datatype folder or at the top level, following BIDS inheritance (the run's own file, else the run-less file, else a top-level `task-<task>_events.tsv`). Their onsets are already in seconds from t = 0, so they are drawn as they are.
 
 **Quality badges.** When a `_desc-quality.json` sidecar is present (per run, or run-less), per-channel pass/fail badges appear next to the timing badge (see {ref}`the stacked channel figure <fig-stack>`).
 
@@ -141,22 +167,22 @@ The **Annotations** box has two parts:
 - **Time Windows:** switch **Annotate** On, then drag on the focus chart to mark a time window and give it a label. Delete a window with its ×. Labels cannot be edited; to change one, delete the window and draw it again.
 
 ```{figure} ../images/eval-ml-annot.gif
-:alt: A respiratory recording rated Good under Signal Quality in the Annotations box, then the Next button steps to the next scan and the annotated count goes up
+:alt: Next steps to a respiratory recording with three time windows labelled motion listed under Time Windows; zooming in on the focus chart shows each window over a framewise displacement peak in the chart below
 :name: fig-rate-and-step
 
-Rating a recording's signal quality and stepping to the next scan.
+Stepping to the next scan and checking its time windows against head motion.
 ```
 
 ```{figure} ../images/explore-annotate-time-window.png
-:alt: A time window from 330.38 s to 360.71 s labelled motion, shaded on the zoomed-in focus chart, with Annotate On and the window listed under Time Windows; the framewise displacement chart below peaks in the same window
+:alt: A time window from 22.38 s to 76.79 s labelled signal drop out, shaded on the zoomed-in respiratory focus chart over a stretch where the breathing signal goes flat, and listed under Time Windows with its ×; red detected peaks on the signal and framewise displacement below
 :name: fig-time-window
 
-A time window labelled "motion" over a head-motion peak. It is listed under **Time Windows**, where × deletes it.
+A time window labelled "signal drop out" over a flat stretch of the respiratory signal. It is listed under **Time Windows**, where × deletes it.
 ```
 
-Everything is saved to disk automatically, one file per scan and channel, and reloads when you return to that scan. Each time window is stored with both its times and its sample indices, so the file can be used as an artifact mask. See {doc}`inputs-and-outputs` for where the files go.
+Everything is saved to disk automatically, one file per scan, recording and channel, and reloads when you return to that scan. Each time window is stored with both its times and its sample indices, so the file can be used as an artifact mask. See {doc}`inputs-and-outputs` for where the files go.
 
-Under the box, the annotated count and progress bar show how many scans of this channel have annotations.
+Under the box, the annotated count and progress bar show how many scans of this channel have annotations, within the locks. When two recordings of a scan share a channel name (e.g. `respiratory (recording-belt1)` and `respiratory (recording-belt2)`), each recording is counted on its own.
 
 ## Scatter plot
 
