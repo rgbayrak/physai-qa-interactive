@@ -6,7 +6,7 @@ Beta: runs through the Vite dev server (a standalone launcher is planned); the q
 
 Changes since v1.0.0 (released 2026-04-02).
 
-### New features
+### Added
 
 - **Any BIDS physio layout:** recordings in any datatype folder (`func/`, `eeg/`, `meg/`, `beh/`, …), for some subjects or sessions only, scans split into `recording-<label>` files, sidecars and events by BIDS inheritance (`beh/` physio without events of its own takes the same acquisition's events from its neural datatype folder); physio and derivatives next to the main BIDS folder (`BIDSPHYS_ROOT`, `BIDSDER_ROOT`).
 - **Annotations:** a Signal Quality rating and Notes per recording, labelled time windows, a progress count and **Go to the first unannotated scan**.
@@ -16,44 +16,38 @@ Changes since v1.0.0 (released 2026-04-02).
 - **Dataset checks:** BIDS version check of file and folder names, notices for a missing or placeholder `dataset_description.json`, an On disk data summary, and a start-up log.
 - **Project:** documentation on Read the Docs, synthetic test fixtures, unit tests and CI.
 
-### Changed or removed
+### Changed
 
 - MIT licence (was PolyForm Noncommercial 1.0.0); renamed physai-qa-interactive.
 - `BIDS_ROOT` is required: there is no default dataset.
-- Scan links are `#scan?id=<datatype>/<prefix>`; old `#scan?sub=…` links no longer open a scan.
+- Scan links are `#scan?id=<datatype>/<prefix>`.
 - Annotations are saved in the recording's own datatype folder, one file per scan, recording and channel.
 - Choices are kept for one visit (sessionStorage), not across launches.
-- Metrics TSVs from earlier runs must be computed again.
-- Metrics removed: min, max, median, % non-zero; sVRI, IPA, SQI, ApEn and Beat Corr are out until they are reviewed.
-- The README is a landing page; the documentation is on Read the Docs.
+
+### Fixed
+
+- The overview (context) chart is drawn from a min/max envelope instead of every Nth sample, so peaks, spikes and short dropouts show as in the focus chart.
+
+### Upgrade notes
+
+- Set `BIDS_ROOT` when starting the tool (see {doc}`user-guide/start`).
+- Compute the metrics TSVs again with `scripts/compute-quality-metrics.ts`; for a TSV from an earlier version, the tool asks for this.
+- Bookmarked `#scan?sub=…` links need to be opened again from the tool.
 
 ### Planned
 
+- **Standalone launcher:** run the tool without the Vite dev server, from one command.
+- **Faster scan switching and loading:** binary transfer, a server cache and lazy loading of high-rate recordings.
 - **Eye tracking:** not supported in the current version. BIDS eye-tracking recordings (`PhysioType: "eyetrack"`, gaze and pupil, one `recording-` file per eye) will need their own timing, events and quality metrics.
 - **Metric review, continued:** port the default peak detectors to TypeScript, then review M_SQI, Beat Corr, respiratory rate (Romano 2023), sVRI, IPA and SQI (PaPaGei) and ApEn, and others for non-PPG signals.
 - **Concurrent recordings (EEG-fMRI):** link the `func/` and `eeg/` physio of one run, which are two separate scans today.
-- **BIDS version check:** add hand-written rules for versions before 1.6.0 if a source for them is found (same format as `server/schema-rules/`)
+- **BIDS version check:** rules for versions before 1.6.0, if a source for them is found.
+- **Physiological response functions:** signals derived by convolving them (Birn et al. 2006/2008; Chang & Glover 2009).
 
-**Open for discussion:**
+Open for discussion:
 
 - **Search box:** find any level the scan controls show (task, datatype, `acq`, run), not only subjects and sessions.
 - **Subset of a dataset:** view or compute metrics for some subjects only, while `BIDS_ROOT` stays on the whole dataset.
-- Turn on "Allow GitHub Actions to create and approve pull requests" (repository Settings → Actions → General → Workflow permissions); without it, `.github/workflows/bids-rules.yml` cannot open its pull request when a new BIDS release exists. The "no new release, no pull request" case passed on the scheduled run of 2026-11-16.
-- If moving to the next file is slow (unacceptable latency). Not timed yet: first check `/api/bids/physio` in the browser Network tab (Waiting (TTFB) = server time, Size / Content download = JSON cost) and the Performance tab for the chart drawing. Suggested fixes, biggest effect first:
-  - Send physio samples as binary (`Float32Array`, about 4 bytes per value, no parsing) instead of JSON number arrays, which are likely tens of MB per scan at 1000–5000 Hz and parsed in full by the browser (`fetchPhysioRaw`)
-  - Keep columns as typed arrays in the viewer instead of one `{time, value}` object per sample, built again for each stacked channel (`toDataPoints`, `src/viewer/charts/stack.ts`)
-  - Server cache and prefetch, and focus-chart downsampling (items below)
-  - Read the confounds file once per scan: `readPhysio` reads and unzips it to count volumes when the BOLD sidecar has no `VolumeTiming` (`countConfoundVolumes`), then `readConfounds` reads it again (`server/bids-layout.ts`)
-
-#### Performance & data pipeline
-
-- Context (overview) chart: draw it from a min/max envelope instead of `downsample(data, 2000)` (`src/viewer/charts/focus-context.ts:117`, uniform stride in `src/core/viewportCulling.ts`). Keeping every N-th sample drops or flattens R-peaks, spikes and short dropouts and can alias a regular rhythm into a pattern that is not there, so the overview looks different from the focus view and can hide artifacts. Display only (metrics and the Stats waveforms already use `minMaxEnvelope()`). Share the envelope with the focus-chart item above; own branch, after the BIDS discovery steps
-- Cache parsed physio/confounds reads server-side — `server/bids-physio-plugin.ts` re-parses (sync gunzip + full TSV parse) on every request, even when revisiting a scan just seen; add an in-memory cache keyed by scan id (and recording). Also prefetch the next scan while the current one is viewed, so Next is served from memory
-- Lazy loading, above all for high sampling-rate waveforms: fetch and draw only what the view needs (e.g. the overview envelope first, full-rate samples for the focus window as it is zoomed or moved), instead of the whole recording before anything is shown
-- Switching between Explore and Annotate and Stats reloads every waveform: each tab is a separate page load, so the scan's physio and the Stats waveforms are fetched and drawn again each time. Keep them in memory across the switch, either by making the two tabs one page that only swaps views (both exist at the same time, the hidden one kept), or by caching the fetched data in the browser for the visit (with the server cache above for the first load)
-- Time the first load of a high-rate scan (10 kHz): every request unzips, parses and low-pass filters the full-rate file again (`readPhysio`, `server/downsample.ts`). Parsing ~600 MB of text took ~8 s in the test; the server cache above would make revisits instant
-- Support custom signals derived by convolving physiological response functions (Birn et al. 2006/2008 respiration-BOLD, Chang & Glover 2009 cardiac/respiratory response functions)
-- Production build, the server plugin only works in Vite dev mode; the FastAPI backend planned above should supersede this, otherwise would need an Express/Fastify server for production. That server must also serve `data/quality/` for the quality page
 
 
 ### Developer notes
