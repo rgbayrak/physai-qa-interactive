@@ -1,4 +1,4 @@
-import { createChart, createZoom, createBrush, cullToViewport, downsample } from '@/core';
+import { createChart, createZoom, createBrush, cullToViewport, minMaxDownsample } from '@/core';
 import type { ChartInstance, BrushHandle } from '@/core';
 import { pointer } from 'd3-selection';
 import { toDataPoints, getViewExtent, getValueExtent } from '@/data/bids-physio-reader';
@@ -122,8 +122,10 @@ export function buildFocusContext(opts: FocusContextOptions): FocusContextHandle
   const focusOnsetGroup = focusLayers.content.append('g').attr('class', 'onset-marker');
   const contextOnsetGroup = contextLayers.content.append('g').attr('class', 'onset-marker');
 
-  // The overview always shows the whole recording, so draw it downsampled once
-  const contextData = downsample(data, 2000);
+  // The overview always shows the whole recording, so draw it downsampled once:
+  // each bucket's min and max, so peaks, spikes and dropouts look as in the focus
+  // chart. 1000 buckets × 2 keeps the 2000-point budget of the stride it replaced
+  const contextData = minMaxDownsample(data, 1000, (d) => d.value);
 
   function drawFocusLine() {
     const visible = cullToViewport(data, xDomainOf(focus), (d: DataPoint) => d.time);

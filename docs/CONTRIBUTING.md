@@ -46,7 +46,7 @@ src/
 │   ├── tooltip.ts          # Tooltip module
 │   ├── zoom.ts             # Composable zoom/pan module
 │   ├── brush.ts            # Composable brush module
-│   ├── viewportCulling.ts  # cullToViewport + downsample
+│   ├── viewportCulling.ts  # cullToViewport, minMaxDownsample, downsample
 │   └── index.ts            # Barrel export
 ├── data/
 │   ├── bids-physio-reader.ts  # Client-side BIDS physio data fetcher
@@ -361,9 +361,13 @@ Attaches a horizontal brush. Returns a `BrushHandle`.
 
 Binary-search slice of sorted data to the visible x-domain. O(log n).
 
+### `minMaxDownsample(data, buckets, value)`
+
+Min/max downsampling for drawing a line: keeps each bucket's lowest and highest point in time order, plus the first missing value of a bucket so a gap stays a gap, and the first and last points. Peaks, spikes and short dropouts survive. The context chart uses it with 1000 buckets.
+
 ### `downsample(data, maxPoints)`
 
-Uniform stride downsampling. Keeps first and last points.
+Uniform stride downsampling. Keeps first and last points. Can drop or flatten short peaks; for drawing a signal, prefer `minMaxDownsample`.
 
 ---
 
