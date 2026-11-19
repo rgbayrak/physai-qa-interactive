@@ -10,7 +10,7 @@ describe('bannerLines', () => {
     expect(text).toContain('PHYSAI-QA-INTERACTIVE');
     expect(text).toContain('version 0.1.0 (beta)');
     expect(text).toContain('https://github.com/rgbayrak/physai-qa-interactive');
-    expect(text).toContain('https://doi.org/10.5281/zenodo.19389717');
+    expect(text).toContain('https://doi.org/10.5281/zenodo.19389716');
   });
 
   it('keeps every line within the rule width', () => {

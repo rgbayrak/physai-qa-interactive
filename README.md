@@ -1,6 +1,6 @@
 # physAI-QA-interactive
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19389717.svg)](https://doi.org/10.5281/zenodo.19389717)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19389716.svg)](https://doi.org/10.5281/zenodo.19389716)
 
 **An interactive visualization and annotation tool for physiological recordings in BIDS-compliant datasets.**
 
@@ -40,7 +40,7 @@ Architecture, server API, the chart library's API reference and how to add a met
 
 ## Citation
 
-If you use this software, please cite it using its DOI: [10.5281/zenodo.19389717](https://doi.org/10.5281/zenodo.19389717). GitHub's **Cite this repository** button (from [CITATION.cff](CITATION.cff)) gives APA and BibTeX formats.
+If you use this software, please cite it using its DOI: [10.5281/zenodo.19389716](https://doi.org/10.5281/zenodo.19389716). GitHub's **Cite this repository** button (from [CITATION.cff](CITATION.cff)) gives APA and BibTeX formats.
 
 ## AI disclosure
 

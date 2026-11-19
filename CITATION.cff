@@ -21,8 +21,12 @@ authors:
     affiliation: "Electrical and Computer Engineering; Biomedical Engineering; Vanderbilt University Institute of Imaging Science; Vanderbilt University, Nashville, TN 37235, United States"
 license: "MIT"
 version: "2.0.0"
-doi: "10.5281/zenodo.19389717"
+date-released: "2026-11-18"
+doi: "10.5281/zenodo.19389716"
 identifiers:
+  - type: doi
+    value: "10.5281/zenodo.19389716"
+    description: "All versions (concept DOI)"
   - type: doi
     value: "10.5281/zenodo.19389717"
     description: "v1.0.0"

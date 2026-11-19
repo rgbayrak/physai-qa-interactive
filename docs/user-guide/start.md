@@ -45,7 +45,7 @@ The terminal prints a welcome banner, the folders the tool reads from and what i
    recordings in BIDS-compliant datasets. Part of the physAI suite.
 
    Docs and issues  https://github.com/rgbayrak/physai-qa-interactive
-   Cite             https://doi.org/10.5281/zenodo.19389717
+   Cite             https://doi.org/10.5281/zenodo.19389716
    License          MIT
    Stop             Ctrl+C
   ────────────────────────────────────────────────────────────────────
