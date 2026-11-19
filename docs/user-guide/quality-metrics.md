@@ -65,7 +65,7 @@ The top of the **Stats** tab: what is known about the scan, and its waveforms ov
 **Metrics shown** lists every metric by name, with the paper it comes from (e.g. "Perfusion (Elgendi 2016)"); hover a metric for a short description and its paper. Tick which ones the tables and histograms show, or use Show all / Hide all. The choice is kept for the visit (this browser tab), and a new launch of the tool starts with every metric shown.
 
 ```{figure} ../images/quality-metrics-histograms.png
-:alt: The Stats sidebar with the last metrics run (10 of 155 recordings, a subset), the PDF report link, and the Metrics shown box with Show all, Hide all and all 10 metrics ticked, each named with its source paper; next to it, the cardiac metrics table with each value and its percentile, and a histogram per metric with a solid dark line for this scan and a dashed grey line for the mean of all 10 cardiac recordings
+:alt: The Stats sidebar with the PDF report link and the Metrics shown box (Show all, Hide all, all 10 metrics ticked, each named with its source paper); next to it, the cardiac metrics table with the seven metrics this recording has, each value with its percentile, and a histogram per metric with a solid dark line for this scan and a dashed grey line for the mean of all 80 cardiac recordings
 :name: fig-metric-histograms
 
 Each metric's value and percentile for this scan, and where it falls in the dataset (solid dark line: this scan; dashed grey line: dataset mean).
