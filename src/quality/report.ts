@@ -482,7 +482,7 @@ export async function buildQualityReport(opts: ReportOptions): Promise<Blob> {
             const pr = percentileRank(group.map((g) => g.metrics[k]), v);
             return [metricDef(k).label, Number.isFinite(pr) ? `${formatMetric(v, k)}  (${ordinal(pr)} pct)` : formatMetric(v, k)];
           });
-          await L.table(['Metric', r.channel], body);
+          await L.table(['Metric', 'Value'], body);
         }
       }
     }

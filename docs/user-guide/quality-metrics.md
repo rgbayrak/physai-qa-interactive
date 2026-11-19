@@ -78,8 +78,8 @@ The scan open in Explore and Annotate is the one Stats opens, and the other way 
 `data/quality/<dataset>/quality_report.pdf` has a summary, each channel's scatter plot, and one page per scan with its waveforms and, per channel, a table of the metrics it has, each with its percentile. Computing the metrics deletes the old report; the next time the Stats tab opens, it builds a new one in the background and saves it there. The Stats sidebar shows its progress, then a link to open it.
 
 ```{figure} ../images/quality-metrics-pdf-report.png
-:alt: One scan's page in the PDF report: the scan name and file, participant information, sampling rate, duration and timing check, the cardiac and respiratory waveforms over the whole recording with a dashed scan onset line, and a table of every metric for each channel with its percentile
+:alt: One scan's page in the PDF report: the scan name and file, participant information, sampling rate, duration and timing check, the cardiac and respiratory waveforms over the whole recording with a dashed scan onset line, then one Metric and Value table per channel with each value's percentile: seven metrics for cardiac, only Std Dev for respiratory
 :name: fig-pdf-report
 
-One scan's page in the PDF report: its waveforms and every metric, with each value's percentile in the dataset.
+One scan's page in the PDF report: its waveforms and, per channel, its metrics with each value's percentile in the dataset.
 ```
