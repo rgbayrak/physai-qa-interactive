@@ -125,6 +125,23 @@ describe('runQualityMetrics (bids-sessions fixture)', () => {
     expect(noUnits.cardiac.snr).toBe(withUnits.cardiac.snr);
   });
 
+  it('reports perfusion and entropy only for channels with a physical unit', () => {
+    const { scan, raw } = allRaw()[0];
+    const byChannel = (units?: Record<string, string>) =>
+      Object.fromEntries(scanQualityRows(scan, raw, raw.datatype, units).map((r) => [r.channel, r.metrics]));
+    const withUnits = byChannel({ cardiac: 'mV' });
+    expect(Number.isFinite(withUnits.cardiac.perfusion)).toBe(true);
+    expect(Number.isFinite(withUnits.cardiac.entropy)).toBe(true);
+    for (const units of [undefined, { cardiac: 'arbitrary' }]) {
+      const m = byChannel(units).cardiac;
+      expect(m.perfusion).toBeNaN();
+      expect(m.entropy).toBeNaN();
+      // The other PPG metrics do not depend on the units
+      expect(m.kurtosis).toBe(withUnits.cardiac.kurtosis);
+      expect(m.relativePower).toBe(withUnits.cardiac.relativePower);
+    }
+  });
+
   it('hasPhysicalUnit: any given unit except the BIDS "arbitrary"', () => {
     expect(hasPhysicalUnit('mV')).toBe(true);
     expect(hasPhysicalUnit('a.u.')).toBe(true); // not the BIDS spelling, so not treated as arbitrary

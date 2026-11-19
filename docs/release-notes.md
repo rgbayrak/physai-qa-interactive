@@ -81,7 +81,7 @@ Decisions made for this version, which is not released yet, with the reason wher
 
 Against Elgendi (2016); definitions in {doc}`user-guide/metric-definitions`.
 
-- Mean only for physical units (`"arbitrary"` or missing `Units` gives `n/a`).
+- Mean, perfusion and entropy only for physical units (`"arbitrary"` or missing `Units` gives `n/a`): the mean and perfusion need the DC level, and entropy is a sum in the signal's own units.
 - The generic skewness, kurtosis, zero crossing and SNR are replaced by the paper's SQIs, each named with its paper; PPG filtering through NeuroKit2.
 - Windows: perfusion 1 s, S_SQI 5 s, N_SQI and Z_SQI 1 s (the paper gives none). The mean over windows is ad hoc.
 - Z_SQI follows the paper's text and Chen (1988), not Eq. 6 as printed.
