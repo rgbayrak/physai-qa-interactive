@@ -11,7 +11,8 @@ const DESCRIPTION = [
 ];
 const INFO: [string, string][] = [
   ['Docs and issues', 'https://github.com/rgbayrak/physai-qa-interactive'],
-  ['Cite', 'https://doi.org/10.5281/zenodo.19389717'],
+  // Concept DOI: all versions, resolves to the latest release
+  ['Cite', 'https://doi.org/10.5281/zenodo.19389716'],
   ['License', 'MIT'],
   ['Stop', 'Ctrl+C'],
 ];

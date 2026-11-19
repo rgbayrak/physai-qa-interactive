@@ -1,8 +1,8 @@
 # Release notes
 
-## Unreleased
+## v2.0.0 (2026-11-18)
 
-Changes since v1.0.0 (tagged 2026-03-24).
+Changes since v1.0.0 (released 2026-04-02).
 
 ### New features
 
@@ -56,7 +56,7 @@ Changes since v1.0.0 (tagged 2026-03-24).
 
 ### Developer notes
 
-Decisions made for this version, which is not released yet, with the reason where one was recorded.
+Decisions made for this version, with the reason where one was recorded.
 
 #### Design choices
 
