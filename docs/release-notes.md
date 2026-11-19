@@ -1,6 +1,8 @@
 # Release notes
 
-## v2.0.0 (2026-11-18)
+## v2.0.0-beta.1 (2026-11-18)
+
+Beta: runs through the Vite dev server (a standalone launcher is planned); the quality metrics review is ongoing.
 
 Changes since v1.0.0 (released 2026-04-02).
 
