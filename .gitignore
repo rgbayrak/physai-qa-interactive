@@ -8,6 +8,6 @@ user_facing/
 CLAUDE.md
 .DS_Store
 docs/_build/
-paper/JOSS-TODO.md
+JOSS_TODO.md
 REVIEW.md
 metrics_scratchpad.md
