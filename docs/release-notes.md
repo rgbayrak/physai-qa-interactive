@@ -2,16 +2,20 @@
 
 ## v2.0.0-beta.1 (2026-11-18)
 
+DOI: [10.5281/zenodo.24357754](https://doi.org/10.5281/zenodo.24357754)
+
 Beta: runs through the Vite dev server (a standalone launcher is planned); the quality metrics review is ongoing.
+
+Feedback welcome: questions and experiences in this release's discussion; bugs as [issues](https://github.com/rgbayrak/physai-qa-interactive/issues).
 
 Changes since v1.0.0 (released 2026-04-02).
 
 ### Added
 
 - **Any BIDS physio layout:** recordings in any datatype folder (`func/`, `eeg/`, `meg/`, `beh/`, …), for some subjects or sessions only, scans split into `recording-<label>` files, sidecars and events by BIDS inheritance (`beh/` physio without events of its own takes the same acquisition's events from its neural datatype folder); physio and derivatives next to the main BIDS folder (`BIDSPHYS_ROOT`, `BIDSDER_ROOT`).
-- **Annotations:** a Signal Quality rating and Notes per recording, labelled time windows, a progress count and **Go to the first unannotated scan**.
-- **Viewer:** scan controls from the dataset's entities, with locks (Session hidden for a subject without sessions, as Run is for scans without a run); confounds (fMRIPrep and MRIQC), task events and stacked channels on one time axis; ←/→ keys; downsampling of recordings at 2 kHz or more; every physio column shown unless excluded.
-- **Detected peaks:** `scripts/compute-peaks.ts`, with a default detector per signal type (PPG Elgendi 2013, ECG NeuroKit, respiration Khodadad 2018).
+- **Annotations:** a Signal Quality rating and Notes per recording, labelled time windows and a progress count.
+- **Viewer:** scan controls from the dataset's entities, with locks (Session hidden for a subject without sessions, as Run is for scans without a run); confounds (e.g. from fMRIPrep and MRIQC), task events and stacked channels on one time axis; ←/→ keys; downsampling of recordings at 2 kHz or more; every physio column shown unless excluded.
+- **Peak detectors:** `scripts/compute-peaks.ts`, with a default detector per signal type (PPG Elgendi 2013, ECG NeuroKit, respiration Khodadad 2018).
 - **Quality metrics:** a dataset-wide script with a run log and `--max-scans`, one row per recording and channel; PPG metrics reviewed against Elgendi (2016); a scatter plot, the Stats tab and a PDF report.
 - **Dataset checks:** BIDS version check of file and folder names, notices for a missing or placeholder `dataset_description.json`, an On disk data summary, and a start-up log.
 - **Project:** documentation on Read the Docs, synthetic test fixtures, unit tests and CI.
