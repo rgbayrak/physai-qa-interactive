@@ -40,7 +40,7 @@ The terminal prints a welcome banner, the folders the tool reads from and what i
 
 ```text
   ────────────────────────────────────────────────────────────────────
-   PHYSAI-QA-INTERACTIVE                                 version 2.0.0
+   PHYSAI-QA-INTERACTIVE                          version 2.0.0-beta.1
    Interactive visualization and annotation of physiological
    recordings in BIDS-compliant datasets. Part of the physAI suite.
 
