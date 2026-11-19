@@ -7,7 +7,7 @@ export const BANNER_WIDTH = 70;
 const TITLE = 'PHYSAI-QA-INTERACTIVE';
 const DESCRIPTION = [
   'Interactive visualization and annotation of physiological',
-  'recordings in BIDS fMRI datasets. Part of the physAI suite.',
+  'recordings in BIDS-compliant datasets. Part of the physAI suite.',
 ];
 const INFO: [string, string][] = [
   ['Docs and issues', 'https://github.com/rgbayrak/physai-qa-interactive'],

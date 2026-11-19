@@ -6,7 +6,7 @@ export { createResizeObserver } from './resize';
 export { createTooltip } from './tooltip';
 export { createZoom } from './zoom';
 export { createBrush } from './brush';
-export { cullToViewport, downsample } from './viewportCulling';
+export { cullToViewport, downsample, minMaxDownsample } from './viewportCulling';
 export type {
   Margin,
   Dimensions,

@@ -30,7 +30,7 @@ In `data/quality/<dataset>/`:
 - `quality_metrics.tsv`: one row per scan and physiological channel (`n/a` where a metric does not apply). Each metric column is explained in {doc}`metric-definitions`.
 - `dataset.json`: the dataset description, scan and subject counts, `participants.tsv` and its descriptions, scans that could not be computed, and excluded channels.
 - `waveforms/`: a downsampled waveform per scan, for the plots.
-- `quality_runs.tsv`: a log with one line per run (`run_date`, `scans_computed`, `scans_available`, `scans_failed`, `count_source`). `scans_available` counts every physiological recording the dataset lists, downloaded or not. The Stats tab, the PDF report and the On disk data summary show its last line, e.g. "Quality metrics were last computed on 2026-11-05 for 78 of 120 scans (40 not downloaded, 2 failed)".
+- `quality_runs.tsv`: a log with one line per run (`run_date`, `scans_computed`, `scans_available`, `scans_failed`, `count_source`). `scans_available` counts every physiological recording the dataset lists, downloaded or not. The Stats tab, the PDF report and the On disk data summary show its last line, e.g. "Quality metrics were last computed on 2026-11-05 for 78 of 120 physio recordings (40 not downloaded, 2 failed)". Counts are in physiological recordings: a scan split into `recording-cardiac` and `recording-respiratory` files counts twice.
 - `quality_report.pdf`: the PDF report, built by the Stats tab (see below).
 
 ## Scatter plot
@@ -53,7 +53,7 @@ SNR of every respiratory recording against a participant variable (handedness), 
 
 ## Stats tab
 
-One scan at a time, with **Prev / Next**: file name, participant information, recording details, the waveform of each physiological channel, and per channel a table of its metrics with percentiles, followed by where the scan sits in each metric's histogram compared with the group.
+One scan at a time, with **Prev / Next** (which stay within the locks set in Explore and Annotate): file name, participant information, recording details, the waveform of each physiological channel, and per channel a table of its metrics with percentiles, followed by where the scan sits in each metric's histogram compared with the group.
 
 ```{figure} ../images/quality-metrics-stats-tab.png
 :alt: The Stats tab for one scan: participant info, recording details, the trigger-verified Timing badge, the last metrics run and a link to the PDF report on the left; the cardiac and respiratory waveforms over the whole recording, with a dashed scan onset line, on the right
@@ -62,10 +62,10 @@ One scan at a time, with **Prev / Next**: file name, participant information, re
 The top of the **Stats** tab: what is known about the scan, and its waveforms over the whole recording.
 ```
 
-**Metrics shown** lists every metric by name, with the paper it comes from (e.g. "Perfusion (Elgendi 2016)"); hover a metric for a short description and its paper. Tick which ones the tables and histograms show, or use Show all / Hide all. The choice is remembered in your browser.
+**Metrics shown** lists every metric by name, with the paper it comes from (e.g. "Perfusion (Elgendi 2016)"); hover a metric for a short description and its paper. Tick which ones the tables and histograms show, or use Show all / Hide all. The choice is kept for the visit (this browser tab), and a new launch of the tool starts with every metric shown.
 
 ```{figure} ../images/quality-metrics-histograms.png
-:alt: Metrics shown box with every metric ticked, each named with its source paper; next to it, the cardiac metrics table with each value and its percentile, and a histogram per metric with a solid dark line for this scan and a dashed grey line for the mean of all 80 cardiac recordings
+:alt: The Stats sidebar with the PDF report link and the Metrics shown box (Show all, Hide all, all 10 metrics ticked, each named with its source paper); next to it, the cardiac metrics table with the seven metrics this recording has, each value with its percentile, and a histogram per metric with a solid dark line for this scan and a dashed grey line for the mean of all 80 cardiac recordings
 :name: fig-metric-histograms
 
 Each metric's value and percentile for this scan, and where it falls in the dataset (solid dark line: this scan; dashed grey line: dataset mean).
@@ -75,11 +75,11 @@ The scan open in Explore and Annotate is the one Stats opens, and the other way 
 
 ## PDF report
 
-`data/quality/<dataset>/quality_report.pdf` has a summary, each channel's scatter plot, and one page per scan with its waveforms and every metric. Computing the metrics deletes the old report; the next time the Stats tab opens, it builds a new one in the background and saves it there. The Stats sidebar shows its progress, then a link to open it.
+`data/quality/<dataset>/quality_report.pdf` has a summary, each channel's scatter plot, and one page per scan with its waveforms and, per channel, a table of the metrics it has, each with its percentile. Computing the metrics deletes the old report; the next time the Stats tab opens, it builds a new one in the background and saves it there. The Stats sidebar shows its progress, then a link to open it.
 
 ```{figure} ../images/quality-metrics-pdf-report.png
-:alt: One scan's page in the PDF report: the scan name and file, participant information, sampling rate, duration and timing check, the cardiac and respiratory waveforms over the whole recording with a dashed scan onset line, and a table of every metric for each channel with its percentile
+:alt: One scan's page in the PDF report: the scan name and file, participant information, sampling rate, duration and timing check, the cardiac and respiratory waveforms over the whole recording with a dashed scan onset line, then one Metric and Value table per channel with each value's percentile: seven metrics for cardiac, only Std Dev for respiratory
 :name: fig-pdf-report
 
-One scan's page in the PDF report: its waveforms and every metric, with each value's percentile in the dataset.
+One scan's page in the PDF report: its waveforms and, per channel, its metrics with each value's percentile in the dataset.
 ```

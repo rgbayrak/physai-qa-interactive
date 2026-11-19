@@ -8,7 +8,7 @@ The Stats tab provides a dataset-wide view of signal quality, allowing you to co
 
 physAI-QA-interactive is part of physAI, a research suite for physiological data. It serves as the manual exploration and annotation interface within physAI-QA, the suite's manual quality assessment component.
 
-![The Explore and Annotate tab: stepping through scans, zooming into a signal and its auxiliary charts](images/physviz.gif)
+![The Explore and Annotate tab: hovering over a respiratory signal and marking two time windows where it drops out, with framewise displacement below](images/annotate.gif)
 
 - **How does it fit together?** The {doc}`overview` shows the typical workflow, step by step.
 - **New here?** Start with {doc}`get-started`: what the tool is for, what you need, and how to install it.

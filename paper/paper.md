@@ -94,8 +94,9 @@ scripts and viewers, so quality assessment practices vary widely between groups.
 
 physAI-QA-interactive is a browser-faced tool for exploring and annotating
 physiological recordings stored in the Brain Imaging Data Structure (BIDS)
-[@gorgolewski2016]. It discovers every subject, session, task and run in a
-dataset and visualizes multimodal physiological signals alongside auxiliary measures.
+[@gorgolewski2016]. It discovers every scan in a dataset, in any BIDS datatype
+folder and including scans split into several recording files, and visualizes
+multimodal physiological signals alongside auxiliary measures.
 Researchers can step through all scans of a dataset, zoom
 into signals, compute per-channel signal quality indices on recordings,
 and mark artifacts as time-stamped annotations saved alongside the dataset for
@@ -110,22 +111,23 @@ OpenNeuro [@markiewicz2021] with DataLad and fetch only the physiological and
 confound files, so users can start reviewing public data without downloading
 whole datasets. It has four key components:
 
-- **BIDS reader.** Discovers subjects, sessions, tasks and runs, follows BIDS
-  metadata inheritance, skips files that DataLad has not yet fetched, and
-  finds the physiological and derivatives folders by their content. It
-  locates fMRIPrep [@esteban2019] or MRIQC motion confounds, task events and
-  BOLD sidecars, checks file and folder names against the rules of the
-  dataset's declared BIDS version, and reports how many physiological files
-  are downloaded. Results are served to the browser as a JSON API.
+- **BIDS reader.** Indexes the dataset once by file name, so physiological
+  recordings are found in any datatype folder, for any subset of subjects and
+  sessions, and split into `recording-` files. It follows BIDS metadata
+  inheritance, skips files that DataLad has not yet fetched, and times each
+  recording against its own datatype's data. It locates fMRIPrep
+  [@esteban2019] or MRIQC motion confounds, task events and BOLD sidecars,
+  checks file and folder names against the rules of the dataset's declared
+  BIDS version, and reports how many physiological files are downloaded.
+  Results are served to the browser as a JSON API.
 - **Signal quality metrics.** Whole-recording statistics for every channel,
-  plus windowed and beat-level metrics for cardiac [@elgendi2016; @pincus1991]
-  and respiratory channels. A script computes them for every scan of a
+  plus windowed PPG metrics following @elgendi2016. A script computes them for every scan of a
   dataset, keeping only physiological channels, and writes one TSV per
   dataset, with a log of each run.
 - **Viewer and annotation.** Linked overview and detail charts, built on a
   TypeScript chart library over D3 [@bostock2011], stay responsive on
   high-rate recordings. Extra channels, task events and motion confounds
-  follow the same time window. Annotations are saved per scan and channel as
+  follow the same time window. Annotations are saved per scan, recording and channel as
   JSON with times and sample indices, ready to use as artifact masks. The
   interface keeps all of its state in a single object; charts, controls and
   annotations are separate modules that receive state and page elements as
@@ -155,7 +157,7 @@ branch and every pull request, cover:
 
 - **BIDS reading:** dataset discovery, finding the physiological and
   derivatives folders, sidecar lookup, physiological reading, fMRIPrep and
-  MRIQC confounds, task events and downloaded-file counts, on two small
+  MRIQC confounds, task events and downloaded-file counts, on three small
   synthetic BIDS datasets included in the repository and on real OpenNeuro
   [@markiewicz2021] datasets when present.
 - **Dataset checks:** the required dataset path, and file and folder names

@@ -126,9 +126,18 @@ export function scanQualityRows(
     const q = raw.quality?.[channel];
     const values = {} as Record<MetricKey, number>;
     for (const c of METRIC_COLUMNS) values[c.key] = m[c.key];
-    // The reported mean (the DC level) means nothing in arbitrary or unknown units, so it is n/a there.
-    // Only this column: means used inside other metrics are computed whatever the units.
-    if (!hasPhysicalUnit(channelUnits[channel])) values.mean = NaN;
+    // Values that need the signal's physical scale are n/a in arbitrary or unknown units:
+    // - the mean (the DC level);
+    // - perfusion, which divides by the raw mean: Elgendi 2016, Eq. 2, pulsatile over static
+    //   light, so it needs the DC level (a centred signal gives a near-zero divisor);
+    // - entropy, −Σ x² ln(x²) summed in the signal's own units (Eq. 5; the paper gives no
+    //   normalisation), so its size is set by the amplitude scale.
+    // Means used inside the other metrics are computed whatever the units.
+    if (!hasPhysicalUnit(channelUnits[channel])) {
+      values.mean = NaN;
+      values.perfusion = NaN;
+      values.entropy = NaN;
+    }
     return {
       ...toScanKey(scan),
       recording: raw.recording,

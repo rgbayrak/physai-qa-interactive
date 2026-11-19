@@ -66,11 +66,11 @@ Filtering a flat signal leaves rounding noise (values near 1e-16) rather than ex
 | `std_dev` | all | raw signal | whole recording | 
 | `std_dev_filtered` | PPG | band-pass filtered signal | whole recording | 
 | `snr` | PPG | band-pass filtered signal | 1 s, stepped by 1 s | 
-| `entropy` | PPG | raw signal | 1 s, stepped by 1 s | 
+| `entropy` | PPG, with a physical unit | raw signal | 1 s, stepped by 1 s | 
 | `kurtosis` | PPG | raw signal | 1 s, stepped by 1 s | 
 | `skewness` | PPG | raw signal | 5 s, stepped by 1 s | 
 | `zero_crossing` | PPG | band-pass filtered signal | 1 s, stepped by 1 s | 
-| `perfusion` | PPG | raw and band-pass filtered signal | 1 s | 
+| `perfusion` | PPG, with a physical unit | raw and band-pass filtered signal | 1 s | 
 | `relative_power` | PPG | raw signal | 60 s, stepped by 30 s | 
 
 ## Implemented metrics
@@ -79,7 +79,7 @@ Filtering a flat signal leaves rounding noise (values near 1e-16) rather than ex
 
 The average of the raw signal over the whole recording, i.e. its DC level: the sum of the samples divided by their number.
 
-The DC level only means something in a physical unit. The column is therefore given only when the physio sidecar gives the channel a unit other than `"arbitrary"`, the string BIDS uses for arbitrary units (BIDS Specification, Common principles, Units). It is `n/a` when the unit is missing or `"arbitrary"`. This applies to the `mean` column only: means used inside other metrics are computed whatever the units.
+The DC level only means something in a physical unit. The column is therefore given only when the physio sidecar gives the channel a unit other than `"arbitrary"`, the string BIDS uses for arbitrary units (BIDS Specification, Common principles, Units). It is `n/a` when the unit is missing or `"arbitrary"`. The same rule applies to perfusion and entropy, which also need the signal's physical scale (see below). Means used inside the other metrics are computed whatever the units.
 
 ### Perfusion (`perfusion`)
 
@@ -89,7 +89,8 @@ The perfusion index P_SQI of Elgendi (2016, Eq. 2), in percent: the peak-to-peak
 - **Window:** 1 s windows stepped by 1 s (Elgendi 2016, Section 3).
 - **One value per recording:** the mean over the windows. The paper does not say how windows are combined, so this is ad hoc.
 - All windows are kept. The first and last one or two include the filter's start-up transients and read higher (on a synthetic pulse: about 23 and 26 against 20 mid-recording), which matters more for short recordings.
-- Windows whose raw mean is 0 are skipped. A signal that was already centred (e.g. a preprocessed derivative) has a raw mean near 0 and gives very large values.
+- **Units:** `n/a` unless the physio sidecar gives the channel a unit other than `"arbitrary"`, as for the mean. Elgendi (2016) defines P_SQI as "the ratio of the pulsatile blood flow to the nonpulsatile or static blood", so it needs the raw signal's DC level, which only means something in a physical unit.
+- Windows whose raw mean is 0 are skipped. A signal that was already centred (e.g. a preprocessed derivative, or a device that removes the DC level) has a raw mean near 0 and gives very large values, even with a physical unit.
 
 ### Skewness (`skewness`)
 
@@ -113,6 +114,7 @@ The kurtosis K_SQI of Elgendi (2016, Eq. 4): the mean of [(xᵢ − μₓ) / σ]
 The entropy E_SQI of Elgendi (2016, Eq. 5): −Σ x[n]² ln(x[n]²) over the samples of the raw PPG signal x. Only PPG channels get a value. It is not approximate entropy (Pincus 1991), which is a different measure.
 
 - **A sum, not a mean:** its size depends on the signal's amplitude (and so its units) and on the number of samples per window (the sampling rate). Compare it only between recordings with the same units and rate.
+- **Units:** `n/a` unless the physio sidecar gives the channel a unit other than `"arbitrary"`, as for the mean. The paper gives no normalisation of x, and in arbitrary units the sum only reflects the amplitude scale (e.g. about −10⁹ for a signal of ±1000 at 496 Hz).
 - **Zero samples** add 0, the limit of u ln u as u → 0.
 - **Window:** 1 s windows stepped by 1 s, as for perfusion and kurtosis.
 - **One value per recording:** the mean over the windows (ad hoc, as for perfusion).

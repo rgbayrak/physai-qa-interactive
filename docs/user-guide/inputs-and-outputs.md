@@ -7,15 +7,16 @@ The tool reads from three folders. Only `BIDS_ROOT` is required; the other two a
 | Setting | Point it at | Read from it |
 |---|---|---|
 | `BIDS_ROOT` | Always the main BIDS folder (required, no default), even when the physiological recordings are stored elsewhere | `dataset_description.json`, `participants.tsv`, task events, BOLD sidecars |
-| `BIDSPHYS_ROOT` | The folder holding the `*_physio.tsv.gz` files, when it is outside `BIDS_ROOT` | Physiological recordings and their sidecars; subjects, sessions, tasks and runs are discovered here |
+| `BIDSPHYS_ROOT` | The folder holding the `*_physio.tsv.gz` files, when it is outside `BIDS_ROOT` | Physiological recordings and their sidecars; its copy of a recording is the one loaded |
 | `BIDSDER_ROOT` | The derivatives folder with the confounds, when it is outside `BIDS_ROOT/derivatives/` | Confounds, the derivatives' dataset description, BOLD sidecars when `BIDS_ROOT` has none |
 
-When `BIDSPHYS_ROOT` and `BIDSDER_ROOT` are not set, the tool looks for them inside `BIDS_ROOT` by their files, never by folder name:
+When the server starts, it walks `BIDS_ROOT`, with everything inside it (its `derivatives/` too), and then `BIDSPHYS_ROOT` and `BIDSDER_ROOT` when they are set, once each. It reads only file names, skips hidden folders, `sourcedata/` and `code/`, and doesn't follow folder links. Each file is used for what it is, wherever it sits, never by folder name:
 
-- **Physiological recordings:** the main folder when it has `sub-*/[ses-*/]func/*_physio.tsv.gz` files; otherwise the first folder inside it, or inside its `derivatives/`, that has them.
-- **Derivatives:** the folder inside `derivatives/` with confounds files, preferring fMRIPrep's over MRIQC's.
+- **Physiological recordings:** every `*_physio.tsv.gz` (or plain `*_physio.tsv`) file whose content is downloaded, in any datatype folder (`func/`, `eeg/`, `meg/`, `beh/`, …), for every subject and session that has one. Each one is a scan, named by its datatype folder and entities (e.g. `func/sub-01_ses-01_task-rest_run-01`); physio in `func/` and `eeg/` for the same run gives two scans. A scan split into `recording-<label>` files (e.g. `recording-cardiac` and `recording-respiratory`) loads every recording.
+- **Derivatives:** confounds files anywhere in those folders, fMRIPrep's preferred over MRIQC's.
+- **When a recording is found twice** (e.g. a raw copy and a physprep copy): the file under `BIDSPHYS_ROOT` when it is set, else the `BIDS_ROOT` dataset's own file over copies in its `derivatives/`; then a `desc-preproc` file, then `.tsv.gz` over `.tsv`. The terminal says which was loaded: `<file> loaded; same recording not loaded: <other>`.
 
-The terminal prints the three folders and how each was chosen. When more than one folder matches, it names the others, so you can pick one with the setting.
+The terminal lists the folders walked, how many readable recordings it found in each datatype folder, and the files it skipped (listed but not downloaded, or found twice).
 
 ```bash
 BIDS_ROOT=/path/to/dataset npm run dev                                  # everything inside it
@@ -30,8 +31,8 @@ BIDS_ROOT=/path/to/dataset BIDSPHYS_ROOT=/path/to/physio BIDSDER_ROOT=/path/to/d
 
 ## What a dataset needs
 
-- A standard BIDS layout: `sub-XX/ses-XX/func/*_physio.tsv.gz`, or session-less `sub-XX/func/*_physio.tsv.gz`.
-- A JSON sidecar with `SamplingFrequency`, `StartTime` and `Columns`, per file or at the top level.
+- A BIDS layout: `sub-XX/[ses-XX/]<datatype>/*[_recording-<label>]_physio.tsv.gz`, in any datatype folder, with or without sessions.
+- A JSON sidecar with `SamplingFrequency`, `StartTime` and `Columns`, per file or inherited from a folder above it (BIDS inheritance; a `recording-<label>` sidecar applies to that recording only).
 - The TSV can have a header row; it is detected and skipped.
 - For confound timing: a BOLD sidecar with `VolumeTiming` or `RepetitionTime` (raw scan-level, top-level `task-<task>_bold.json`, or in the derivatives).
 - Run labels are compared as numbers between raw data and derivatives, so `run-01` matches `run-1`.
@@ -67,6 +68,6 @@ This is not a full BIDS validation: file contents and sidecar fields are not che
 
 ## Where files are saved
 
-- **Annotations:** `data/annotations/<dataset>/sub-XX/[ses-YY/]func/`, one folder per dataset. Set `ANNOTATIONS_ROOT` to use another folder in place of `data/annotations/`.
+- **Annotations:** `data/annotations/<dataset>/sub-XX/[ses-YY/]<datatype>/`, the physiological recording's own folder, one folder per dataset and one file per scan, recording and channel (`…[_recording-<label>]_channel-<channel>_annotations.json`). Set `ANNOTATIONS_ROOT` to use another folder in place of `data/annotations/`.
 - **Detected peaks:** `data/peaks/<dataset>/sub-XX/[ses-YY/]<datatype>/`, laid out as the annotations (see [Detected peaks](explore-and-annotate.md#detected-peaks)). Set `PEAKS_ROOT` to use another folder in place of `data/peaks/`.
 - **Quality metrics:** `data/quality/<name>/`, where `<name>` is the first folder under `data/` (e.g. `BIDS_ROOT=data/friends/friends` → `friends`). For a dataset outside `data/`, it is the folder name of `BIDS_ROOT`, or set `DATASET_NAME` (useful when the main BIDS folder has a generic name such as `data`).

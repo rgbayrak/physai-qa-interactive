@@ -159,7 +159,7 @@ export function availableMetrics(rows: QualityRow[], visible?: VisibleMetrics): 
   );
 }
 
-/** Default scatter axes: SNR against beat correlation where available, else the first available metrics */
+/** Default scatter axes [x, y]: SNR (else Std Dev, Mean) and kurtosis (else skewness) where available, else the first available metrics */
 export function defaultMetricPair(rows: QualityRow[]): [MetricKey, MetricKey] {
   const avail = availableMetrics(rows);
   const pick = (prefs: MetricKey[], exclude?: MetricKey): MetricKey =>
